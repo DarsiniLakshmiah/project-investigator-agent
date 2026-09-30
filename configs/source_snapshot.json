@@ -1,0 +1,398 @@
+{
+  "snapshot_id": "71c36ffe262398175a02e9cc3cae94c08a40f8f3b7be717fc7ef96b8f41fcf9a",
+  "file_count": 56,
+  "files": [
+    {
+      "relative_path": "P130544/Disclosable-Restructuring-Paper-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544.pdf",
+      "sha256": "a10516ee827af8396d316eeae9868da215b648eb3c76b54d77ce55daa4005c94",
+      "size_bytes": 82751,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-05.pdf",
+      "sha256": "a89c3a11401c8972b6c9ab05560477574b9eb9a165b25d791fc6ca42f706ac67",
+      "size_bytes": 200500,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-06.pdf",
+      "sha256": "8a37f05685e49cf35737d276c8450649bfc6152a6ed4daf1f810f771aa3ccef8",
+      "size_bytes": 210482,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-07.pdf",
+      "sha256": "f8e8cd83b4a137d71fb218befb8f602bbd105ec778d19349621a6e12301a1926",
+      "size_bytes": 221369,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-08.pdf",
+      "sha256": "3862994a2b22f0f17077cce91aa0bca689b9a556b1e379096890617cbb017c4e",
+      "size_bytes": 221543,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-09.pdf",
+      "sha256": "b749942c67d01a964ee0ca43f86e4c6688cfc22eead9a8849b831194cf34efa2",
+      "size_bytes": 222340,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-10.pdf",
+      "sha256": "7a151dc2f3ab45520cc455845ad94b2826bd8f1bba2349f056d214e15267289c",
+      "size_bytes": 224426,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-11.pdf",
+      "sha256": "f7b0121cdfc7159822f8a5200627ee537f99fe70286db813d1ae3ce6dabc768a",
+      "size_bytes": 169950,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-12.pdf",
+      "sha256": "34597d235e5cd3b0460796236ab81e72a8a1391c3c6974d81988917c753011ab",
+      "size_bytes": 169095,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-13.pdf",
+      "sha256": "04ae9a93894913278c96370039b72dd427f324e8d3291e288d7735e7fb9f42ca",
+      "size_bytes": 167704,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-14.pdf",
+      "sha256": "5c1ad006c289687feb780fc25e381265815d870bef1237835c362d4fe4d30b4d",
+      "size_bytes": 169718,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/Disclosable0Ve04000Sequence0No00015.pdf",
+      "sha256": "8197c1ad8a4b858f0ba867239e75c6e71db493b8d12d6648d207e996a5010d04",
+      "size_bytes": 168933,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/ISR-Disclosable-P130544-04-10-2017-1491820303083.pdf",
+      "sha256": "ac53c3f8b54397c8221c8576a3b172beb78c29d6fb8e086292180373b0976126",
+      "size_bytes": 184650,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/ISR-Disclosable-P130544-06-28-2016-1467123646936.pdf",
+      "sha256": "6a47fb0d9a11119156d13455f74878929e66cfa4206d4ec7c74d81b1b37e1f87",
+      "size_bytes": 178400,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/ISR-Disclosable-P130544-08-11-2017-1502436961279.pdf",
+      "sha256": "9f92fbd1823bc7bfbc3a851592031c7ee3e5d1eb9b1428ca5d27a21774cc7f30",
+      "size_bytes": 201050,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/ISR-Disclosable-P130544-09-01-2016-1472755061652.pdf",
+      "sha256": "f456f58a29e142189cb4cef741c260a368d233ce3b4969febfd019b3861f7871",
+      "size_bytes": 182105,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/India-Karnataka-Urban-Water-Supply-Modernization-Project-Additional-Financing.pdf",
+      "sha256": "0cfd1d0a3b428a6f69bd76d01a9de6689d4c64568a96d8350be8df578252cb79",
+      "size_bytes": 2062530,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/P130544-074e478e-72dd-4be8-ac96-57b86f9ef893.pdf",
+      "sha256": "9fa1d6d298abf582f2f80d53b5a45ceea4de5b9147b800fca78d2d51eca6e13e",
+      "size_bytes": 153447,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/P130544-34b297f2-855a-4904-bd0d-262972a94fa7.pdf",
+      "sha256": "dbca2716fa36e2d2bd4270e854b08ce26b9f593f80e098c42d1e417a15e25c09",
+      "size_bytes": 155309,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/P130544-495b246d-9920-42d8-b2d0-d492a6258b39.pdf",
+      "sha256": "5b5965b630feef7135130e945702098003c9491a15c0ca9568f32b40822682ee",
+      "size_bytes": 204043,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/P130544-d2372558-1779-4f56-8468-69d1fe627e46.pdf",
+      "sha256": "502d3bdceddcecbd83bfcddac1c4de3c2d3fbbaf22cce03dc11a602c36016f31",
+      "size_bytes": 364043,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/P130544-d2dae9b9-fb24-48cb-a8e9-0a09806f9497.pdf",
+      "sha256": "c3f92899568db04847ab4e1ca29331e73e7b0c61e9960c47f04233307a112e4c",
+      "size_bytes": 349650,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/P130544-f8ddc568-b865-4a97-8f9d-9c498315fcbd.pdf",
+      "sha256": "3c3bc526b1a5650692261838077fde4761831c364edcc38377e5ce3aeed0cc3c",
+      "size_bytes": 160145,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/P13054406d7c1a0330bb350d7693976372e.pdf",
+      "sha256": "6ff8d8e08a3083cd307e17fcb0a3b3285b55920b7c906baa2559e3e9e239314d",
+      "size_bytes": 170967,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/P1305440d1d53606509e1408089574bee42.pdf",
+      "sha256": "b9b131e16fd0709643346b16c68269aeac4d6acf8c101944c6d7734208e7e5f4",
+      "size_bytes": 171557,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/P1305440f6d0220730904f079465ee70ccd.pdf",
+      "sha256": "11e676f3134ba9b0b389049e2c8c6762e3f80c87ac6c207b150e29db68fee6bd",
+      "size_bytes": 172359,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/P130544114e4b90271b0181c01b669b256d.pdf",
+      "sha256": "d829e49941f9acf1449bb8d29f2313233f95199c023109a066583af8ba23affd",
+      "size_bytes": 297458,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/P13054419462e80bd1a3e615b23e31712b6.pdf",
+      "sha256": "dc4201ccaf760dbc1516a90d82f4fc20a3044bd7628752f071258f1317d3ec16",
+      "size_bytes": 369365,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/P1305441bf033c0221b8651c987ea59dee3.pdf",
+      "sha256": "c2460f82c40a316060eb63605297885fede55c2e05ba428da641d10b8901f4e4",
+      "size_bytes": 172622,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/PAD440-PAD-P130544-R2016-0052-1-Box394870B-OUO-9.pdf",
+      "sha256": "0164e0420e9bd29d150b5f7b8b4f869cdcaa11f1067b68b7d20ad9cc9bcc6916",
+      "size_bytes": 1338873,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/RAD1345690765.pdf",
+      "sha256": "67ebdf37b977e925512a9c6ec944a1bb0b25d9b7e824698771cbc081c11c226f",
+      "size_bytes": 99123,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P130544/RAD696381150.pdf",
+      "sha256": "dd80927f5c17e56e2bb975caba15e813d7934d04a1b998fb67dd74f99af35fb0",
+      "size_bytes": 833688,
+      "kind": "document",
+      "project_id": "P130544"
+    },
+    {
+      "relative_path": "P179039/BOSIB-0866500e-7445-4d25-8aba-065bea3defd6.pdf",
+      "sha256": "8b561105309ed1c13e7068eb9f3ad3d2780caf9ef68c7fb141f52e36f423b2b4",
+      "size_bytes": 937603,
+      "kind": "document",
+      "project_id": "P179039"
+    },
+    {
+      "relative_path": "P179039/P179039-3c28639e-4e62-42b9-a752-49c9e7ee4972.pdf",
+      "sha256": "95c180d52c7714ccea08b0af3afb714164f6729233c94f2d72e9872443e7ecfb",
+      "size_bytes": 159946,
+      "kind": "document",
+      "project_id": "P179039"
+    },
+    {
+      "relative_path": "P179039/P179039-9ecea121-4113-4b6b-b074-1b5b316db93d.pdf",
+      "sha256": "0c083a777f23b63ded50ea15c12abc8223c1517cd84c55cda90a3708681f6e51",
+      "size_bytes": 145027,
+      "kind": "document",
+      "project_id": "P179039"
+    },
+    {
+      "relative_path": "P179039/P179039-ed35d702-d7e5-406e-b14c-3823e45e7d84.pdf",
+      "sha256": "bb3fd90dec001f3f08df15cc5cd93d8d872d963054991ce6cc130e9abeef600d",
+      "size_bytes": 147259,
+      "kind": "document",
+      "project_id": "P179039"
+    },
+    {
+      "relative_path": "P179039/P17903906985950640a42503bd25566a7bb.pdf",
+      "sha256": "b1775599afaf5b38f476d0599e154f7b289c6df3f9ef177f8c598bf2b2c2d459",
+      "size_bytes": 663509,
+      "kind": "document",
+      "project_id": "P179039"
+    },
+    {
+      "relative_path": "P179039/P17903906de0c809d080db029d143a95433.pdf",
+      "sha256": "bcf7325a42d2ec92594fdec8cf8bcad37dde2cdbbbe7b6f31720240d94c01163",
+      "size_bytes": 106071,
+      "kind": "document",
+      "project_id": "P179039"
+    },
+    {
+      "relative_path": "P179039/P179039099ccae0d008276003ef2deea98e.pdf",
+      "sha256": "4ba98600354959bd7cb97932e1fd66f7116b8b0930dfe7933c60240ff35fa043",
+      "size_bytes": 1859595,
+      "kind": "document",
+      "project_id": "P179039"
+    },
+    {
+      "relative_path": "P179039/P1790390ab843603a0b48f06d2a10dedfa7.pdf",
+      "sha256": "f7ed04f303a178b16a1b87b0048a7982f4838063b05f663f1380a13f57596671",
+      "size_bytes": 106061,
+      "kind": "document",
+      "project_id": "P179039"
+    },
+    {
+      "relative_path": "P179039/P1790390acdc3309508a7002f351bd3125c.pdf",
+      "sha256": "cdd5677b878747ceb26c9bf51c3a717d72b6df761344addb197d9a4fa7e3e03e",
+      "size_bytes": 1125771,
+      "kind": "document",
+      "project_id": "P179039"
+    },
+    {
+      "relative_path": "P179039/P1790390d52b1100093c2050149251e969.pdf",
+      "sha256": "c0a3ff27e13519b567e62a8528d4f888356673628e6e50d8b2e416f40b1ecab1",
+      "size_bytes": 1065377,
+      "kind": "document",
+      "project_id": "P179039"
+    },
+    {
+      "relative_path": "P179039/P179039134cd7608b1b72910dc80e161d70.pdf",
+      "sha256": "6ed1067bf5c4da32bb3062bac743b8a243fbebf39315fa4c773a9cae0d40a6ad",
+      "size_bytes": 106391,
+      "kind": "document",
+      "project_id": "P179039"
+    },
+    {
+      "relative_path": "P179039/P17903913ed7940c1186e1128e58b1b5a08.pdf",
+      "sha256": "6e523a4cae7dab749846410866440b151c641c4136786f1224b65af53b0fc01a",
+      "size_bytes": 146435,
+      "kind": "document",
+      "project_id": "P179039"
+    },
+    {
+      "relative_path": "P179039/P1790391b3534e0d91a321172d8540b8794.pdf",
+      "sha256": "70d117b0eb94199fe08d71dac400108e28aea88b31e2b35107c5a4e3b12b5b38",
+      "size_bytes": 106390,
+      "kind": "document",
+      "project_id": "P179039"
+    },
+    {
+      "relative_path": "P506272/BOSIB-3f0dba34-6d82-4428-9b4a-af441bf19aff.pdf",
+      "sha256": "34de363933066c8cb298ca67b00a8718761841e5fbb983e4db6a8680229b7fa9",
+      "size_bytes": 937086,
+      "kind": "document",
+      "project_id": "P506272"
+    },
+    {
+      "relative_path": "P506272/P506272-317d4567-1d03-40b0-b6b9-e016bdd4bb94.pdf",
+      "sha256": "b0bac656dd3f40f78687bb4fbb17735c4556d46a317bc13b8370d7043f4ad9b7",
+      "size_bytes": 863990,
+      "kind": "document",
+      "project_id": "P506272"
+    },
+    {
+      "relative_path": "P506272/P506272-57ab5339-e7c0-451b-b6b4-7d39782cf1f6.pdf",
+      "sha256": "c70c73ae1a46b86a86224269469bacc4a6c9e0d754bf83105afdc507cbb8514a",
+      "size_bytes": 185968,
+      "kind": "document",
+      "project_id": "P506272"
+    },
+    {
+      "relative_path": "P506272/P506272-6b506d73-c324-4bba-882b-8660bce21e8a.pdf",
+      "sha256": "cd50142b5c0820f311431ed4deef3d296c527914116191bfca28654a76ad677d",
+      "size_bytes": 490793,
+      "kind": "document",
+      "project_id": "P506272"
+    },
+    {
+      "relative_path": "P506272/P506272-7ce6e8b6-0c88-4cef-90c3-48c3ec3330ad.pdf",
+      "sha256": "0fa72213d01422f2e75bbe9ea98f7e932161f06733ea8abeb7a1b113df6370c5",
+      "size_bytes": 607088,
+      "kind": "document",
+      "project_id": "P506272"
+    },
+    {
+      "relative_path": "P506272/P506272-7d8f160b-0ec8-40da-9694-1adb32a3cc47.pdf",
+      "sha256": "cfdbc4e447027325976a1515c19bae049d4dc8142813342987f59087da471fbb",
+      "size_bytes": 173039,
+      "kind": "document",
+      "project_id": "P506272"
+    },
+    {
+      "relative_path": "P506272/P506272-baa4722c-1fe9-47de-9ccc-62b985287ee6.pdf",
+      "sha256": "432f802e1515b2055ba70f4041f329376f08dcf599b450ec7f780c9185e99bca",
+      "size_bytes": 162609,
+      "kind": "document",
+      "project_id": "P506272"
+    },
+    {
+      "relative_path": "P506272/P506272-cb80605f-d4d0-40be-af6e-40c57fddc414.pdf",
+      "sha256": "ac25b4911bfb763676a05862fe27e89c583415e51d1d4f5e84da27a456f75457",
+      "size_bytes": 1460154,
+      "kind": "document",
+      "project_id": "P506272"
+    },
+    {
+      "relative_path": "all.xlsx",
+      "sha256": "333c3a2d8d93b99b5151e3984ec88b493c37dfb9bcad23f36f313aefa8d5cc93",
+      "size_bytes": 18420487,
+      "kind": "structured",
+      "project_id": null
+    },
+    {
+      "relative_path": "contract_awards_in_investment_project_financing_india_projects_09-26-2026.csv",
+      "sha256": "5dd62729c546f61085d6ad248f508faf926b45240e56a691855b5dad81d1f189",
+      "size_bytes": 13642140,
+      "kind": "structured",
+      "project_id": null
+    },
+    {
+      "relative_path": "ibrd_statement_of_loans_and_guarantees_latest_available_snapshot_09-26-2026.csv",
+      "sha256": "832fa744924d3ec681be983360ba1ddaf050c81eccda5356bdfb325d6e50cdeb",
+      "size_bytes": 3466992,
+      "kind": "structured",
+      "project_id": null
+    }
+  ]
+}

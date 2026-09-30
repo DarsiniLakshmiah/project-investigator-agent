@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "worldbank-implementation-intelligence"
+version = "0.1.0"
+description = "World Bank Project Implementation Intelligence Copilot: evidence-grounded decision support for project officers."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+# Core dependencies: needed to import the package, load configuration and
+# (from Phase 2) read the structured source files locally.
+dependencies = [
+    "pydantic>=2.5",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0",
+    "pandas>=2.1",
+    "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+# Extras are grouped by the phase that first needs them. Nothing here is
+# required to import the package or run the unit tests.
+databricks = [          # Phases 2-7: Delta / Unity Catalog / Vector Search access
+    "databricks-sdk",
+    "databricks-vectorsearch",
+]
+documents = [           # Phase 4: layout-aware PDF parsing (validated with docling 2.130.0)
+    "docling>=2.130,<3",
+]
+retrieval = [           # Phase 8: reranking
+    "sentence-transformers>=2.2",
+]
+agents = [              # Phase 11
+    "langgraph>=0.2",
+]
+guardrails = [          # Phase 12
+    "nemoguardrails",
+]
+observability = [       # Phase 13 (mlflow.tracing requires >=2.14)
+    "mlflow>=2.14",
+]
+api = [                 # Phase 14
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
+dev = [
+    "pytest>=7.4",
+    "ruff>=0.4",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+# Default run = unit tests only. Real-file checks: `pytest -m integration`;
+# real Docling model runs: `pytest -m docling`.
+addopts = "-ra --import-mode=importlib -m 'not databricks and not integration and not docling'"
+markers = [
+    "integration: tests that exercise several modules or real (non-fixture) local files",
+    "databricks: tests that require a live Databricks workspace (deselected by default)",
+    "docling: tests that run real Docling models (slow; deselected by default)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+extend-exclude = ["notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

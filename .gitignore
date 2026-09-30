@@ -1,0 +1,67 @@
+# ---------------------------------------------------------------------------
+# Source data — never commit datasets or PDFs.
+# Only data/README.md (placement instructions) is tracked.
+# ---------------------------------------------------------------------------
+data/**
+!data/
+!data/README.md
+
+*.pdf
+*.xlsx
+*.xls
+*.csv
+*.parquet
+*.delta
+# Test fixtures are small, synthetic and allowed.
+!tests/fixtures/**
+# Human review artefacts (derived metadata, no source data) are tracked.
+!review/*.csv
+
+# ---------------------------------------------------------------------------
+# Secrets / local environment
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+.databrickscfg
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.python-version
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---------------------------------------------------------------------------
+# Local artefacts
+# ---------------------------------------------------------------------------
+mlruns/
+mlartifacts/
+.local_output/
+*.log
+
+# Frontend (Phase 15)
+node_modules/
+frontend/dist/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Databricks bundle local state
+.databricks/

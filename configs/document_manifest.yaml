@@ -1,0 +1,495 @@
+# Known project documents (curated). Used by the Phase 2 document inventory to
+# classify files whose names carry no type information (e.g. hash-named PDFs).
+#
+# Provenance: every entry was recorded from the page-1 text of the file during
+# Phase 1 inspection (2026-09-26); `evidence` quotes what was seen. No PDF text is
+# parsed at ingestion time. Phase 4 (Docling) will re-verify these labels.
+#
+# size_bytes guards against a file being silently replaced: if the size on disk
+# differs, the inventory reports MANIFEST_FILE_CHANGED and does not trust the entry.
+#
+# document_date is only given where page 1 shows a single, complete date.
+#   date_basis: isr_archived_date | cover_date
+# Month-only dates ("February 2023") and OCR-garbled dates are left null.
+
+documents:
+  P130544:
+    - filename: 'Disclosable-Restructuring-Paper-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544.pdf'
+      size_bytes: 82751
+      document_type: RESTRUCTURING_PAPER
+      isr_sequence: null
+      document_date: null
+      date_basis: null
+      report_number: 'RES33572'
+      loan_number_raw: null
+      evidence: 'page 1: ''REPORT NO.: RES33572 DOCUMENT OF THE WORLD BANK R...'''
+    - filename: 'Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-05.pdf'
+      size_bytes: 200500
+      document_type: ISR
+      isr_sequence: 5
+      document_date: '2017-11-29'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 5 ... Archived on 29-Nov-2017'''
+    - filename: 'Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-06.pdf'
+      size_bytes: 210482
+      document_type: ISR
+      isr_sequence: 6
+      document_date: '2018-05-04'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 6 ... Archived on 04-May-2018'''
+    - filename: 'Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-07.pdf'
+      size_bytes: 221369
+      document_type: ISR
+      isr_sequence: 7
+      document_date: '2018-11-28'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 7 ... Archived on 28-Nov-2018'''
+    - filename: 'Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-08.pdf'
+      size_bytes: 221543
+      document_type: ISR
+      isr_sequence: 8
+      document_date: '2019-02-21'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 8 ... Archived on 21-Feb-2019'''
+    - filename: 'Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-09.pdf'
+      size_bytes: 222340
+      document_type: ISR
+      isr_sequence: 9
+      document_date: '2019-09-07'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 9 ... Archived on 07-Sep-2019'''
+    - filename: 'Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-10.pdf'
+      size_bytes: 224426
+      document_type: ISR
+      isr_sequence: 10
+      document_date: '2019-12-30'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 10 ... Archived on 30-Dec-2019'''
+    - filename: 'Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-11.pdf'
+      size_bytes: 169950
+      document_type: ISR
+      isr_sequence: 11
+      document_date: '2020-04-03'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 11 ... Archived on 03-Apr-2020'''
+    - filename: 'Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-12.pdf'
+      size_bytes: 169095
+      document_type: ISR
+      isr_sequence: 12
+      document_date: '2020-07-19'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 12 ... Archived on 19-Jul-2020'''
+    - filename: 'Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-13.pdf'
+      size_bytes: 167704
+      document_type: ISR
+      isr_sequence: 13
+      document_date: '2021-02-12'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 13 ... Archived on 12-Feb-2021'''
+    - filename: 'Disclosable-Version-of-the-ISR-IN-Karnataka-Urban-Water-Supply-Modernization-Project-P130544-Sequence-No-14.pdf'
+      size_bytes: 169718
+      document_type: ISR
+      isr_sequence: 14
+      document_date: '2021-06-09'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 14 ... Archived on 09-Jun-2021'''
+    - filename: 'Disclosable0Ve04000Sequence0No00015.pdf'
+      size_bytes: 168933
+      document_type: ISR
+      isr_sequence: 15
+      document_date: '2022-01-11'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 15 ... Archived on 11-Jan-2022'''
+    - filename: 'India-Karnataka-Urban-Water-Supply-Modernization-Project-Additional-Financing.pdf'
+      size_bytes: 2062530
+      document_type: ADDITIONAL_FINANCING
+      isr_sequence: null
+      document_date: '2021-11-22'
+      date_basis: 'cover_date'
+      report_number: 'PAD4503'
+      loan_number_raw: null
+      evidence: 'page 1: ''Report No: PAD4503 ... PROJECT PAPER ON A PROPOSED ADDITIONAL LOAN ... November 22, 2021'''
+    - filename: 'ISR-Disclosable-P130544-04-10-2017-1491820303083.pdf'
+      size_bytes: 184650
+      document_type: ISR
+      isr_sequence: 3
+      document_date: '2017-04-10'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 3 ... Archived on 10-Apr-2017'''
+    - filename: 'ISR-Disclosable-P130544-06-28-2016-1467123646936.pdf'
+      size_bytes: 178400
+      document_type: ISR
+      isr_sequence: 1
+      document_date: '2016-06-28'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 1 ... Archived on 28-Jun-2016'''
+    - filename: 'ISR-Disclosable-P130544-08-11-2017-1502436961279.pdf'
+      size_bytes: 201050
+      document_type: ISR
+      isr_sequence: 4
+      document_date: '2017-08-11'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 4 ... Archived on 11-Aug-2017'''
+    - filename: 'ISR-Disclosable-P130544-09-01-2016-1472755061652.pdf'
+      size_bytes: 182105
+      document_type: ISR
+      isr_sequence: 2
+      document_date: '2016-09-01'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 2 ... Archived on 01-Sep-2016'''
+    - filename: 'P130544-074e478e-72dd-4be8-ac96-57b86f9ef893.pdf'
+      size_bytes: 153447
+      document_type: ISR
+      isr_sequence: 24
+      document_date: '2026-08-16'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 24 ... Archived on 16-Aug-2026'''
+    - filename: 'P130544-34b297f2-855a-4904-bd0d-262972a94fa7.pdf'
+      size_bytes: 155309
+      document_type: ISR
+      isr_sequence: 22
+      document_date: '2025-05-23'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 22 ... Archived on 23-May-2025'''
+    - filename: 'P130544-495b246d-9920-42d8-b2d0-d492a6258b39.pdf'
+      size_bytes: 204043
+      document_type: RESTRUCTURING_PAPER
+      isr_sequence: null
+      document_date: null
+      date_basis: null
+      report_number: 'RES01944'
+      loan_number_raw: null
+      evidence: 'page 1: ''Report No: RES01944 RESTRUCTURING PAPER ON A PROPOSED PROJECT RESTRUCTURING'''
+    - filename: 'P130544-d2372558-1779-4f56-8468-69d1fe627e46.pdf'
+      size_bytes: 364043
+      document_type: ISR
+      isr_sequence: 20
+      document_date: '2024-10-11'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 20 ... Archived on 11-Oct-2024'''
+    - filename: 'P130544-d2dae9b9-fb24-48cb-a8e9-0a09806f9497.pdf'
+      size_bytes: 349650
+      document_type: ISR
+      isr_sequence: 21
+      document_date: '2024-12-08'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 21 ... Archived on 08-Dec-2024'''
+    - filename: 'P130544-f8ddc568-b865-4a97-8f9d-9c498315fcbd.pdf'
+      size_bytes: 160145
+      document_type: ISR
+      isr_sequence: 23
+      document_date: '2025-12-27'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 23 ... Archived on 27-Dec-2025'''
+    - filename: 'P13054406d7c1a0330bb350d7693976372e.pdf'
+      size_bytes: 170967
+      document_type: ISR
+      isr_sequence: 16
+      document_date: '2022-09-28'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 16 ... Archived on 28-Sep-2022'''
+    - filename: 'P1305440d1d53606509e1408089574bee42.pdf'
+      size_bytes: 171557
+      document_type: ISR
+      isr_sequence: 17
+      document_date: '2023-05-11'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 17 ... Archived on 11-May-2023'''
+    - filename: 'P1305440f6d0220730904f079465ee70ccd.pdf'
+      size_bytes: 172359
+      document_type: ISR
+      isr_sequence: 18
+      document_date: '2023-11-27'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 18 ... Archived on 27-Nov-2023'''
+    - filename: 'P130544114e4b90271b0181c01b669b256d.pdf'
+      size_bytes: 297458
+      document_type: RESTRUCTURING_PAPER
+      isr_sequence: null
+      document_date: null
+      date_basis: null
+      report_number: 'RES00289'
+      loan_number_raw: null
+      evidence: 'page 1: ''Report No: RES00289 RESTRUCTURING PAPER ON A PROPOSED PROJECT RESTRUCTURING OF PROPOSED ADDITIONAL LOAN'''
+    - filename: 'P13054419462e80bd1a3e615b23e31712b6.pdf'
+      size_bytes: 369365
+      document_type: RESTRUCTURING_PAPER
+      isr_sequence: null
+      document_date: null
+      date_basis: null
+      report_number: 'RES00355'
+      loan_number_raw: null
+      evidence: 'page 1: ''Report No: RES00355 RESTRUCTURING PAPER ON A PROPOSED PROJECT RESTRUCTURING'''
+    - filename: 'P1305441bf033c0221b8651c987ea59dee3.pdf'
+      size_bytes: 172622
+      document_type: ISR
+      isr_sequence: 19
+      document_date: '2024-04-08'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 19 ... Archived on 08-Apr-2024'''
+    - filename: 'PAD440-PAD-P130544-R2016-0052-1-Box394870B-OUO-9.pdf'
+      size_bytes: 1338873
+      document_type: APPRAISAL_DOCUMENT
+      isr_sequence: null
+      document_date: '2016-03-10'
+      date_basis: 'cover_date'
+      report_number: 'PAD440'
+      loan_number_raw: null
+      evidence: 'page 1: ''Report No: PAD440 ... PROJECT APPRAISAL DOCUMENT ... March 10, 2016'''
+    - filename: 'RAD1345690765.pdf'
+      size_bytes: 99123
+      document_type: PERFORMANCE_INDICATORS
+      isr_sequence: null
+      document_date: '2016-05-24'
+      date_basis: 'cover_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Supplemental Letter No. 2 ... May 24, 2016 ... Performance Monitoring Indicators'' (loan number OCR-garbled as ''860 I-IN'')'
+    - filename: 'RAD696381150.pdf'
+      size_bytes: 833688
+      document_type: LOAN_AGREEMENT
+      isr_sequence: null
+      document_date: null
+      date_basis: null
+      report_number: null
+      loan_number_raw: '8601-IN'
+      evidence: 'page 1: ''LOAN NUMBER 8601-IN Loan Agreement'' (signature date OCR-garbled)'
+  P179039:
+    - filename: 'BOSIB-0866500e-7445-4d25-8aba-065bea3defd6.pdf'
+      size_bytes: 937603
+      document_type: APPRAISAL_DOCUMENT
+      isr_sequence: null
+      document_date: '2023-03-03'
+      date_basis: 'cover_date'
+      report_number: 'PAD5226'
+      loan_number_raw: null
+      evidence: 'page 1: ''Report No: PAD5226 ... PROGRAM APPRAISAL DOCUMENT ... March 3, 2023'''
+    - filename: 'P179039-3c28639e-4e62-42b9-a752-49c9e7ee4972.pdf'
+      size_bytes: 159946
+      document_type: ISR
+      isr_sequence: 8
+      document_date: '2026-02-27'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 8 ... Archived on 27-Feb-2026'''
+    - filename: 'P179039-9ecea121-4113-4b6b-b074-1b5b316db93d.pdf'
+      size_bytes: 145027
+      document_type: ISR
+      isr_sequence: 5
+      document_date: '2024-09-11'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 5 ... Archived on 11-Sep-2024'''
+    - filename: 'P179039-ed35d702-d7e5-406e-b14c-3823e45e7d84.pdf'
+      size_bytes: 147259
+      document_type: ISR
+      isr_sequence: 7
+      document_date: '2025-09-13'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 7 ... Archived on 13-Sep-2025'''
+    - filename: 'P17903906985950640a42503bd25566a7bb.pdf'
+      size_bytes: 663509
+      document_type: PERFORMANCE_INDICATORS
+      isr_sequence: null
+      document_date: '2023-06-05'
+      date_basis: 'cover_date'
+      report_number: null
+      loan_number_raw: '9496-IN'
+      evidence: 'page 1: ''Supplemental Letter ... June 5, 2023 ... Loan No. 9496-IN ... Performance Monitoring Indicators'''
+    - filename: 'P17903906de0c809d080db029d143a95433.pdf'
+      size_bytes: 106071
+      document_type: ISR
+      isr_sequence: 2
+      document_date: '2023-09-13'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 2 ... Archived on 13-Sep-2023'''
+    - filename: 'P179039099ccae0d008276003ef2deea98e.pdf'
+      size_bytes: 1859595
+      document_type: ESSA
+      isr_sequence: null
+      document_date: '2023-01-20'
+      date_basis: 'cover_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Environment and Social Systems Assessment (ESSA) January 20, 2023'''
+    - filename: 'P1790390ab843603a0b48f06d2a10dedfa7.pdf'
+      size_bytes: 106061
+      document_type: ISR
+      isr_sequence: 1
+      document_date: '2023-06-16'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 1 ... Archived on 16-Jun-2023'''
+    - filename: 'P1790390acdc3309508a7002f351bd3125c.pdf'
+      size_bytes: 1125771
+      document_type: FIDUCIARY_ASSESSMENT
+      isr_sequence: null
+      document_date: null
+      date_basis: null
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Integrated Fiduciary Systems Assessment ... February 2023'' (month only)'
+    - filename: 'P1790390d52b1100093c2050149251e969.pdf'
+      size_bytes: 1065377
+      document_type: TECHNICAL_ASSESSMENT
+      isr_sequence: null
+      document_date: '2023-03-02'
+      date_basis: 'cover_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Technical Assessment March 2, 2023'''
+    - filename: 'P179039134cd7608b1b72910dc80e161d70.pdf'
+      size_bytes: 106391
+      document_type: ISR
+      isr_sequence: 4
+      document_date: '2024-03-08'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 4 ... Archived on 08-Mar-2024'''
+    - filename: 'P17903913ed7940c1186e1128e58b1b5a08.pdf'
+      size_bytes: 146435
+      document_type: ISR
+      isr_sequence: 6
+      document_date: '2025-03-12'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 6 ... Archived on 12-Mar-2025'''
+    - filename: 'P1790391b3534e0d91a321172d8540b8794.pdf'
+      size_bytes: 106390
+      document_type: ISR
+      isr_sequence: 3
+      document_date: '2024-01-11'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 3 ... Archived on 11-Jan-2024'''
+  P506272:
+    - filename: 'BOSIB-3f0dba34-6d82-4428-9b4a-af441bf19aff.pdf'
+      size_bytes: 937086
+      document_type: APPRAISAL_DOCUMENT
+      isr_sequence: null
+      document_date: '2025-05-30'
+      date_basis: 'cover_date'
+      report_number: 'PADHP00139'
+      loan_number_raw: null
+      evidence: 'page 1: ''Report No: PADHP00139 ... PROGRAM APPRAISAL DOCUMENT ... MAY 30, 2025'''
+    - filename: 'P506272-317d4567-1d03-40b0-b6b9-e016bdd4bb94.pdf'
+      size_bytes: 863990
+      document_type: TECHNICAL_ASSESSMENT
+      isr_sequence: null
+      document_date: null
+      date_basis: null
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''TECHNICAL ASSESSMENT ... MARCH 2025 FINAL VERSION'' (month only)'
+    - filename: 'P506272-57ab5339-e7c0-451b-b6b4-7d39782cf1f6.pdf'
+      size_bytes: 185968
+      document_type: ISR
+      isr_sequence: 3
+      document_date: '2026-09-24'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 3 ... Archived on 24-Sep-2026'''
+    - filename: 'P506272-6b506d73-c324-4bba-882b-8660bce21e8a.pdf'
+      size_bytes: 490793
+      document_type: FIDUCIARY_ASSESSMENT
+      isr_sequence: null
+      document_date: '2025-03-11'
+      date_basis: 'cover_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''INTEGRATED FIDUCIARY SYSTEMS ASSESSMENT Final Version March 11, 2025'''
+    - filename: 'P506272-7ce6e8b6-0c88-4cef-90c3-48c3ec3330ad.pdf'
+      size_bytes: 607088
+      document_type: LOAN_AGREEMENT
+      isr_sequence: null
+      document_date: null
+      date_basis: null
+      report_number: null
+      loan_number_raw: '9835-IN'
+      evidence: 'page 1: ''LOAN NUMBER 9835-IN Loan Agreement'' (dated as of the Signature Date)'
+    - filename: 'P506272-7d8f160b-0ec8-40da-9694-1adb32a3cc47.pdf'
+      size_bytes: 173039
+      document_type: ISR
+      isr_sequence: 2
+      document_date: '2026-03-11'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 2 ... Archived on 11-Mar-2026'''
+    - filename: 'P506272-baa4722c-1fe9-47de-9ccc-62b985287ee6.pdf'
+      size_bytes: 162609
+      document_type: ISR
+      isr_sequence: 1
+      document_date: '2025-09-25'
+      date_basis: 'isr_archived_date'
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''Implementation Status & Results Report ... Seq No: 1 ... Archived on 25-Sep-2025'''
+    - filename: 'P506272-cb80605f-d4d0-40be-af6e-40c57fddc414.pdf'
+      size_bytes: 1460154
+      document_type: ESSA
+      isr_sequence: null
+      document_date: null
+      date_basis: null
+      report_number: null
+      loan_number_raw: null
+      evidence: 'page 1: ''ENVIRONMENT AND SOCIAL SYSTEMS ASSESSMENT ... Final version disclosed April 2025'' (month only)'

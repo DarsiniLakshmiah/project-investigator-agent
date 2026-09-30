@@ -1,0 +1,61 @@
+# The V1 prototype scope: exactly three Karnataka water-sector operations.
+# Do not add projects to V1 (CLAUDE.md section 2).
+#
+# name / instrument values are copied verbatim from the "World Bank Projects"
+# sheet of the Projects & Operations workbook (data as of 09/26/2026).
+# procurement_coverage records how the IPF contract-awards dataset relates to
+# each project, so zero rows are never read as "no procurement activity".
+# expected_isr_count is the ISR count in the local corpus as of 2026-09-26
+# (sequences 1..N); update it when newer ISRs are added.
+# expected_loan_numbers lists the loans in the IBRD snapshot (End of Period
+# 08/31/2026); Silver validation reports missing or additional loans.
+
+projects:
+  - project_id: P130544
+    name: IN Karnataka Urban Water Supply Modernization Project
+    instrument: Investment Project Financing
+    lifecycle_stage: mature
+    purpose: Mature historical-validation case.
+    analytical_question: >-
+      What implementation signals appeared before restructuring, additional
+      financing and cancellation events?
+    documents_dir: P130544
+    expected_isr_count: 24
+    expected_loan_numbers: [IBRD86010, IBRD93240]
+    procurement_coverage:
+      covered_by_ipf_contract_awards: true
+      note: IPF operation; contract awards dataset contains records for this project.
+
+  - project_id: P179039
+    name: Karnataka Sustainable Rural Water Supply Program
+    instrument: Program-for-Results Financing
+    lifecycle_stage: mid
+    purpose: Mid-lifecycle monitoring case.
+    analytical_question: >-
+      Which risks anticipated during appraisal later appeared during
+      implementation, and what new issues emerged?
+    documents_dir: P179039
+    expected_isr_count: 8
+    expected_loan_numbers: [IBRD94960]
+    procurement_coverage:
+      covered_by_ipf_contract_awards: false
+      note: >-
+        Program-for-Results operation; outside IPF contract-awards coverage.
+        Zero rows must not be interpreted as no procurement activity.
+
+  - project_id: P506272
+    name: Karnataka Water Security and Resilience Program
+    instrument: Program-for-Results Financing
+    lifecycle_stage: early
+    purpose: Early-lifecycle monitoring case.
+    analytical_question: >-
+      What early implementation signals are beginning to emerge relative to
+      appraisal expectations?
+    documents_dir: P506272
+    expected_isr_count: 3
+    expected_loan_numbers: [IBRD98350]
+    procurement_coverage:
+      covered_by_ipf_contract_awards: false
+      note: >-
+        Program-for-Results operation; outside IPF contract-awards coverage.
+        Zero rows must not be interpreted as no procurement activity.

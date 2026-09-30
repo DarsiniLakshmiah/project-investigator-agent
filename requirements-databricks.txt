@@ -1,0 +1,11 @@
+# Runtime dependencies for the Databricks notebooks (installed notebook-scoped with
+# %pip in notebooks/05_platformize_databricks.py). Versions are pinned to the ones the
+# validated local outputs were produced with: identical PDF-text and XLSX readers are a
+# precondition for identical results, which the Phase 6 reconciliation verifies.
+# Docling is NOT needed in Databricks for Phase 6 (the Phase 4 parsed cache is used).
+pydantic==2.13.5
+pydantic_core==2.46.5
+PyYAML==6.0.3
+python-dotenv==1.2.3
+openpyxl==3.1.5
+pypdfium2==5.13.0

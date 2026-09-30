@@ -1,0 +1,1415 @@
+{
+  "profiles": {
+    "bronze.document_inventory": {
+      "distinct_counts": {
+        "_source_file": 53,
+        "document_id": 53,
+        "project_id": 3,
+        "relative_path": 53
+      },
+      "distinct_record_ids": 53,
+      "fingerprint": "aac454c95ba56db3006642abdce1518277945e2536ecd2fb8ed9ca7ff2faac27",
+      "groups": {
+        "project_id": {
+          "P130544": 32,
+          "P179039": 13,
+          "P506272": 8
+        }
+      },
+      "null_counts": {
+        "_source_file": 0,
+        "_source_row": 53,
+        "_source_sha256": 0,
+        "_source_sheet": 53,
+        "classification_conflicts": 0,
+        "classification_method": 0,
+        "date_basis": 9,
+        "document_date": 9,
+        "document_id": 0,
+        "document_type": 0,
+        "extension": 0,
+        "file_size_bytes": 0,
+        "filename": 0,
+        "filename_document_date": 49,
+        "filename_document_type": 35,
+        "filename_isr_sequence": 42,
+        "filename_project_ids": 0,
+        "filename_rule": 35,
+        "isr_sequence": 18,
+        "manifest_status": 0,
+        "normalized_loan_number": 50,
+        "project_id": 0,
+        "raw_loan_number": 50,
+        "record_hash": 0,
+        "record_id": 0,
+        "relative_path": 0,
+        "report_number": 45,
+        "sha256": 0
+      },
+      "row_count": 53,
+      "stored_hash_mismatches": 0,
+      "table": "bronze.document_inventory"
+    },
+    "bronze.financers_raw": {
+      "distinct_counts": {
+        "_source_file": 1,
+        "project_id": 3
+      },
+      "distinct_record_ids": 6,
+      "fingerprint": "97b18ae6aed04989fb41756c7956f3f9434f52fae927b27269dc3d28fe939266",
+      "groups": {
+        "project_id": {
+          "P130544": 2,
+          "P179039": 2,
+          "P506272": 2
+        }
+      },
+      "null_counts": {
+        "_extra_fields": 0,
+        "_source_file": 0,
+        "_source_row": 0,
+        "_source_sha256": 0,
+        "_source_sheet": 0,
+        "amount_usd": 0,
+        "currency": 0,
+        "current_amount": 0,
+        "financer_id": 0,
+        "financer_name": 0,
+        "project_financial_type": 0,
+        "project_id": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "source_project_id": 0
+      },
+      "row_count": 6,
+      "stored_hash_mismatches": 0,
+      "table": "bronze.financers_raw"
+    },
+    "bronze.geo_locations_raw": {
+      "distinct_counts": {
+        "_source_file": 1,
+        "project_id": 1
+      },
+      "distinct_record_ids": 2,
+      "fingerprint": "3263cc5ac1fff77105c7d460111a2ea93f05e37b220ec48aeae81fdf74117427",
+      "groups": {
+        "project_id": {
+          "P130544": 2
+        }
+      },
+      "null_counts": {
+        "_extra_fields": 0,
+        "_source_file": 0,
+        "_source_row": 0,
+        "_source_sha256": 0,
+        "_source_sheet": 0,
+        "admin_unit1_name": 0,
+        "admin_unit2_name": 0,
+        "geo_latitude": 0,
+        "geo_loc_id": 0,
+        "geo_loc_name": 0,
+        "geo_longitude": 0,
+        "place_id": 0,
+        "project_id": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "source_project_id": 0,
+        "wbg_country_key": 0
+      },
+      "row_count": 2,
+      "stored_hash_mismatches": 0,
+      "table": "bronze.geo_locations_raw"
+    },
+    "bronze.loans_raw": {
+      "distinct_counts": {
+        "_source_file": 1,
+        "project_id": 3
+      },
+      "distinct_record_ids": 4,
+      "fingerprint": "21d1253d67d0c870763bd27bda8f375a8ee63153ab3fe515f9ea37adb580d101",
+      "groups": {
+        "project_id": {
+          "P130544": 2,
+          "P179039": 1,
+          "P506272": 1
+        }
+      },
+      "null_counts": {
+        "_extra_fields": 0,
+        "_source_file": 0,
+        "_source_row": 0,
+        "_source_sha256": 0,
+        "_source_sheet": 4,
+        "agreement_signing_date": 0,
+        "board_approval_calendar_year": 0,
+        "board_approval_date": 0,
+        "board_approval_fiscal_year": 0,
+        "borrower": 0,
+        "borrowers_obligation_usd": 0,
+        "cancelled_amount_usd": 0,
+        "closed_date_most_recent": 0,
+        "country": 0,
+        "country_code": 0,
+        "currency_of_commitment": 0,
+        "disbursed_amount_usd": 0,
+        "due_3rd_party_usd": 0,
+        "due_to_ibrd_usd": 0,
+        "effective_date_most_recent": 0,
+        "end_of_period": 0,
+        "exchange_adjustment_usd": 0,
+        "first_repayment_date": 0,
+        "guarantor": 0,
+        "guarantor_country_code": 0,
+        "interest_rate": 0,
+        "last_disbursement_date": 0,
+        "last_repayment_date": 0,
+        "loan_status": 0,
+        "loan_type": 0,
+        "loans_held_usd": 0,
+        "normalized_loan_number": 0,
+        "original_principal_amount_usd": 0,
+        "project_id": 0,
+        "project_name": 0,
+        "raw_loan_number": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "region": 0,
+        "repaid_3rd_party_usd": 0,
+        "repaid_to_ibrd_usd": 0,
+        "sold_3rd_party_usd": 0,
+        "source_project_id": 0,
+        "undisbursed_amount_usd": 0
+      },
+      "row_count": 4,
+      "stored_hash_mismatches": 0,
+      "table": "bronze.loans_raw"
+    },
+    "bronze.procurement_coverage": {
+      "distinct_counts": {
+        "_source_file": 1,
+        "project_id": 3
+      },
+      "distinct_record_ids": 3,
+      "fingerprint": "d417232301453a15ffe33ec4cedcb7ef06f3f0d63945109600ac8679a2714ea1",
+      "groups": {
+        "project_id": {
+          "P130544": 1,
+          "P179039": 1,
+          "P506272": 1
+        }
+      },
+      "null_counts": {
+        "_source_file": 0,
+        "_source_row": 3,
+        "_source_sha256": 0,
+        "_source_sheet": 3,
+        "coverage_status": 0,
+        "covered_by_dataset": 0,
+        "dataset": 0,
+        "interpretation": 0,
+        "project_id": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "row_count": 0
+      },
+      "row_count": 3,
+      "stored_hash_mismatches": 0,
+      "table": "bronze.procurement_coverage"
+    },
+    "bronze.procurement_raw": {
+      "distinct_counts": {
+        "_source_file": 1,
+        "project_id": 1
+      },
+      "distinct_record_ids": 17,
+      "fingerprint": "72cd5cd2c3b7ac4d5505f4086d728c9f3176c360e74a09dbf8aa17eb96c7b4e1",
+      "groups": {
+        "project_id": {
+          "P130544": 17
+        }
+      },
+      "null_counts": {
+        "_extra_fields": 0,
+        "_source_file": 0,
+        "_source_row": 0,
+        "_source_sha256": 0,
+        "_source_sheet": 17,
+        "as_of_date": 0,
+        "borrower_contract_reference_number": 0,
+        "borrower_country": 0,
+        "borrower_country_code": 0,
+        "contract_description": 0,
+        "contract_signed_calendar_year": 0,
+        "contract_signing_date": 0,
+        "fiscal_year": 0,
+        "procurement_category": 0,
+        "procurement_method": 0,
+        "project_global_practice": 0,
+        "project_id": 0,
+        "project_name": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "region": 0,
+        "review_type": 0,
+        "source_project_id": 0,
+        "supplier": 0,
+        "supplier_contract_amount_usd": 0,
+        "supplier_country": 0,
+        "supplier_country_code": 0,
+        "supplier_id": 0,
+        "wb_contract_number": 0
+      },
+      "row_count": 17,
+      "stored_hash_mismatches": 0,
+      "table": "bronze.procurement_raw"
+    },
+    "bronze.projects_raw": {
+      "distinct_counts": {
+        "_source_file": 1,
+        "project_id": 3
+      },
+      "distinct_record_ids": 3,
+      "fingerprint": "c8b061c46f1924d0aa4b02518a026984d77eda0a0745dc484860a23c14d01e31",
+      "groups": {
+        "project_id": {
+          "P130544": 1,
+          "P179039": 1,
+          "P506272": 1
+        }
+      },
+      "null_counts": {
+        "_extra_fields": 0,
+        "_source_file": 0,
+        "_source_row": 0,
+        "_source_sha256": 0,
+        "_source_sheet": 0,
+        "associated_project": 0,
+        "board_approval_date": 0,
+        "borrower": 0,
+        "consultant_services_required": 0,
+        "country": 0,
+        "current_project_cost": 0,
+        "environmental_and_social_risk": 0,
+        "environmental_assessment_category": 0,
+        "financing_type": 0,
+        "grant_amount": 0,
+        "ibrd_commitment": 0,
+        "ida_commitment": 0,
+        "implementing_agency": 0,
+        "last_stage_reached_name": 0,
+        "last_update_date": 0,
+        "lending_instrument": 0,
+        "loan_effective_date": 0,
+        "project_closing_date": 0,
+        "project_development_objective": 0,
+        "project_id": 0,
+        "project_name": 0,
+        "project_status": 0,
+        "public_disclosure_date": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "region": 0,
+        "source_project_id": 0,
+        "total_ibrd_ida_grant_commitment": 0
+      },
+      "row_count": 3,
+      "stored_hash_mismatches": 0,
+      "table": "bronze.projects_raw"
+    },
+    "bronze.sectors_raw": {
+      "distinct_counts": {
+        "_source_file": 1,
+        "project_id": 3
+      },
+      "distinct_record_ids": 10,
+      "fingerprint": "8ae176edb1463174feb87d48a7ee11b2aa81b4679a1c7df8dae9e0d713064b73",
+      "groups": {
+        "project_id": {
+          "P130544": 2,
+          "P179039": 3,
+          "P506272": 5
+        }
+      },
+      "null_counts": {
+        "_extra_fields": 0,
+        "_source_file": 0,
+        "_source_row": 0,
+        "_source_sha256": 0,
+        "_source_sheet": 0,
+        "major_sector": 0,
+        "project_id": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "sector": 0,
+        "sector_percent": 0,
+        "source_project_id": 0
+      },
+      "row_count": 10,
+      "stored_hash_mismatches": 0,
+      "table": "bronze.sectors_raw"
+    },
+    "bronze.themes_raw": {
+      "distinct_counts": {
+        "_source_file": 1,
+        "project_id": 3
+      },
+      "distinct_record_ids": 56,
+      "fingerprint": "f48d44f7457b8a7bf16506bb96916dc1efca2ecc613ec891e823f1530665ca62",
+      "groups": {
+        "project_id": {
+          "P130544": 5,
+          "P179039": 14,
+          "P506272": 37
+        }
+      },
+      "null_counts": {
+        "_extra_fields": 0,
+        "_source_file": 0,
+        "_source_row": 0,
+        "_source_sha256": 0,
+        "_source_sheet": 0,
+        "level_1": 0,
+        "level_2": 0,
+        "level_3": 0,
+        "percentage_1": 0,
+        "percentage_2": 0,
+        "percentage_3": 0,
+        "project_id": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "source_project_id": 0
+      },
+      "row_count": 56,
+      "stored_hash_mismatches": 0,
+      "table": "bronze.themes_raw"
+    },
+    "silver.appraisal_risks": {
+      "distinct_counts": {
+        "evidence_document_id": 9,
+        "project_id": 3,
+        "source_document": 9
+      },
+      "distinct_record_ids": 89,
+      "fingerprint": "6135e55cd4138ace575e6e272533cf11f64a5e29ce157bea9379cc1ea11072b6",
+      "groups": {
+        "extraction_method": {
+          "DOCLING_TABLE": 88,
+          "PDF_TEXT_FALLBACK": 1
+        },
+        "framing": {
+          "ASSESSMENT_FINDING": 50,
+          "FORMAL_RISK_RATING": 39
+        },
+        "project_id": {
+          "P130544": 20,
+          "P179039": 34,
+          "P506272": 35
+        },
+        "project_id+framing": {
+          "P130544|FORMAL_RISK_RATING": 20,
+          "P179039|ASSESSMENT_FINDING": 24,
+          "P179039|FORMAL_RISK_RATING": 10,
+          "P506272|ASSESSMENT_FINDING": 26,
+          "P506272|FORMAL_RISK_RATING": 9
+        },
+        "source_document_type": {
+          "ADDITIONAL_FINANCING": 10,
+          "APPRAISAL_DOCUMENT": 33,
+          "ESSA": 34,
+          "FIDUCIARY_ASSESSMENT": 6,
+          "TECHNICAL_ASSESSMENT": 6
+        },
+        "status": {
+          "AMBIGUOUS": 8,
+          "EXACT": 81
+        }
+      },
+      "null_counts": {
+        "activity": 57,
+        "evidence_block_id": 89,
+        "evidence_column": 50,
+        "evidence_document_date": 32,
+        "evidence_document_id": 0,
+        "evidence_document_type": 0,
+        "evidence_extraction_method": 0,
+        "evidence_filename": 0,
+        "evidence_hash": 0,
+        "evidence_label": 0,
+        "evidence_page_number": 0,
+        "evidence_row": 0,
+        "evidence_section": 0,
+        "evidence_table_id": 1,
+        "evidence_text": 0,
+        "extraction_method": 0,
+        "framing": 0,
+        "identified_date": 32,
+        "mitigation_text": 49,
+        "project_id": 0,
+        "quality_issue_codes": 0,
+        "quality_issues_json": 0,
+        "rating_justification": 81,
+        "record_hash": 0,
+        "record_id": 0,
+        "risk_category": 0,
+        "risk_description": 39,
+        "risk_id": 0,
+        "risk_rating": 33,
+        "risk_rating_raw": 33,
+        "risk_rating_status": 33,
+        "source_document": 0,
+        "source_document_type": 0,
+        "source_page": 0,
+        "source_refs_json": 0,
+        "source_section": 0,
+        "source_text": 0,
+        "status": 0
+      },
+      "row_count": 89,
+      "stored_hash_mismatches": 0,
+      "table": "silver.appraisal_risks"
+    },
+    "silver.data_quality_observations": {
+      "distinct_counts": {
+        "document_id": 43,
+        "project_id": 4
+      },
+      "distinct_record_ids": 394,
+      "fingerprint": "c70e6ffb9ec51ac004d0953ca15c2f9699e2e0f360c99c07099a620b6cd59f2d",
+      "groups": {
+        "check_code": {
+          "BLANK_PROJECT_FIELDS": 1,
+          "BLANK_SOURCE_COLUMN": 3,
+          "CROSS_SOURCE_AGREEMENT": 29,
+          "CROSS_SOURCE_DIFFERENCE": 8,
+          "CROSS_SOURCE_NOT_COMPARABLE": 1,
+          "DOCUMENT_LOAN_REFERENCE_LINKED": 3,
+          "DUPLICATE_CONTRACT_IDENTIFIER": 1,
+          "EMPTY_PAGES": 5,
+          "EXTRACTION_AMBIGUOUS": 60,
+          "EXTRACTION_CONFLICT": 2,
+          "EXTRACTION_LIMITATION": 12,
+          "FIELD_FROM_SECONDARY_SOURCE": 3,
+          "FINANCER_AMOUNT_FIELDS_DIFFER": 1,
+          "HTML_IN_TEXT_FIELD": 1,
+          "ISR_DATES_DIFFER": 4,
+          "ISR_DATE_DIFFERENCE": 4,
+          "LOAN_PRINCIPAL_COMPONENTS_DIFFERENCE": 2,
+          "LOAN_SNAPSHOT_DATE": 1,
+          "LOAN_VALUATION_CAVEAT": 2,
+          "MISSING_EXPECTED_METADATA": 9,
+          "MULTIPLE_LOANS_PER_PROJECT": 1,
+          "OCR_NOT_REQUIRED_FOR_CURRENT_SCOPE": 3,
+          "ORIGINAL_CLOSING_DATE_ESTABLISHED": 3,
+          "PDF_TEXT_FALLBACK_USED": 76,
+          "POSSIBLE_INDICATOR_MATCH": 96,
+          "PROCUREMENT_AWARD_AMOUNT_UNRESOLVED": 1,
+          "PROJECT_COMMITMENT_SOURCE_DIFFERENCE": 2,
+          "PROJECT_METADATA_INCOMPLETE": 3,
+          "PROJECT_MISSING_FROM_SOURCE": 2,
+          "RESTRUCTURING_DATE_UNRESOLVED": 4,
+          "RESULTS_TABLE_INVALID": 14,
+          "SEQUENCE_DATE_ANOMALY": 1,
+          "SOURCE_CONCEPT_NOT_PROVIDED": 4,
+          "TABLE_CELLS_DROPPED": 32
+        },
+        "layer+severity": {
+          "bronze|INFO": 16,
+          "bronze|WARNING": 4,
+          "parsing|INFO": 18,
+          "parsing|WARNING": 32,
+          "silver_documents|INFO": 270,
+          "silver_documents|WARNING": 43,
+          "silver|INFO": 10,
+          "silver|WARNING": 1
+        },
+        "related_table": {
+          "": 308,
+          "silver.appraisal_risks": 8,
+          "silver.isr_snapshots": 57,
+          "silver.project_events": 5,
+          "silver.project_results": 16
+        }
+      },
+      "null_counts": {
+        "check_code": 0,
+        "details_json": 0,
+        "document_id": 96,
+        "explanation": 377,
+        "extraction_method": 96,
+        "layer": 0,
+        "message": 0,
+        "observation_fingerprint": 0,
+        "occurrence_count": 0,
+        "page_number": 96,
+        "project_id": 9,
+        "record_hash": 0,
+        "record_id": 0,
+        "related_record_id": 308,
+        "related_table": 308,
+        "severity": 0,
+        "source": 0,
+        "table_id": 248
+      },
+      "row_count": 394,
+      "stored_hash_mismatches": 0,
+      "table": "silver.data_quality_observations"
+    },
+    "silver.indicator_match_candidates": {
+      "distinct_counts": {
+        "project_id": 3
+      },
+      "distinct_record_ids": 96,
+      "fingerprint": "71847756f8d97d66c02ffad207480a2e00aa1a9a8910880a7ac9513ea696ab7c",
+      "groups": {
+        "project_id": {
+          "P130544": 62,
+          "P179039": 20,
+          "P506272": 14
+        },
+        "review_status": {
+          "PENDING_REVIEW": 96
+        }
+      },
+      "null_counts": {
+        "alias_config_entry": 96,
+        "candidate_reason": 0,
+        "first_isr_sequence_a": 0,
+        "first_isr_sequence_b": 0,
+        "indicator_key_a": 0,
+        "indicator_key_b": 0,
+        "indicator_name_normalized_a": 0,
+        "indicator_name_normalized_b": 0,
+        "indicator_name_raw_a": 0,
+        "indicator_name_raw_b": 0,
+        "indicator_types_a": 0,
+        "indicator_types_b": 0,
+        "isr_sequences_a": 0,
+        "isr_sequences_b": 0,
+        "last_isr_sequence_a": 0,
+        "last_isr_sequence_b": 0,
+        "observation_count_a": 0,
+        "observation_count_b": 0,
+        "project_id": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "review_status": 0,
+        "source_refs_a": 0,
+        "source_refs_b": 0,
+        "unit_a": 14,
+        "unit_b": 12
+      },
+      "row_count": 96,
+      "stored_hash_mismatches": 0,
+      "table": "silver.indicator_match_candidates"
+    },
+    "silver.isr_loan_disbursements": {
+      "distinct_counts": {
+        "document_id": 35,
+        "evidence_document_id": 35,
+        "loan_number": 4,
+        "project_id": 3
+      },
+      "distinct_record_ids": 45,
+      "fingerprint": "ac67cc64486aba6acc79d0e0d0586df9adfe4a8a95577b23ec3861663c7c72b7",
+      "groups": {
+        "project_id": {
+          "P130544": 34,
+          "P179039": 8,
+          "P506272": 3
+        }
+      },
+      "null_counts": {
+        "cancelled_musd": 0,
+        "canonical_report_date": 0,
+        "currency": 17,
+        "disbursed_musd": 0,
+        "disbursed_pct_reported": 0,
+        "document_id": 0,
+        "evidence_block_id": 45,
+        "evidence_column": 45,
+        "evidence_document_date": 0,
+        "evidence_document_id": 0,
+        "evidence_document_type": 0,
+        "evidence_extraction_method": 0,
+        "evidence_filename": 0,
+        "evidence_hash": 0,
+        "evidence_label": 0,
+        "evidence_page_number": 0,
+        "evidence_row": 0,
+        "evidence_section": 0,
+        "evidence_table_id": 0,
+        "evidence_text": 0,
+        "historical_disbursed_musd": 40,
+        "isr_record_id": 0,
+        "isr_sequence": 0,
+        "loan_number": 0,
+        "loan_status": 0,
+        "original_musd": 0,
+        "project_id": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "revised_musd": 0,
+        "status": 0,
+        "undisbursed_musd": 0
+      },
+      "row_count": 45,
+      "stored_hash_mismatches": 0,
+      "table": "silver.isr_loan_disbursements"
+    },
+    "silver.isr_loan_key_dates": {
+      "distinct_counts": {
+        "document_id": 34,
+        "evidence_document_id": 34,
+        "loan_number": 4,
+        "project_id": 3
+      },
+      "distinct_record_ids": 42,
+      "fingerprint": "b44266cd32f256dec4d4fabe7c06624858bd229ecaa662127cb93b3a479f806c",
+      "groups": {
+        "project_id": {
+          "P130544": 31,
+          "P179039": 8,
+          "P506272": 3
+        }
+      },
+      "null_counts": {
+        "approval_date": 0,
+        "canonical_report_date": 0,
+        "document_id": 0,
+        "effectiveness_date": 6,
+        "evidence_block_id": 42,
+        "evidence_column": 42,
+        "evidence_document_date": 0,
+        "evidence_document_id": 0,
+        "evidence_document_type": 0,
+        "evidence_extraction_method": 0,
+        "evidence_filename": 0,
+        "evidence_hash": 0,
+        "evidence_label": 0,
+        "evidence_page_number": 0,
+        "evidence_row": 29,
+        "evidence_section": 29,
+        "evidence_table_id": 29,
+        "evidence_text": 0,
+        "isr_record_id": 0,
+        "isr_sequence": 0,
+        "loan_number": 0,
+        "original_closing_date": 0,
+        "project_id": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "revised_closing_date": 0,
+        "signing_date": 3,
+        "status": 0
+      },
+      "row_count": 42,
+      "stored_hash_mismatches": 0,
+      "table": "silver.isr_loan_key_dates"
+    },
+    "silver.isr_snapshots": {
+      "distinct_counts": {
+        "document_id": 35,
+        "project_id": 3,
+        "source_document": 35
+      },
+      "distinct_record_ids": 35,
+      "fingerprint": "d4fd679c2eab181d7db5e6b20652af25e0f4678165b518cade00e3c239c095b7",
+      "groups": {
+        "canonical_date_basis": {
+          "header_date": 35
+        },
+        "pdo_rating": {
+          "Moderately Satisfactory": 10,
+          "Moderately Unsatisfactory": 4,
+          "Satisfactory": 13,
+          "Unsatisfactory": 8
+        },
+        "pdo_rating_extraction_method": {
+          "DOCLING_TABLE": 28,
+          "PDF_TEXT_FALLBACK": 7
+        },
+        "project_id": {
+          "P130544": 24,
+          "P179039": 8,
+          "P506272": 3
+        }
+      },
+      "null_counts": {
+        "archive_date": 0,
+        "canonical_date_basis": 0,
+        "canonical_report_date": 0,
+        "commitment_amount_musd": 0,
+        "date_difference_days": 0,
+        "disbursed_amount_musd": 0,
+        "disbursement_pct_reported": 10,
+        "document_id": 0,
+        "document_type": 0,
+        "header_date": 0,
+        "implementation_progress_rating": 0,
+        "implementation_progress_rating_extraction_method": 0,
+        "implementation_progress_rating_page_number": 0,
+        "implementation_progress_rating_raw": 0,
+        "implementation_progress_rating_status": 0,
+        "implementation_progress_rating_table_id": 7,
+        "implementation_status_text": 0,
+        "isr_number": 0,
+        "isr_sequence": 0,
+        "key_decisions_text": 35,
+        "key_issues_text": 35,
+        "loan_count": 0,
+        "loan_disbursements_json": 0,
+        "loan_key_dates_json": 0,
+        "narrative_sections_json": 0,
+        "overall_risk_rating": 0,
+        "overall_risk_rating_extraction_method": 0,
+        "overall_risk_rating_page_number": 0,
+        "overall_risk_rating_raw": 0,
+        "overall_risk_rating_status": 0,
+        "overall_risk_rating_table_id": 6,
+        "pdo_rating": 0,
+        "pdo_rating_extraction_method": 0,
+        "pdo_rating_page_number": 0,
+        "pdo_rating_raw": 0,
+        "pdo_rating_status": 0,
+        "pdo_rating_table_id": 7,
+        "previous_implementation_rating": 3,
+        "previous_implementation_rating_extraction_method": 1,
+        "previous_implementation_rating_page_number": 1,
+        "previous_implementation_rating_raw": 1,
+        "previous_implementation_rating_status": 1,
+        "previous_implementation_rating_table_id": 8,
+        "previous_overall_risk_rating": 3,
+        "previous_overall_risk_rating_extraction_method": 1,
+        "previous_overall_risk_rating_page_number": 1,
+        "previous_overall_risk_rating_raw": 1,
+        "previous_overall_risk_rating_status": 1,
+        "previous_overall_risk_rating_table_id": 7,
+        "previous_pdo_rating": 3,
+        "previous_pdo_rating_extraction_method": 1,
+        "previous_pdo_rating_page_number": 1,
+        "previous_pdo_rating_raw": 1,
+        "previous_pdo_rating_status": 1,
+        "previous_pdo_rating_table_id": 8,
+        "project_id": 0,
+        "project_status": 35,
+        "quality_issue_codes": 0,
+        "quality_issues_json": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "restructuring_history_json": 0,
+        "sort_category_count": 0,
+        "sort_ratings_json": 0,
+        "source_document": 0,
+        "source_hash": 0,
+        "source_pages": 0,
+        "source_refs_json": 0
+      },
+      "row_count": 35,
+      "stored_hash_mismatches": 0,
+      "table": "silver.isr_snapshots"
+    },
+    "silver.isr_sort_ratings": {
+      "distinct_counts": {
+        "document_id": 35,
+        "evidence_document_id": 35,
+        "project_id": 3
+      },
+      "distinct_record_ids": 332,
+      "fingerprint": "00ef865fd2fbe75c79bbad4258b52e3af6f3b0828b2871fadc4bc1ec90f35194",
+      "groups": {
+        "project_id": {
+          "P130544": 235,
+          "P179039": 70,
+          "P506272": 27
+        }
+      },
+      "null_counts": {
+        "canonical_report_date": 0,
+        "current_rating": 23,
+        "current_rating_extraction_method": 0,
+        "current_rating_page_number": 0,
+        "current_rating_raw": 0,
+        "current_rating_status": 0,
+        "current_rating_table_id": 30,
+        "document_id": 0,
+        "evidence_block_id": 332,
+        "evidence_column": 30,
+        "evidence_document_date": 0,
+        "evidence_document_id": 0,
+        "evidence_document_type": 0,
+        "evidence_extraction_method": 0,
+        "evidence_filename": 0,
+        "evidence_hash": 0,
+        "evidence_label": 0,
+        "evidence_page_number": 0,
+        "evidence_row": 30,
+        "evidence_section": 30,
+        "evidence_table_id": 30,
+        "evidence_text": 0,
+        "isr_record_id": 0,
+        "isr_sequence": 0,
+        "previous_rating": 50,
+        "previous_rating_extraction_method": 9,
+        "previous_rating_page_number": 9,
+        "previous_rating_raw": 9,
+        "previous_rating_status": 9,
+        "previous_rating_table_id": 39,
+        "project_id": 0,
+        "rating_at_approval": 23,
+        "rating_at_approval_extraction_method": 0,
+        "rating_at_approval_page_number": 0,
+        "rating_at_approval_raw": 0,
+        "rating_at_approval_status": 0,
+        "rating_at_approval_table_id": 30,
+        "record_hash": 0,
+        "record_id": 0,
+        "risk_category": 0
+      },
+      "row_count": 332,
+      "stored_hash_mismatches": 0,
+      "table": "silver.isr_sort_ratings"
+    },
+    "silver.loans": {
+      "distinct_counts": {
+        "project_id": 3
+      },
+      "distinct_record_ids": 4,
+      "fingerprint": "a178e28052ec618771de2815d76d5de44a6d544a7dc9816efd4f15f1ca1f02c4",
+      "groups": {
+        "project_id": {
+          "P130544": 2,
+          "P179039": 1,
+          "P506272": 1
+        }
+      },
+      "null_counts": {
+        "agreement_signing_date": 0,
+        "board_approval_date": 0,
+        "borrower": 0,
+        "borrowers_obligation_usd": 0,
+        "cancelled_amount_usd": 0,
+        "closing_date": 0,
+        "country_code": 0,
+        "currency_of_commitment": 4,
+        "disbursed_amount_usd": 0,
+        "due_to_ibrd_usd": 0,
+        "effective_date": 0,
+        "exchange_adjustment_usd": 0,
+        "first_repayment_date": 0,
+        "last_disbursement_date": 0,
+        "last_repayment_date": 0,
+        "lender": 0,
+        "loan_base_number": 0,
+        "loan_status": 0,
+        "loan_suffix": 0,
+        "loan_type": 0,
+        "loans_held_usd": 0,
+        "normalized_loan_number": 0,
+        "original_principal_usd": 0,
+        "principal_components_difference_usd": 0,
+        "principal_components_total_usd": 0,
+        "project_id": 0,
+        "quality_issue_codes": 0,
+        "quality_issues_json": 0,
+        "raw_loan_number": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "repaid_to_ibrd_usd": 0,
+        "snapshot_date": 0,
+        "source_file": 0,
+        "source_record_keys": 0,
+        "source_refs_json": 0,
+        "undisbursed_amount_usd": 0,
+        "valuation_caveats": 0
+      },
+      "row_count": 4,
+      "stored_hash_mismatches": 0,
+      "table": "silver.loans"
+    },
+    "silver.procurement_awards": {
+      "distinct_counts": {
+        "project_id": 1
+      },
+      "distinct_record_ids": 16,
+      "fingerprint": "d4343e067939c519542f13b42b10905d0429c1ba01cf69a4c2d492679c70d76e",
+      "groups": {
+        "amount_basis": {
+          "MULTI_SUPPLIER_UNRESOLVED": 1,
+          "SINGLE_SUPPLIER_ROW": 15
+        },
+        "project_id": {
+          "P130544": 16
+        }
+      },
+      "null_counts": {
+        "amount_basis": 0,
+        "amount_lower_bound_usd": 0,
+        "amount_upper_bound_usd": 0,
+        "borrower_contract_reference": 0,
+        "contract_amount_usd": 1,
+        "contract_description": 0,
+        "contract_id": 0,
+        "contract_signing_date": 0,
+        "fiscal_year": 0,
+        "procurement_category": 0,
+        "procurement_method": 0,
+        "project_global_practice": 0,
+        "project_id": 0,
+        "quality_issue_codes": 0,
+        "quality_issues_json": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "review_type": 0,
+        "source_file": 0,
+        "source_record_keys": 0,
+        "source_refs_json": 0,
+        "supplier_count": 0,
+        "supplier_names": 0
+      },
+      "row_count": 16,
+      "stored_hash_mismatches": 0,
+      "table": "silver.procurement_awards"
+    },
+    "silver.procurement_coverage": {
+      "distinct_counts": {
+        "project_id": 3
+      },
+      "distinct_record_ids": 3,
+      "fingerprint": "1a4500c9ce5e93a70fce7526c45f4cbacf39d96ac4a0864088acb8423ccb77f7",
+      "groups": {
+        "coverage_status": {
+          "NOT_COVERED_BY_THIS_DATASET": 2,
+          "RECORDS_PRESENT": 1
+        }
+      },
+      "null_counts": {
+        "award_count": 2,
+        "coverage_status": 0,
+        "covered_by_dataset": 0,
+        "dataset": 0,
+        "interpretation": 0,
+        "project_id": 0,
+        "quality_issue_codes": 0,
+        "quality_issues_json": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "source_record_keys": 0,
+        "source_refs_json": 0,
+        "source_row_count": 0,
+        "supplier_relationship_count": 2
+      },
+      "row_count": 3,
+      "stored_hash_mismatches": 0,
+      "table": "silver.procurement_coverage"
+    },
+    "silver.procurement_suppliers": {
+      "distinct_counts": {
+        "project_id": 1
+      },
+      "distinct_record_ids": 17,
+      "fingerprint": "341feac0e9cbe5def5e5dc65509b324eeb004d71c03f10daa10c2a244b8c65c2",
+      "groups": {
+        "project_id": {
+          "P130544": 17
+        }
+      },
+      "null_counts": {
+        "contract_id": 0,
+        "project_id": 0,
+        "quality_issue_codes": 0,
+        "quality_issues_json": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "source_record_keys": 0,
+        "source_refs_json": 0,
+        "supplier_country": 0,
+        "supplier_country_code": 0,
+        "supplier_id": 0,
+        "supplier_name": 0,
+        "supplier_row_amount_usd": 0
+      },
+      "row_count": 17,
+      "stored_hash_mismatches": 0,
+      "table": "silver.procurement_suppliers"
+    },
+    "silver.project_enrichment": {
+      "distinct_counts": {
+        "evidence_document_id": 4,
+        "loan_number": 4,
+        "project_id": 3
+      },
+      "distinct_record_ids": 7,
+      "fingerprint": "61322d24bcb31cf3424d7f08cf0781a825c7f7720cfd7cefae2042e7c1649c62",
+      "groups": {
+        "target_table+status": {
+          "silver_loans|DERIVED_FROM_EXPLICIT_SOURCE": 4,
+          "silver_projects|DERIVED_FROM_EXPLICIT_SOURCE": 3
+        }
+      },
+      "null_counts": {
+        "candidates_json": 0,
+        "evidence_block_id": 7,
+        "evidence_column": 7,
+        "evidence_document_date": 0,
+        "evidence_document_id": 0,
+        "evidence_document_type": 0,
+        "evidence_extraction_method": 0,
+        "evidence_filename": 0,
+        "evidence_hash": 0,
+        "evidence_json": 0,
+        "evidence_label": 0,
+        "evidence_page_number": 0,
+        "evidence_row": 0,
+        "evidence_section": 0,
+        "evidence_table_id": 0,
+        "evidence_text": 0,
+        "loan_number": 0,
+        "project_id": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "rule": 0,
+        "status": 0,
+        "target_field": 0,
+        "target_table": 0,
+        "value": 0
+      },
+      "row_count": 7,
+      "stored_hash_mismatches": 0,
+      "table": "silver.project_enrichment"
+    },
+    "silver.project_events": {
+      "distinct_counts": {
+        "evidence_document_id": 12,
+        "loan_number": 5,
+        "project_id": 3,
+        "source_document": 9
+      },
+      "distinct_record_ids": 27,
+      "fingerprint": "78830d2ebb170e3ff1952abd5fb1fae2b953a049c72d79aab682b8387b067b5b",
+      "groups": {
+        "candidate_date_status": {
+          "": 23,
+          "DERIVED_FROM_EXPLICIT_SOURCE": 4
+        },
+        "project_id": {
+          "P130544": 23,
+          "P179039": 2,
+          "P506272": 2
+        },
+        "project_id+event_type": {
+          "P130544|ADDITIONAL_FINANCING": 1,
+          "P130544|APPROVAL": 2,
+          "P130544|CANCELLATION": 1,
+          "P130544|CLOSING_DATE_CHANGE": 5,
+          "P130544|COMPONENT_CHANGE": 1,
+          "P130544|EFFECTIVENESS": 2,
+          "P130544|FUND_REALLOCATION": 1,
+          "P130544|RESTRUCTURING": 8,
+          "P130544|RESULTS_FRAMEWORK_CHANGE": 2,
+          "P179039|APPROVAL": 1,
+          "P179039|EFFECTIVENESS": 1,
+          "P506272|APPROVAL": 1,
+          "P506272|EFFECTIVENESS": 1
+        },
+        "status": {
+          "AMBIGUOUS": 4,
+          "EXACT": 22,
+          "NORMALIZED": 1
+        }
+      },
+      "null_counts": {
+        "additional_financing_amount": 26,
+        "additional_financing_currency": 26,
+        "cancelled_amount": 26,
+        "cancelled_currency": 26,
+        "candidate_date_basis": 23,
+        "candidate_date_status": 23,
+        "candidate_event_date": 23,
+        "change_description": 10,
+        "change_flags_json": 0,
+        "components_changed": 24,
+        "event_date": 8,
+        "event_date_basis": 0,
+        "event_id": 0,
+        "event_type": 0,
+        "evidence_block_id": 23,
+        "evidence_column": 25,
+        "evidence_document_date": 9,
+        "evidence_document_id": 0,
+        "evidence_document_type": 0,
+        "evidence_extraction_method": 0,
+        "evidence_filename": 0,
+        "evidence_hash": 0,
+        "evidence_label": 0,
+        "evidence_page_number": 0,
+        "evidence_row": 20,
+        "evidence_section": 8,
+        "evidence_table_id": 16,
+        "evidence_text": 0,
+        "extraction_method": 0,
+        "fund_reallocation": 24,
+        "loan_number": 13,
+        "new_closing_date": 22,
+        "old_closing_date": 22,
+        "project_id": 0,
+        "quality_issue_codes": 0,
+        "quality_issues_json": 0,
+        "reason_text": 22,
+        "record_hash": 0,
+        "record_id": 0,
+        "results_framework_changed": 24,
+        "source_document": 0,
+        "source_page": 0,
+        "source_refs_json": 0,
+        "source_section": 8,
+        "source_text": 0,
+        "status": 0
+      },
+      "row_count": 27,
+      "stored_hash_mismatches": 0,
+      "table": "silver.project_events"
+    },
+    "silver.project_financial_summary": {
+      "distinct_counts": {
+        "project_id": 3
+      },
+      "distinct_record_ids": 3,
+      "fingerprint": "b1f4e40e4428a5c5485c715d8792502a3c50a7466c28107c2c56b2420904d91d",
+      "groups": {},
+      "null_counts": {
+        "cancelled_total_usd": 0,
+        "commitment_sources_agree": 0,
+        "disbursed_total_usd": 0,
+        "disbursement_vs_net_principal_pct": 0,
+        "disbursement_vs_original_principal_pct": 0,
+        "loan_count": 0,
+        "loan_principal_minus_workbook_commitment_usd": 0,
+        "loans_with_valuation_caveats": 0,
+        "net_principal_after_cancellation_usd": 0,
+        "original_principal_total_usd": 0,
+        "project_id": 0,
+        "quality_issue_codes": 0,
+        "quality_issues_json": 0,
+        "raw_loan_numbers": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "snapshot_date": 0,
+        "source_record_keys": 0,
+        "source_refs_json": 0,
+        "undisbursed_total_usd": 0,
+        "workbook_ibrd_commitment_usd": 0
+      },
+      "row_count": 3,
+      "stored_hash_mismatches": 0,
+      "table": "silver.project_financial_summary"
+    },
+    "silver.project_results": {
+      "distinct_counts": {
+        "document_id": 35,
+        "evidence_document_id": 35,
+        "indicator_key": 237,
+        "project_id": 3,
+        "source_document": 35
+      },
+      "distinct_record_ids": 837,
+      "fingerprint": "dd0d8b7e64e08087375c5079c81bdb3542bb17812eb5c2f18619ca13cad9ab8c",
+      "groups": {
+        "extraction_method": {
+          "DOCLING_TABLE": 523,
+          "PDF_TEXT_FALLBACK": 314
+        },
+        "identity_basis": {
+          "EXACT_NAME": 837
+        },
+        "layout": {
+          "BLOCK": 425,
+          "DLI": 116,
+          "WIDE": 296
+        },
+        "project_id": {
+          "P130544": 465,
+          "P179039": 193,
+          "P506272": 179
+        },
+        "status": {
+          "AMBIGUOUS": 16,
+          "EXACT": 821
+        }
+      },
+      "null_counts": {
+        "baseline_date": 151,
+        "baseline_value": 18,
+        "comments": 647,
+        "current_date": 158,
+        "current_value": 140,
+        "document_id": 0,
+        "evidence_block_id": 837,
+        "evidence_column": 837,
+        "evidence_document_date": 0,
+        "evidence_document_id": 0,
+        "evidence_document_type": 0,
+        "evidence_extraction_method": 0,
+        "evidence_filename": 0,
+        "evidence_hash": 0,
+        "evidence_label": 0,
+        "evidence_page_number": 0,
+        "evidence_row": 314,
+        "evidence_section": 314,
+        "evidence_table_id": 314,
+        "evidence_text": 0,
+        "extraction_method": 0,
+        "identity_basis": 0,
+        "indicator_id_source": 562,
+        "indicator_key": 0,
+        "indicator_name_normalized": 0,
+        "indicator_name_raw": 0,
+        "indicator_tags": 0,
+        "indicator_type": 0,
+        "isr_sequence": 0,
+        "layout": 0,
+        "name_source_ref_json": 836,
+        "observation_date": 0,
+        "previous_date": 259,
+        "previous_value": 243,
+        "project_id": 0,
+        "quality_issue_codes": 0,
+        "quality_issues_json": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "reported_status": 754,
+        "result_area": 450,
+        "source_document": 0,
+        "source_page": 0,
+        "source_table": 314,
+        "status": 0,
+        "target_date": 149,
+        "target_value": 20,
+        "unit": 34
+      },
+      "row_count": 837,
+      "stored_hash_mismatches": 0,
+      "table": "silver.project_results"
+    },
+    "silver.project_sectors": {
+      "distinct_counts": {
+        "project_id": 3
+      },
+      "distinct_record_ids": 10,
+      "fingerprint": "6378de81cc2767056d494ac1b64926330ba9bf98918d358ace99d7395df4daae",
+      "groups": {
+        "project_id": {
+          "P130544": 2,
+          "P179039": 3,
+          "P506272": 5
+        }
+      },
+      "null_counts": {
+        "major_sector": 0,
+        "project_id": 0,
+        "quality_issue_codes": 0,
+        "quality_issues_json": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "sector": 0,
+        "sector_percent": 0,
+        "source_record_keys": 0,
+        "source_refs_json": 0,
+        "taxonomy_label": 5
+      },
+      "row_count": 10,
+      "stored_hash_mismatches": 0,
+      "table": "silver.project_sectors"
+    },
+    "silver.project_themes": {
+      "distinct_counts": {
+        "project_id": 3
+      },
+      "distinct_record_ids": 56,
+      "fingerprint": "b0098bd54e6f9d33616166268871b4e57802fcabd6bd7f26c52fd90eaeb548ca",
+      "groups": {
+        "project_id+level": {
+          "P130544|1": 2,
+          "P130544|2": 2,
+          "P130544|3": 1,
+          "P179039|1": 2,
+          "P179039|2": 5,
+          "P179039|3": 7,
+          "P506272|1": 7,
+          "P506272|2": 15,
+          "P506272|3": 15
+        }
+      },
+      "null_counts": {
+        "level": 0,
+        "level_1_theme": 0,
+        "parent_theme_name": 11,
+        "percentage": 0,
+        "project_id": 0,
+        "quality_issue_codes": 0,
+        "quality_issues_json": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "source_record_keys": 0,
+        "source_refs_json": 0,
+        "taxonomy_label": 37,
+        "theme_name": 0,
+        "theme_path": 0
+      },
+      "row_count": 56,
+      "stored_hash_mismatches": 0,
+      "table": "silver.project_themes"
+    },
+    "silver.projects": {
+      "distinct_counts": {
+        "project_id": 3
+      },
+      "distinct_record_ids": 3,
+      "fingerprint": "6b760c1c362c14893bd0e8afefe5a2583e5590a6460527762d096400ebf6cbd3",
+      "groups": {},
+      "null_counts": {
+        "approval_date": 0,
+        "borrower": 0,
+        "country": 0,
+        "country_code": 0,
+        "country_code_source": 0,
+        "current_closing_date": 0,
+        "current_project_cost_usd": 1,
+        "effective_date": 0,
+        "environmental_and_social_risk": 0,
+        "environmental_assessment_category": 0,
+        "financing_instrument": 0,
+        "financing_type": 0,
+        "implementing_agency": 0,
+        "last_stage_reached": 0,
+        "major_sectors": 0,
+        "original_closing_date": 3,
+        "primary_sector": 0,
+        "project_development_objective": 0,
+        "project_id": 0,
+        "project_name": 0,
+        "project_status": 0,
+        "public_disclosure_date": 0,
+        "quality_issue_codes": 0,
+        "quality_issues_json": 0,
+        "record_hash": 0,
+        "record_id": 0,
+        "region": 0,
+        "sectors": 0,
+        "source_file": 0,
+        "source_last_updated": 0,
+        "source_record_keys": 0,
+        "source_refs_json": 0,
+        "state": 3,
+        "themes": 0,
+        "workbook_grant_amount_usd": 0,
+        "workbook_ibrd_commitment_usd": 0,
+        "workbook_ida_commitment_usd": 0,
+        "workbook_total_commitment_usd": 0
+      },
+      "row_count": 3,
+      "stored_hash_mismatches": 0,
+      "table": "silver.projects"
+    }
+  },
+  "source_snapshot_id": "71c36ffe262398175a02e9cc3cae94c08a40f8f3b7be717fc7ef96b8f41fcf9a"
+}

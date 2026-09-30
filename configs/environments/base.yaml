@@ -1,0 +1,51 @@
+# Settings shared by every environment. Environment files (local.yaml,
+# databricks.yaml) are deep-merged on top, then WBC_* environment variables
+# override individual keys. `null` means "not configured yet": code that needs
+# such a value must call Settings.require(...) and fail clearly.
+
+log_level: INFO
+
+data:
+  local_data_root: data
+  databricks_volume_root: null
+  # Layout beneath the data root. Matches the files as currently delivered:
+  #   <root>/all.xlsx, <root>/*.csv         -> structured_subdir "."
+  #   <root>/P130544/*.pdf, ...              -> documents_subdir "."
+  # (CLAUDE.md proposes structured/ and documents/<PID>/; see IMPLEMENTATION_PLAN.md.)
+  structured_subdir: "."
+  documents_subdir: "."
+  # Local runs write Bronze JSONL here (git-ignored). Never inside the data root.
+  local_output_root: .local_output
+
+# Source files, relative to <data root>/<structured_subdir>. Glob patterns must
+# match exactly one file; zero or several matches fail clearly.
+sources:
+  projects_workbook: all.xlsx
+  loans_snapshot: ibrd_statement_of_loans_and_guarantees_latest_available_snapshot_*.csv
+  procurement_contract_awards: contract_awards_in_investment_project_financing_india_projects_*.csv
+  document_manifest: document_manifest.yaml   # relative to configs/
+
+databricks:
+  # Unity Catalog layout (Phase 6). The catalog already exists in the workspace;
+  # schemas and Volumes are validated and created only where permitted.
+  catalog: worldbank_ai
+  bronze_schema: bronze
+  silver_schema: silver
+  gold_schema: gold            # reserved for Phase 7; nothing is written there yet
+  # Governed Volume for the original source files (in the bronze schema). Its data/
+  # folder mirrors the local data/ layout so relative source paths (lineage) match.
+  source_volume: sources
+  # Volume for pipeline artefacts derived from sources (Phase 4 parsed documents,
+  # extraction cache) in the silver schema.
+  artifact_volume: pipeline_artifacts
+
+vector_search:
+  endpoint: null
+  index: null
+
+models:
+  embedding_endpoint: null
+  llm_endpoint: null
+
+mlflow:
+  experiment: null

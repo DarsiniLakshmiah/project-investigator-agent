@@ -1,0 +1,17 @@
+# Documented indicator aliases (Phase 5 identity rule 2).
+#
+# Use only when two differently printed names are confirmed, after review, to be
+# the same results-framework indicator. Evidence (documents/pages) is required
+# for each entry. POSSIBLE_INDICATOR_MATCH observations in
+# .local_output/silver_documents/document_extraction_quality.json list candidates.
+#
+# Format:
+# projects:
+#   P130544:
+#     - canonical: "<normalized name kept as the key>"
+#       aliases: ["<other normalized name>"]
+#       evidence: "<document, page>"
+#       reviewed_by: "<name>"
+#
+# Intentionally empty: no alias has been reviewed yet.
+projects: {}

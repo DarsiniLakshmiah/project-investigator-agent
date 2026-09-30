@@ -1,0 +1,5 @@
+# Local development (VS Code). No Databricks credentials required.
+# Databricks-only values stay null locally; nothing in Phase 1 needs them.
+
+data:
+  local_data_root: data

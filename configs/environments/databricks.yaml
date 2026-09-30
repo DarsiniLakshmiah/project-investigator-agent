@@ -1,0 +1,12 @@
+# Databricks execution. Catalog, schemas and Volume names come from base.yaml.
+# Endpoints and the MLflow experiment stay null until the phases that need them.
+#
+# Paths default from the Unity Catalog settings (Settings.data_root /
+# Settings.local_output_root):
+#   data root      -> /Volumes/<catalog>/<bronze_schema>/<source_volume>/data
+#   artefact root  -> /Volumes/<catalog>/<silver_schema>/<artifact_volume>
+# Set WBC_DATABRICKS_VOLUME_ROOT / WBC_LOCAL_OUTPUT_ROOT only to override them.
+
+data:
+  databricks_volume_root: null
+  local_output_root: null
