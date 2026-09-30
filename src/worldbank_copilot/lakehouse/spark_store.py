@@ -231,14 +231,20 @@ class SparkDeltaStore:
         return rows[0].asDict(recursive=True) if rows else {}
 
     def write_snapshot(self, contract: TableContract, rows: list[dict[str, Any]]) -> WriteResult:
-        schema = self.schemas[contract.layer]
+        """Phase 6: validated in-memory rows -> snapshot MERGE."""
         names = contract.column_names
-        before = self._latest_history(contract).get("version")
         frame = self.spark.createDataFrame(
             [tuple(r[n] for n in names) for r in rows],
             schema=spark_schema(contract),
             verifySchema=True,
         )
+        return self.merge_frame(contract, frame, row_count=len(rows))
+
+    def merge_frame(self, contract: TableContract, frame: Any,
+                    row_count: int | None = None) -> WriteResult:  # fmt: skip
+        """Snapshot MERGE of a contract-shaped DataFrame (nothing collected to the driver)."""
+        schema = self.schemas[contract.layer]
+        before = self._latest_history(contract).get("version")
         view = f"_wbc_stage_{contract.name}"
         frame.createOrReplaceTempView(view)
         try:
@@ -250,7 +256,11 @@ class SparkDeltaStore:
         finally:
             self.spark.catalog.dropTempView(view)
         entry = self._latest_history(contract)
-        return merge_result(self.fq(contract), len(rows), before, entry)
+        count = row_count if row_count is not None else frame.count()
+        return merge_result(self.fq(contract), count, before, entry)
+
+    def read_frame(self, contract: TableContract) -> Any:
+        return self.spark.table(self.fq(contract)).select(*contract.column_names)
 
     def read_rows(self, contract: TableContract) -> list[dict[str, Any]]:
         """Read the table back (small tables) as dicts with Python values."""

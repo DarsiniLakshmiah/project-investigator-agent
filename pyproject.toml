@@ -58,11 +58,12 @@ testpaths = ["tests"]
 pythonpath = ["tests"]
 # Default run = unit tests only. Real-file checks: `pytest -m integration`;
 # real Docling model runs: `pytest -m docling`.
-addopts = "-ra --import-mode=importlib -m 'not databricks and not integration and not docling'"
+addopts = "-ra --import-mode=importlib -m 'not databricks and not integration and not docling and not spark'"
 markers = [
     "integration: tests that exercise several modules or real (non-fixture) local files",
     "databricks: tests that require a live Databricks workspace (deselected by default)",
     "docling: tests that run real Docling models (slow; deselected by default)",
+    "spark: tests that run a local Spark session (JVM); run with the .venv-spark environment",
 ]
 
 [tool.ruff]

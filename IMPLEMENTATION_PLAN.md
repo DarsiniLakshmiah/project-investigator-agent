@@ -15,8 +15,9 @@ still open. Updated at the end of every phase.
 | 3 | Silver structured transformations | **Complete, approved** (2026-09-26) |
 | 4 | Docling parsing, document metadata validation, parsed representation | **Complete, approved** (2026-09-27) |
 | 5 | Structured document extraction (ISR snapshots, results, appraisal risks, events) | **Complete, approved** (2026-09-30) |
-| 6 | Databricks platformization and governed Delta foundation | **Local implementation complete; real Databricks validation pending** (2026-09-30) |
-| 7–13 | See §3 (roadmap from Claude.md §36) | Not started |
+| 6 | Databricks platformization and governed Delta foundation | **Complete, validated in Databricks, approved** (2026-09-30) |
+| 7 | Deterministic Gold intelligence layer | **Implemented and validated on local Spark; Databricks run pending** (2026-09-30) |
+| 8–13 | See §3 (roadmap from Claude.md §36) | Not started |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
 passed (unit); `pytest -m integration` → 18 passed (5 Bronze + 7 Silver + 6 parsed, real
@@ -66,6 +67,15 @@ files); `pytest -m docling` → 2 passed (real Docling models); `ruff check` +
 12. Phase 3 Silver architecture, procurement modelling (awards + supplier
     relationships, unresolved amounts as bounds), provenance design and source-of-truth
     policy are approved.
+
+### Approved on Phase 6 sign-off (user, 2026-09-30)
+
+20. **Phase 6 validated in Databricks:** 56/56 source hashes matched; 27 Bronze/Silver
+    Delta tables; expected-profile and read-back reconciliation passed; second run 0
+    inserts / 0 updates / 0 deletes; 394 quality observations (0 / 80 / 314).
+21. **Databricks is the primary execution environment from Phase 7:** Gold is built in
+    Databricks directly from `worldbank_copilot.silver.*` with Spark; local execution is
+    for tests and developer feedback only.
 
 ### Approved on Phase 5 sign-off (user, 2026-09-30)
 
@@ -474,6 +484,33 @@ come from content, not filenames. Identified from first-page text:
     repeats the label across the comment row). Not changed in Phase 6 (no semantic
     changes during platformization); to fix in a later extraction revision.
 
+### Additional issues found in Phase 7
+
+51. **DLI table rows are not results-framework progress.** Disbursement-Linked
+    Indicator tables print DLI achievement/allocation columns (e.g. P179039
+    tap connections: target 0.00, and a "current" of 2,000,000 in ISR 7 between
+    6,666,030 and 7,648,665 in ISRs 6 and 8, a column misalignment). Gold marks all 114
+    DLI rows `DLI_LAYOUT_NOT_EVALUATED` (no progress, trend or signals).
+52. **Printed target dates before project effectiveness** (6 rows, P506272, e.g.
+    "Household sewer connections" target due Jun/2025 for a program effective
+    2025-09-15). Kept as printed; excluded from RESULT_TARGET_DATE_PASSED_NOT_MET;
+    WARNING in gold.quality_observations.
+53. **Negative progress as printed** (current on the opposite side of the baseline from
+    the target, e.g. P130544 "Of which, people provided with safely managed water":
+    baseline 254,700, current 51,251). Possibly a baseline copied from a parent
+    indicator; reported as INFO (RESULTS_NEGATIVE_PROGRESS) for review, not changed.
+54. **Some indicator units contradict values** (e.g. "Female beneficiaries (Percentage)"
+    reporting 21,020). Values are used as printed; no unit is re-inferred.
+55. **"Comments on achieving targets" label:** 89 Silver result rows (P130544 ISRs 20,
+    22-24; P179039 ISRs 7-8; P506272 ISRs 1-3) hold the label instead of the comment
+    text. No Gold calculation uses comments. A deterministic fix exists (skip label
+    cells in the WIDE comment row, same row provenance) but is not applied in Phase 7
+    because it changes the validated Silver foundation; see §8.
+56. **Local Spark on this Windows machine cannot run Python workers** (PySpark 3.5 and
+    4.0, Python 3.12). Gold therefore uses only JVM-native Spark functions (also the
+    better choice for Photon/serverless); local Spark tests create DataFrames from JSON
+    with the contract schemas.
+
 ---
 
 ## 7. Assumptions
@@ -514,6 +551,14 @@ Open:
 6. **Canonical ISR date for P179039 ISR 5 (Phase 5):** keep the header-first policy
    (canonical 2025-05-31, out of sequence order) or use the archive date for this
    case. Currently: header-first, flagged; timelines should order ISRs by sequence.
+8. **Comments label fix (Phase 7 finding, issue 55):** apply the deterministic WIDE
+   comment-row fix in extraction and reload Silver through the Phase 6 notebook (89 rows
+   change; expected profiles must be regenerated) before comments are used for RAG
+   or display (Phase 8).
+9. **Attention thresholds (Phase 7):** schedule (12 / 24 months), rating runs (3 / 6
+   ISRs), disbursement gap (25 / 40 points, IPF only) and results (HIGH below 50%) are
+   project-team review markers, not World Bank policy; confirm or adjust in
+   `configs/intelligence/attention_rules.yaml`.
 7. **Indicator aliases (Phase 5/6):** `configs/indicator_aliases.yaml` is empty. The 96
    candidate pairs in `review/indicator_alias_candidates.csv` (issue 47) (mostly unit/type-suffix changes across ISR
    templates) need review before Gold result-progress series are built across templates.
@@ -910,3 +955,96 @@ idempotent second run, validation SQL results.
 
 **Not done (by design):** Gold, attention signals, RAG, Vector Search, reranking, Jev,
 SLM/LLM routing, agents, memory, cache, MLflow AI evaluation, API, UI.
+
+### Phase 6 — Databricks validation (user, 2026-09-30)
+
+Executed in Databricks by the user and approved:
+- 56/56 source hashes matched;
+- 27 tables were created;
+- expected-profile and read-back reconciliation passed;
+- the idempotent second run changed no rows;
+- all validation SQL succeeded.
+
+### Phase 7 — Deterministic Gold intelligence layer (validated on local Spark; Databricks run pending)
+
+**Execution model:** production runs in Databricks from `worldbank_copilot.silver.*`
+(`notebooks/06_build_gold_intelligence.py`), with native Spark only. Locally, the same
+code runs on a local Spark session against small synthetic fixtures and the Phase 6
+Silver export (development rehearsal). **Nothing has been written to Databricks from
+this environment.**
+
+**Modules** (`src/worldbank_copilot/intelligence/`)
+
+| Module | Responsibility |
+|---|---|
+| `rules.py` | Loads and validates `configs/intelligence/attention_rules.yaml` (14 rules, 8 deferred) and `rating_scales.yaml` (ordinal ranks only). Pure Python. |
+| `contracts.py` | Explicit Gold contracts (Phase 6 mechanism, `DECIMAL(38,6)`, vocabularies, keys, provenance classes); frozen in `configs/gold_contracts.lock.json`. |
+| `frames.py` | Spark expressions for record_id / record_hash, printed-number and date parsing (`try_*`, ANSI-safe), contract validation and profiling inside Spark. |
+| `timeline.py`, `results.py`, `risks.py`, `signals.py`, `project_360.py` | Gold transformations (DataFrame API). |
+| `checks.py` | 16 ERROR invariants (block the write) and 9 WARNING/INFO observations. |
+| `pipeline.py` | Reads and validates Silver → builds → validates → MERGE (`SparkDeltaStore.merge_frame`) → read-back reconciliation; `silver_from_json` only for local rehearsal. |
+
+**Decisions**
+
+* **Native Spark only (no Python UDFs):** portable across classic, shared and
+  serverless compute and Photon. It is also required for local tests here (issue 56).
+* **Signals:**
+  - A signal is CURRENT or HISTORICAL; each has a deterministic `signal_id` and neutral wording.
+  - Wording is checked by the SIGNALS_NEUTRAL_WORDING invariant.
+  - Evidence is structured: `source_table`, `source_record_id`, `supporting_record_ids`, document, page, section and method.
+* **Restructurings:** counted once. Dated ISR-history approvals are counted; the undated
+  papers are supporting evidence only. Closing-date changes are counted as distinct
+  (loan, old, new) combinations.
+* **Result progress:**
+  - Direction comes from each indicator's baseline → target; no "higher is better" assumption is made.
+  - NULL-safe trend logic: a regression test guards against a NULL comparison falling through to "away from target".
+  - A missing target is not a "change".
+* **Financial rule:** IPF only (PforR disburses against DLIs).
+* **Write mode:** snapshot MERGE on `record_id`, the same as Phase 6. The `gold` schema is
+  created only if missing.
+
+**Local results on the real Silver data (local Spark, 2026-09-30)**
+
+| Gold table | Rows | Fingerprint (prefix) |
+|---|---|---|
+| project_360 | 3 | e7ff05ab849f |
+| project_timeline | 74 (9 milestones + 3 original closing + 35 ISRs + 27 events) | 2c8d1a4ffc3f |
+| result_progress | 837 (493 OK; 344 not evaluable with reason) | 353156a7e9c7 |
+| risk_register | 116 (39 formal + 50 findings + 27 latest-ISR SORT) | 2f884ecdf2b4 |
+| attention_signals | 69 | 9aa8663cf0ae |
+| quality_observations | 25 checks (16 ERROR, all PASS) | — |
+
+* **Signals per rule** (69 in total):
+
+  | Rule | Signals | Severity / status | Projects |
+  |---|---|---|---|
+  | SCHEDULE_CLOSING_DATE_EXTENDED | 1 | HIGH | P130544 |
+  | SCHEDULE_REPEATED_CLOSING_DATE_CHANGES | 1 | WATCH | P130544 |
+  | RATING_DOWNGRADE | 7 | 4 HIGH, 3 WATCH, all historical | P130544, P179039 |
+  | RATING_BELOW_SATISFACTORY_PERSISTENT | 4 | 2 HIGH, 2 WATCH, historical | P130544 |
+  | RATING_RECOVERY | 4 | INFO | P130544 |
+  | RESULT_TARGET_DATE_PASSED_NOT_MET | 14 | 8 HIGH current, 4 HIGH historical, 2 WATCH | P130544, P506272 |
+  | RESULT_MOVED_AWAY_FROM_TARGET | 5 | WATCH | P130544 |
+  | RESULT_NO_CHANGE | 21 | INFO | P130544 |
+  | RESULT_TARGET_CHANGED | 6 | INFO | P130544, P179039 |
+  | FINANCE_DISBURSEMENT_LAG | 1 | WATCH | P130544 |
+  | CHANGE_RESTRUCTURING | 1 | WATCH (4 restructurings) | P130544 |
+  | CHANGE_ADDITIONAL_FINANCING | 1 | INFO | P130544 |
+  | CHANGE_CANCELLATION | 1 | INFO | P130544 |
+  | RISK_OVERALL_RATING_ELEVATED | 2 | WATCH | P130544, P506272 |
+
+* **Identity:**
+  - 237 series in total: 110 exact-identity series and 127 indicators in pending alias pairs.
+  - 0 reviewed aliases were used; no pending pair was merged.
+  - 131 series have at least one evaluable observation.
+* **Determinism:** two builds with different run metadata give identical fingerprints and ids for every table.
+* **Tests:**
+  - unit tests: 432 passed;
+  - Spark tests: 15 synthetic plus 6 on real data (including all 17 Phase 7 validation queries executed on local Spark);
+  - `ruff check` and `ruff format --check` clean.
+
+**Pending (Databricks):** `gold` schema creation, Delta MERGE, read-back
+reconciliation, idempotent second run and validation queries on Unity Catalog tables.
+
+**Not done (by design):** RAG, chunking, embeddings, Vector Search, reranking, routing,
+Jev/SLM, agents, memory, cache, MLflow AI evaluation, API, UI.

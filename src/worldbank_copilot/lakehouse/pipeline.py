@@ -78,10 +78,10 @@ DATABRICKS = "DATABRICKS"
 
 
 def code_hash() -> str:
-    """Hash of the lakehouse and extraction source code (operational version tag)."""
+    """Hash of the lakehouse, extraction and intelligence code (operational version tag)."""
     digest = hashlib.sha256()
     root = Path(__file__).resolve().parents[1]
-    for package in ("lakehouse", "extraction"):
+    for package in ("lakehouse", "extraction", "intelligence"):
         for path in sorted((root / package).glob("*.py")):
             digest.update(path.name.encode())
             digest.update(path.read_bytes())

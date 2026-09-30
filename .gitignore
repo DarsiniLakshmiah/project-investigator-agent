@@ -35,7 +35,13 @@ __pycache__/
 build/
 dist/
 .venv/
+.venv-*/
 venv/
+# Local developer tooling (portable JDK for local Spark tests)
+.tools/
+spark-warehouse/
+metastore_db/
+derby.log
 .python-version
 
 # Tooling caches

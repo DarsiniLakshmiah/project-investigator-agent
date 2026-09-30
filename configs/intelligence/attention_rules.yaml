@@ -1,0 +1,278 @@
+# Attention-signal rules (Phase 7). Reviewed configuration: thresholds live here, logic in
+# src/worldbank_copilot/intelligence/signals.py (one builder per rule_id).
+#
+# An attention signal is an observable, evidence-backed condition that deserves
+# investigation. It is NOT a prediction, a probability or a causal claim. Descriptions
+# are neutral statements of what the data shows.
+#
+# Severity scale: INFO (context worth knowing), WATCH (worth reviewing), HIGH (review
+# first). Every severity condition below is deterministic.
+# signal_status: CURRENT (the condition holds in the latest data) or HISTORICAL.
+#
+# Changing a threshold or a rule's logic requires bumping its version.
+
+rules:
+  - rule_id: SCHEDULE_CLOSING_DATE_EXTENDED
+    version: 1
+    enabled: true
+    category: SCHEDULE
+    title: Closing date extended beyond the original closing date
+    description: >-
+      The current project closing date (Projects & Operations workbook) is later than the
+      original closing date established from explicit document sources (ISR key dates and
+      restructuring / additional-financing papers, silver.project_enrichment).
+    required_fields: [silver.projects.current_closing_date, silver.project_enrichment.value]
+    severity:
+      INFO: any extension
+      WATCH: cumulative extension >= watch_extension_months
+      HIGH: cumulative extension >= high_extension_months
+    thresholds:
+      watch_extension_months: 12
+      high_extension_months: 24
+    rationale: >-
+      Review markers chosen by the project team, not World Bank policy: an extension of a
+      year or more changes the implementation horizon materially; two years or more
+      roughly doubles a typical extension. Both are configuration and can be changed.
+
+  - rule_id: SCHEDULE_REPEATED_CLOSING_DATE_CHANGES
+    version: 1
+    enabled: true
+    category: SCHEDULE
+    title: Repeated closing-date changes
+    description: >-
+      Number of distinct closing-date changes (loan, old date, new date) documented in
+      silver.project_events. The same change reported by several documents counts once.
+    required_fields: [silver.project_events.old_closing_date, silver.project_events.new_closing_date]
+    severity:
+      WATCH: distinct changes >= watch_change_count
+    thresholds:
+      watch_change_count: 2
+    rationale: >-
+      One change is an ordinary implementation adjustment; a second change of the schedule
+      is worth reviewing together. Only documented (old, new) closing dates are counted.
+
+  - rule_id: RATING_DOWNGRADE
+    version: 1
+    enabled: true
+    category: IMPLEMENTATION_RATING
+    title: ISR rating downgraded
+    description: >-
+      The PDO or implementation-progress rating of an ISR is lower (ordinal rank) than the
+      rating of the preceding ISR in sequence order.
+    required_fields: [silver.isr_snapshots.pdo_rating, silver.isr_snapshots.implementation_progress_rating]
+    severity:
+      WATCH: downgrade within or into the satisfactory range
+      HIGH: downgrade into below-satisfactory (rank <= performance_below_satisfactory_max_rank)
+    thresholds: {}
+    rationale: >-
+      A downgrade is an explicit change in the Bank's own assessment. Comparison uses ISR
+      sequence (not dates, see P179039 ISR 5) and ordinal ranks only.
+
+  - rule_id: RATING_BELOW_SATISFACTORY_PERSISTENT
+    version: 1
+    enabled: true
+    category: IMPLEMENTATION_RATING
+    title: Rating below satisfactory for consecutive ISRs
+    description: >-
+      The PDO or implementation-progress rating stayed Moderately Unsatisfactory or worse
+      for at least min_consecutive_isrs consecutive ISRs.
+    required_fields: [silver.isr_snapshots.pdo_rating, silver.isr_snapshots.implementation_progress_rating]
+    severity:
+      WATCH: run length >= min_consecutive_isrs
+      HIGH: run length >= high_consecutive_isrs
+    thresholds:
+      min_consecutive_isrs: 3
+      high_consecutive_isrs: 6
+    rationale: >-
+      A single low rating can be transitional; three consecutive ISRs (typically more than
+      a year) is a sustained condition; six is prolonged.
+
+  - rule_id: RATING_RECOVERY
+    version: 1
+    enabled: true
+    category: IMPLEMENTATION_RATING
+    title: Rating recovered to satisfactory range
+    description: >-
+      The PDO or implementation-progress rating moved from below satisfactory to
+      Moderately Satisfactory or better between consecutive ISRs.
+    required_fields: [silver.isr_snapshots.pdo_rating, silver.isr_snapshots.implementation_progress_rating]
+    severity:
+      INFO: any recovery
+    thresholds: {}
+    rationale: Context for downgrade signals; recoveries are part of the rating history.
+
+  - rule_id: RESULT_TARGET_DATE_PASSED_NOT_MET
+    version: 1
+    enabled: true
+    category: RESULTS
+    title: Result target date passed without reaching the target
+    description: >-
+      In the latest ISR reporting an indicator, the report date is after the indicator's
+      target date and the current value has not reached the target (numeric results-framework
+      indicators with baseline, current and target; direction from baseline to target).
+      Target dates earlier than project effectiveness are treated as implausible and skipped.
+    required_fields: [gold.result_progress.progress_percentage, gold.result_progress.target_date_parsed]
+    severity:
+      WATCH: target not met after the target date
+      HIGH: progress_percentage < high_progress_below_percent
+    thresholds:
+      high_progress_below_percent: 50
+    rationale: >-
+      Uses only the indicator's own target and date as printed; no expectation curve is
+      assumed. Less than half of the intended change after the target date is flagged HIGH.
+
+  - rule_id: RESULT_MOVED_AWAY_FROM_TARGET
+    version: 1
+    enabled: true
+    category: RESULTS
+    title: Result indicator moved away from its target
+    description: >-
+      The current value of a numeric indicator moved away from its target compared with the
+      previous ISR observation of the same indicator (same indicator key, same target).
+    required_fields: [gold.result_progress.trend_direction]
+    severity:
+      WATCH: any movement away from target
+    thresholds: {}
+    rationale: >-
+      Direction is defined by the indicator's own baseline-to-target change, so no
+      "higher is better" assumption is made.
+
+  - rule_id: RESULT_NO_CHANGE
+    version: 1
+    enabled: true
+    category: RESULTS
+    title: Result indicator unchanged across ISRs
+    description: >-
+      A numeric indicator below its target reported the same current value in at least
+      min_consecutive_observations consecutive ISR observations spanning at least
+      min_span_months months.
+    required_fields: [gold.result_progress.current_number]
+    severity:
+      INFO: unchanged run meets both thresholds
+    thresholds:
+      min_consecutive_observations: 4
+      min_span_months: 12
+    rationale: >-
+      Many indicators are legitimately flat early in implementation; requiring four
+      observations over a year avoids flagging normal start-up periods.
+
+  - rule_id: RESULT_TARGET_CHANGED
+    version: 1
+    enabled: true
+    category: RESULTS
+    title: Result target changed
+    description: >-
+      The printed target value of an indicator differs from the target in the previous ISR
+      observation of the same indicator.
+    required_fields: [gold.result_progress.target_value]
+    severity:
+      INFO: any change
+    thresholds: {}
+    rationale: Target revisions change how progress should be read; they are not negative.
+
+  - rule_id: FINANCE_DISBURSEMENT_LAG
+    version: 1
+    enabled: true
+    category: FINANCIAL_EXECUTION
+    title: Disbursement lags elapsed implementation period
+    description: >-
+      Disbursed share of net principal (loan snapshot) is lower than the elapsed share of
+      the implementation period (effectiveness to current closing date, at the snapshot
+      date) by at least watch_gap_points percentage points.
+    required_fields: [silver.project_financial_summary.disbursement_vs_net_principal_pct,
+                      silver.projects.effective_date, silver.projects.current_closing_date]
+    severity:
+      WATCH: gap >= watch_gap_points
+      HIGH: gap >= high_gap_points
+    thresholds:
+      watch_gap_points: 25
+      high_gap_points: 40
+    applies_to_instruments: [Investment Project Financing]
+    rationale: >-
+      A linear time comparison is only a coarse indicator, so the thresholds are wide.
+      Program-for-Results operations disburse against achieved results (DLIs), so a
+      time-proportional comparison is not meaningful for them and the rule does not apply.
+      Loans with FX valuation caveats are reported with the signal.
+
+  - rule_id: CHANGE_RESTRUCTURING
+    version: 1
+    enabled: true
+    category: RESTRUCTURING_SCOPE
+    title: Project restructured
+    description: >-
+      Number of restructurings with a formal approval date (ISR restructuring history).
+      Undated restructuring papers describe these restructurings and are not counted again.
+    required_fields: [silver.project_events.event_type, silver.project_events.event_date]
+    severity:
+      INFO: at least one restructuring
+      WATCH: count >= watch_restructuring_count
+    thresholds:
+      watch_restructuring_count: 3
+    rationale: >-
+      Restructurings are normal management tools; several restructurings are worth reviewing
+      together. The description stays neutral.
+
+  - rule_id: CHANGE_ADDITIONAL_FINANCING
+    version: 1
+    enabled: true
+    category: RESTRUCTURING_SCOPE
+    title: Additional financing approved
+    description: Additional financing documented in silver.project_events.
+    required_fields: [silver.project_events.event_type]
+    severity:
+      INFO: any additional financing
+    thresholds: {}
+    rationale: A scope and financing change that frames later schedule and results changes.
+
+  - rule_id: CHANGE_CANCELLATION
+    version: 1
+    enabled: true
+    category: RESTRUCTURING_SCOPE
+    title: Partial cancellation of financing
+    description: >-
+      A cancellation is documented (silver.project_events) and the loan snapshot reports a
+      cancelled amount for the project.
+    required_fields: [silver.project_events.event_type, silver.project_financial_summary.cancelled_total_usd]
+    severity:
+      INFO: any cancellation
+    thresholds: {}
+    rationale: >-
+      Cancellations change the financing envelope; the reason text is kept as printed and no
+      cause is inferred.
+
+  - rule_id: RISK_OVERALL_RATING_ELEVATED
+    version: 1
+    enabled: true
+    category: RISK
+    title: Overall risk rating Substantial or High
+    description: >-
+      Overall risk rating in the latest ISR is Substantial or High (risk scale), with the
+      number of consecutive ISRs at that level or above.
+    required_fields: [silver.isr_snapshots.overall_risk_rating]
+    severity:
+      WATCH: Substantial
+      HIGH: High
+    thresholds: {}
+    rationale: >-
+      The overall risk rating is the Bank's explicit risk assessment; only its current level
+      and persistence are reported.
+
+deferred:
+  - candidate: Result behind an expected trajectory (time-proportional progress)
+    reason: >-
+      Needs an assumed progress curve per indicator; the documents give only targets and
+      dates. Replaced by RESULT_TARGET_DATE_PASSED_NOT_MET, which uses printed targets only.
+  - candidate: Signals on Yes/No and text indicators
+    reason: No numeric progress; completion semantics vary by indicator and are not reviewed.
+  - candidate: Signals across pending indicator-alias pairs
+    reason: 96 candidate pairs are PENDING_REVIEW; series are never joined without review.
+  - candidate: Recurring assessment finding / risk persistence by description
+    reason: No deterministic or reviewed identity between findings of different documents.
+  - candidate: Approaching closing date
+    reason: Needs a policy view of what "approaching" means relative to remaining work.
+  - candidate: Disbursement lag for Program-for-Results operations
+    reason: PforR disburses against DLIs, not over time; a time comparison would mislead.
+  - candidate: Large financing change from ISR revised amounts
+    reason: ISR revised amounts of the JPY loan move with exchange rates; not a scope change.
+  - candidate: SORT category-level trends
+    reason: SORT templates differ across ISRs (7-10 categories); kept in the risk register.

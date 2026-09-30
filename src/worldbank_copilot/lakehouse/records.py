@@ -516,21 +516,26 @@ def _isr_child_contract(
     )
 
 
-def isr_child_datasets(snapshots: list[IsrSnapshot], ctx: LoadContext) -> list[Dataset]:
-    isr = isr_contract()
-    sort_c = _isr_child_contract(
-        "isr_sort_ratings",
-        SortRating,
-        ("isr_record_id", "risk_category"),
-        ("rating_at_approval", "previous_rating", "current_rating"),
-        [
-            c
-            for r in ("rating_at_approval", "previous_rating", "current_rating")
-            for c in _rating_columns(r)
-        ],
-        "SORT rows printed in each ISR (rating at approval / previous / current).",
+def isr_sort_contract() -> TableContract:
+    """silver.isr_sort_ratings (SORT rows with no rating have no evidence)."""
+    return _relax_evidence(
+        _isr_child_contract(
+            "isr_sort_ratings",
+            SortRating,
+            ("isr_record_id", "risk_category"),
+            ("rating_at_approval", "previous_rating", "current_rating"),
+            [
+                c
+                for r in ("rating_at_approval", "previous_rating", "current_rating")
+                for c in _rating_columns(r)
+            ],
+            "SORT rows printed in each ISR (rating at approval / previous / current).",
+        )
     )
-    disb_c = _isr_child_contract(
+
+
+def isr_disbursements_contract() -> TableContract:
+    return _isr_child_contract(
         "isr_loan_disbursements",
         LoanDisbursement,
         ("isr_record_id", "loan_number"),
@@ -538,13 +543,25 @@ def isr_child_datasets(snapshots: list[IsrSnapshot], ctx: LoadContext) -> list[D
         [],
         "Per-loan financial line printed in each ISR (US$ millions).",
     )
-    dates_c = _isr_child_contract(
+
+
+def isr_key_dates_contract() -> TableContract:
+    return _isr_child_contract(
         "isr_loan_key_dates",
         LoanKeyDates,
         ("isr_record_id", "loan_number"),
         ("evidence",),
         [],
         "Per-loan key dates printed in each ISR.",
+    )
+
+
+def isr_child_datasets(snapshots: list[IsrSnapshot], ctx: LoadContext) -> list[Dataset]:
+    isr = isr_contract()
+    sort_c, disb_c, dates_c = (
+        isr_sort_contract(),
+        isr_disbursements_contract(),
+        isr_key_dates_contract(),
     )
     sort_rows, disb_rows, date_rows = [], [], []
     for snap in snapshots:
@@ -578,8 +595,6 @@ def isr_child_datasets(snapshots: list[IsrSnapshot], ctx: LoadContext) -> list[D
             date_rows.append(
                 {**parent, **model_values(item, dates_c.columns), **evidence_values(item.evidence)}
             )
-    # SORT rows with no rating at all have no evidence; relax the requirement for them.
-    sort_c = _relax_evidence(sort_c)
     return [
         finalize(sort_c, sort_rows, ctx),
         finalize(disb_c, disb_rows, ctx),

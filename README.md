@@ -139,6 +139,8 @@ The same code selects its environment automatically (`WBC_ENV`, otherwise
 │   ├── source_snapshot.json        validated source files + SHA-256 (Phase 6)
 │   ├── delta_contracts.lock.json   frozen Delta table contracts (Phase 6)
 │   ├── reconciliation/             expected profiles of the current snapshot (Phase 6)
+│   ├── intelligence/               attention rules + rating scales (Phase 7)
+│   ├── gold_contracts.lock.json    frozen Gold table contracts (Phase 7)
 │   ├── environments/               base.yaml · local.yaml · databricks.yaml
 │   └── guardrails/                 NeMo config (Phase 12)
 ├── data/                           source files — git-ignored (see data/README.md)
@@ -148,6 +150,7 @@ The same code selects its environment automatically (`WBC_ENV`, otherwise
 │   ├── parsing/                    Docling adapter, metadata, parsed representation (Phase 4)
 │   ├── extraction/                 ISR snapshots · results · appraisal risks · events (Phase 5)
 │   ├── lakehouse/                  contracts · identities · reconciliation · Delta store (Phase 6)
+│   ├── intelligence/               Gold: timeline · results · risks · signals · 360 (Phase 7, Spark)
 │   ├── transformations/            bronze · normalize · silver (+ models, lineage, quality); Gold in Phase 6
 │   ├── retrieval/                  Phases 7–8
 │   ├── tools/                      Phase 9
@@ -156,7 +159,7 @@ The same code selects its environment automatically (`WBC_ENV`, otherwise
 │   ├── observability/              Phase 13
 │   └── api/                        Phase 14
 ├── notebooks/                      _bootstrap + 01–10 thin Databricks entry points
-├── sql/                            Phase 6 validation queries
+├── sql/                            Phase 6 and Phase 7 validation queries
 ├── review/                         human review artefacts (indicator alias candidates)
 ├── requirements-databricks.txt     pinned notebook-scoped runtime dependencies
 ├── evaluation/                     Phase 16
@@ -415,8 +418,87 @@ lists every near-identical indicator pair as `PENDING_REVIEW`. To approve one, a
 an entry with evidence and reviewer to `configs/indicator_aliases.yaml`. The
 pipeline never writes that file; only reviewed aliases establish identity.
 
+## Gold intelligence layer (Phase 7)
+
+Gold turns the governed Silver Delta tables into decision-support tables. It runs **in
+Databricks, from `worldbank_copilot.silver.*`, with native Spark**. It does not rebuild
+Phases 1–5.
+
+```
+worldbank_copilot.silver.*  ── validated against the Phase 6 contracts
+   │  Spark (native functions only: Photon / serverless friendly, no Python UDFs)
+   ▼
+gold.project_timeline · gold.result_progress · gold.risk_register ·
+gold.attention_signals · gold.project_360 · gold.quality_observations
+   │  Gold contracts + invariants (any ERROR stops before writing)
+   ▼
+snapshot MERGE into worldbank_copilot.gold.* → read back → reconcile
+```
+
+| Table | Grain | Key sources |
+|---|---|---|
+| `project_360` | project | projects, project_financial_summary, project_enrichment, isr_snapshots, events, risks, results, signals |
+| `project_timeline` | project × source record × event type | projects, project_enrichment, isr_snapshots, project_events |
+| `result_progress` | Silver result observation | project_results, indicator_match_candidates |
+| `risk_register` | Silver risk / finding (plus the latest ISR SORT) | appraisal_risks, isr_sort_ratings |
+| `attention_signals` | rule × project × subject × sequence | all of the above |
+| `quality_observations` | check | Gold invariants and observations |
+
+**Attention signals are observations, not predictions.** Each one comes from a
+reviewed rule in `configs/intelligence/attention_rules.yaml`, which holds the id,
+version, severity logic (INFO / WATCH / HIGH), thresholds with rationale, and the
+deferred rules with reasons. Each signal keeps its primary Silver record, all
+supporting record ids, and the document, page, section and extraction method, so
+`sql/phase7_validation.sql` (`signal_provenance`) can trace it back to the source
+file hash. Ratings are compared by ordinal rank only
+(`configs/intelligence/rating_scales.yaml`).
+
+Semantics that are preserved on purpose:
+
+- **Dates:** `event_date` is only a source-stated date. Derived restructuring
+  candidate dates stay in `candidate_event_date` (`DERIVED_CANDIDATE`).
+- **ISR ordering:** ISR sequence orders the timeline. P179039 ISR 5 keeps its printed
+  date and has `date_sequence_anomaly = true`.
+- **Indicator identity:** indicators are joined only by the Silver key (exact name or
+  reviewed alias). The 96 pending alias pairs remain separate series.
+- **Progress:** progress is calculated only when it is mathematically valid.
+  Otherwise it is NULL, and `calculation_status` says why:
+  - DLI table rows, Yes/No and text units;
+  - missing values and zero target distance;
+  - non-exact extraction.
+
+### Running Gold in Databricks
+
+After Phase 6, run `notebooks/06_build_gold_intelligence.py`. It:
+1. validates the Silver tables;
+2. builds Gold and checks contracts and invariants;
+3. creates `worldbank_copilot.gold` if it is missing;
+4. MERGEs, reads back and reconciles;
+5. runs a second time and asserts that no rows changed;
+6. displays `sql/phase7_validation.sql`.
+
+### Testing Gold transformations locally (real Spark)
+
+Gold code is tested on a local Spark session. It uses only JVM-native Spark functions,
+so no Python workers are needed. The Spark dev environment is separate from the main
+`.venv`:
+
+```powershell
+py -3.12 -m venv .venv-spark
+.\.venv-spark\Scripts\python -m pip install "pyspark==4.0.1" pytest -r requirements-databricks.txt
+.\.venv-spark\Scripts\python -m pip install -e . --no-deps
+# a JDK 17: set JAVA_HOME, or unpack one into .tools\ (git-ignored)
+.\.venv-spark\Scripts\python -m pytest -m spark
+```
+
+The `spark` tests have two parts:
+- **Synthetic scenario:** exercises every rule and edge case.
+- **Real Silver rows:** uses the rows exported by `scripts/platformize.py`. It checks invariants and determinism across two builds, and runs every query in `sql/phase7_validation.sql`.
+
+Delta MERGE, read-back and idempotency are proven only by the Databricks run.
+
 ## Remaining documentation
 
-Sections for Gold, Vector Search, FastAPI,
+Sections for Vector Search, FastAPI,
 React, evaluation and known limitations will be added as those phases are
 implemented.

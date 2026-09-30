@@ -1,0 +1,24 @@
+# Ordinal rating scales used by Gold (Phase 7).
+#
+# Ranks express ORDER only (higher = better performance / higher risk). No arithmetic is
+# done on the distance between ranks: rules only compare ranks (lower than, at or below).
+# Labels are the normalized values produced by Phase 5 (raw text stays in Silver/Gold).
+#
+# Performance scale: the six-point World Bank ISR scale for progress towards the PDO and
+# overall implementation progress.
+performance:
+  Highly Satisfactory: 6
+  Satisfactory: 5
+  Moderately Satisfactory: 4
+  Moderately Unsatisfactory: 3
+  Unsatisfactory: 2
+  Highly Unsatisfactory: 1
+# Highest rank that counts as "below satisfactory" (Moderately Unsatisfactory and worse).
+performance_below_satisfactory_max_rank: 3
+
+# Risk scale: SORT / overall risk ratings (higher = more risk).
+risk:
+  Low: 1
+  Moderate: 2
+  Substantial: 3
+  High: 4

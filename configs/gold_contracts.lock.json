@@ -1,0 +1,1401 @@
+{
+  "gold.attention_signals": {
+    "columns": [
+      {
+        "name": "record_id",
+        "nullable": false,
+        "role": "KEY",
+        "type": "STRING"
+      },
+      {
+        "name": "signal_id",
+        "nullable": false,
+        "role": "KEY",
+        "type": "STRING"
+      },
+      {
+        "name": "project_id",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "rule_id",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "rule_version",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "signal_category",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING",
+        "vocabulary": [
+          "SCHEDULE",
+          "IMPLEMENTATION_RATING",
+          "RESULTS",
+          "FINANCIAL_EXECUTION",
+          "RESTRUCTURING_SCOPE",
+          "RISK"
+        ]
+      },
+      {
+        "name": "signal_type",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "subject",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "signal_title",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "signal_description",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "severity",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING",
+        "vocabulary": [
+          "INFO",
+          "WATCH",
+          "HIGH"
+        ]
+      },
+      {
+        "name": "signal_status",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING",
+        "vocabulary": [
+          "CURRENT",
+          "HISTORICAL"
+        ]
+      },
+      {
+        "name": "observed_date",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DATE"
+      },
+      {
+        "name": "effective_sequence",
+        "nullable": true,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "current_value",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "comparison_value",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "threshold",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "value_unit",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "rule_description",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "supporting_record_ids",
+        "nullable": false,
+        "role": "PROVENANCE",
+        "type": "ARRAY<STRING>"
+      },
+      {
+        "name": "evidence_status",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "caveats",
+        "nullable": false,
+        "role": "DATA",
+        "type": "ARRAY<STRING>"
+      },
+      {
+        "name": "source_table",
+        "nullable": false,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "source_record_id",
+        "nullable": false,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "document_id",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "page_number",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "BIGINT"
+      },
+      {
+        "name": "section",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "extraction_method",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "STRING",
+        "vocabulary": [
+          "DOCLING_TABLE",
+          "DOCLING_TEXT",
+          "PDF_TEXT_FALLBACK",
+          "DERIVED"
+        ]
+      },
+      {
+        "name": "provenance_class",
+        "nullable": false,
+        "role": "PROVENANCE",
+        "type": "STRING",
+        "vocabulary": [
+          "SYSTEM_DERIVED_SIGNAL"
+        ]
+      },
+      {
+        "name": "record_hash",
+        "nullable": false,
+        "role": "INTEGRITY",
+        "type": "STRING"
+      },
+      {
+        "name": "_source_snapshot_id",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      },
+      {
+        "name": "_load_run_id",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      },
+      {
+        "name": "_loaded_at",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "_pipeline_version",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      }
+    ],
+    "layer": "gold",
+    "name": "attention_signals",
+    "natural_key": [
+      "rule_id",
+      "project_id",
+      "subject",
+      "effective_sequence"
+    ],
+    "source_dataset": "gold.attention_signals",
+    "write_mode": "SNAPSHOT_MERGE"
+  },
+  "gold.project_360": {
+    "columns": [
+      {
+        "name": "record_id",
+        "nullable": false,
+        "role": "KEY",
+        "type": "STRING"
+      },
+      {
+        "name": "project_id",
+        "nullable": false,
+        "role": "KEY",
+        "type": "STRING"
+      },
+      {
+        "name": "project_name",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "instrument",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "project_status",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "approval_date",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DATE"
+      },
+      {
+        "name": "effectiveness_date",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DATE"
+      },
+      {
+        "name": "original_closing_date",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DATE"
+      },
+      {
+        "name": "original_closing_date_status",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "current_closing_date",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DATE"
+      },
+      {
+        "name": "days_extended",
+        "nullable": true,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "original_principal_usd",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DECIMAL(38,6)"
+      },
+      {
+        "name": "cancelled_usd",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DECIMAL(38,6)"
+      },
+      {
+        "name": "net_principal_usd",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DECIMAL(38,6)"
+      },
+      {
+        "name": "disbursed_usd",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DECIMAL(38,6)"
+      },
+      {
+        "name": "undisbursed_usd",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DECIMAL(38,6)"
+      },
+      {
+        "name": "disbursement_pct_of_net_principal",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DECIMAL(38,6)"
+      },
+      {
+        "name": "financial_snapshot_date",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DATE"
+      },
+      {
+        "name": "loan_count",
+        "nullable": true,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "loans_with_valuation_caveats",
+        "nullable": true,
+        "role": "DATA",
+        "type": "ARRAY<STRING>"
+      },
+      {
+        "name": "latest_isr_sequence",
+        "nullable": true,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "latest_isr_date",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DATE"
+      },
+      {
+        "name": "latest_isr_date_basis",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "latest_do_rating",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "latest_ip_rating",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "latest_overall_risk_rating",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "previous_do_rating",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "previous_ip_rating",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "do_rating_change",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING",
+        "vocabulary": [
+          "UPGRADE",
+          "DOWNGRADE",
+          "UNCHANGED",
+          "NOT_COMPARABLE"
+        ]
+      },
+      {
+        "name": "ip_rating_change",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING",
+        "vocabulary": [
+          "UPGRADE",
+          "DOWNGRADE",
+          "UNCHANGED",
+          "NOT_COMPARABLE"
+        ]
+      },
+      {
+        "name": "number_of_isrs",
+        "nullable": false,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "number_of_project_events",
+        "nullable": false,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "number_of_restructurings",
+        "nullable": false,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "number_of_restructuring_papers",
+        "nullable": false,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "formal_risk_count",
+        "nullable": false,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "assessment_finding_count",
+        "nullable": false,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "number_of_result_indicators",
+        "nullable": false,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "latest_results_reporting_date",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DATE"
+      },
+      {
+        "name": "current_attention_signal_count",
+        "nullable": false,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "current_watch_signal_count",
+        "nullable": false,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "current_high_signal_count",
+        "nullable": false,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "source_record_ids",
+        "nullable": false,
+        "role": "PROVENANCE",
+        "type": "ARRAY<STRING>"
+      },
+      {
+        "name": "record_hash",
+        "nullable": false,
+        "role": "INTEGRITY",
+        "type": "STRING"
+      },
+      {
+        "name": "_source_snapshot_id",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      },
+      {
+        "name": "_load_run_id",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      },
+      {
+        "name": "_loaded_at",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "_pipeline_version",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      }
+    ],
+    "layer": "gold",
+    "name": "project_360",
+    "natural_key": [
+      "project_id"
+    ],
+    "source_dataset": "gold.project_360",
+    "write_mode": "SNAPSHOT_MERGE"
+  },
+  "gold.project_timeline": {
+    "columns": [
+      {
+        "name": "record_id",
+        "nullable": false,
+        "role": "KEY",
+        "type": "STRING"
+      },
+      {
+        "name": "timeline_event_id",
+        "nullable": false,
+        "role": "KEY",
+        "type": "STRING"
+      },
+      {
+        "name": "project_id",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "event_type",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "event_subtype",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "event_title",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "event_description",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "event_date",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DATE"
+      },
+      {
+        "name": "event_date_status",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING",
+        "vocabulary": [
+          "SOURCE_STATED",
+          "SCHEDULED",
+          "DERIVED_CANDIDATE",
+          "UNDATED"
+        ]
+      },
+      {
+        "name": "event_date_basis",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "candidate_event_date",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DATE"
+      },
+      {
+        "name": "candidate_date_basis",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "candidate_date_status",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "ordering_date",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DATE"
+      },
+      {
+        "name": "ordering_basis",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING",
+        "vocabulary": [
+          "EVENT_DATE",
+          "ISR_SEQUENCE_ADJUSTED",
+          "CANDIDATE_DATE",
+          "NONE"
+        ]
+      },
+      {
+        "name": "event_sequence",
+        "nullable": false,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "isr_sequence",
+        "nullable": true,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "loan_number",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "date_sequence_anomaly",
+        "nullable": false,
+        "role": "DATA",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "extraction_status",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "source_table",
+        "nullable": false,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "source_record_id",
+        "nullable": false,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "document_id",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "page_number",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "BIGINT"
+      },
+      {
+        "name": "section",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "extraction_method",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "STRING",
+        "vocabulary": [
+          "DOCLING_TABLE",
+          "DOCLING_TEXT",
+          "PDF_TEXT_FALLBACK",
+          "DERIVED"
+        ]
+      },
+      {
+        "name": "provenance_class",
+        "nullable": false,
+        "role": "PROVENANCE",
+        "type": "STRING",
+        "vocabulary": [
+          "FACT",
+          "DOCUMENTED_FINDING"
+        ]
+      },
+      {
+        "name": "record_hash",
+        "nullable": false,
+        "role": "INTEGRITY",
+        "type": "STRING"
+      },
+      {
+        "name": "_source_snapshot_id",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      },
+      {
+        "name": "_load_run_id",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      },
+      {
+        "name": "_loaded_at",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "_pipeline_version",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      }
+    ],
+    "layer": "gold",
+    "name": "project_timeline",
+    "natural_key": [
+      "project_id",
+      "source_table",
+      "source_record_id",
+      "event_type"
+    ],
+    "source_dataset": "gold.project_timeline",
+    "write_mode": "SNAPSHOT_MERGE"
+  },
+  "gold.quality_observations": {
+    "columns": [
+      {
+        "name": "record_id",
+        "nullable": false,
+        "role": "KEY",
+        "type": "STRING"
+      },
+      {
+        "name": "check_id",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "severity",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING",
+        "vocabulary": [
+          "ERROR",
+          "WARNING",
+          "INFO"
+        ]
+      },
+      {
+        "name": "table_name",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "project_id",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "observation_count",
+        "nullable": false,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "message",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "details_json",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "record_hash",
+        "nullable": false,
+        "role": "INTEGRITY",
+        "type": "STRING"
+      },
+      {
+        "name": "_source_snapshot_id",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      },
+      {
+        "name": "_load_run_id",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      },
+      {
+        "name": "_loaded_at",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "_pipeline_version",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      }
+    ],
+    "layer": "gold",
+    "name": "quality_observations",
+    "natural_key": [
+      "check_id",
+      "table_name",
+      "project_id"
+    ],
+    "source_dataset": "gold.quality_observations",
+    "write_mode": "SNAPSHOT_MERGE"
+  },
+  "gold.result_progress": {
+    "columns": [
+      {
+        "name": "record_id",
+        "nullable": false,
+        "role": "KEY",
+        "type": "STRING"
+      },
+      {
+        "name": "project_id",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "canonical_indicator_id",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "indicator_name",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "indicator_type",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "unit",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "layout",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "identity_basis",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "identity_review_status",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING",
+        "vocabulary": [
+          "EXACT_IDENTITY",
+          "REVIEWED_ALIAS",
+          "PENDING_ALIAS_REVIEW"
+        ]
+      },
+      {
+        "name": "isr_sequence",
+        "nullable": true,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "reporting_date",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DATE"
+      },
+      {
+        "name": "baseline_value",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "current_value",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "target_value",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "baseline_number",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DECIMAL(38,6)"
+      },
+      {
+        "name": "current_number",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DECIMAL(38,6)"
+      },
+      {
+        "name": "target_number",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DECIMAL(38,6)"
+      },
+      {
+        "name": "target_date",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "target_date_parsed",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DATE"
+      },
+      {
+        "name": "previous_isr_sequence",
+        "nullable": true,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "previous_number",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DECIMAL(38,6)"
+      },
+      {
+        "name": "previous_target_number",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DECIMAL(38,6)"
+      },
+      {
+        "name": "absolute_change",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DECIMAL(38,6)"
+      },
+      {
+        "name": "percentage_change",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DECIMAL(38,6)"
+      },
+      {
+        "name": "progress_percentage",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DECIMAL(38,6)"
+      },
+      {
+        "name": "target_gap",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DECIMAL(38,6)"
+      },
+      {
+        "name": "trend_direction",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING",
+        "vocabulary": [
+          "TOWARD_TARGET",
+          "AWAY_FROM_TARGET",
+          "UNCHANGED",
+          "NOT_COMPARABLE"
+        ]
+      },
+      {
+        "name": "target_status",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING",
+        "vocabulary": [
+          "MET",
+          "NOT_MET",
+          "NOT_EVALUABLE"
+        ]
+      },
+      {
+        "name": "calculation_status",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING",
+        "vocabulary": [
+          "OK",
+          "EXTRACTION_NOT_EXACT",
+          "DLI_LAYOUT_NOT_EVALUATED",
+          "QUALITATIVE_UNIT",
+          "MISSING_BASELINE",
+          "MISSING_CURRENT",
+          "MISSING_TARGET",
+          "NON_NUMERIC_VALUE",
+          "ZERO_TARGET_DISTANCE"
+        ]
+      },
+      {
+        "name": "target_changed",
+        "nullable": false,
+        "role": "DATA",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "extraction_status",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "table_id",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "source_table",
+        "nullable": false,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "source_record_id",
+        "nullable": false,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "document_id",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "page_number",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "BIGINT"
+      },
+      {
+        "name": "section",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "extraction_method",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "STRING",
+        "vocabulary": [
+          "DOCLING_TABLE",
+          "DOCLING_TEXT",
+          "PDF_TEXT_FALLBACK",
+          "DERIVED"
+        ]
+      },
+      {
+        "name": "provenance_class",
+        "nullable": false,
+        "role": "PROVENANCE",
+        "type": "STRING",
+        "vocabulary": [
+          "DOCUMENTED_FINDING"
+        ]
+      },
+      {
+        "name": "record_hash",
+        "nullable": false,
+        "role": "INTEGRITY",
+        "type": "STRING"
+      },
+      {
+        "name": "_source_snapshot_id",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      },
+      {
+        "name": "_load_run_id",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      },
+      {
+        "name": "_loaded_at",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "_pipeline_version",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      }
+    ],
+    "layer": "gold",
+    "name": "result_progress",
+    "natural_key": [
+      "source_record_id"
+    ],
+    "source_dataset": "gold.result_progress",
+    "write_mode": "SNAPSHOT_MERGE"
+  },
+  "gold.risk_register": {
+    "columns": [
+      {
+        "name": "record_id",
+        "nullable": false,
+        "role": "KEY",
+        "type": "STRING"
+      },
+      {
+        "name": "project_id",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "risk_or_finding_id",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "record_type",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING",
+        "vocabulary": [
+          "FORMAL_RISK_RATING",
+          "ASSESSMENT_FINDING",
+          "ISR_SORT_RATING"
+        ]
+      },
+      {
+        "name": "category",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "title",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "description",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "activity",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "rating_raw",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "rating",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "rating_rank",
+        "nullable": true,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "rating_at_approval",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "previous_rating",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "observed_date",
+        "nullable": true,
+        "role": "DATA",
+        "type": "DATE"
+      },
+      {
+        "name": "isr_sequence",
+        "nullable": true,
+        "role": "DATA",
+        "type": "BIGINT"
+      },
+      {
+        "name": "source_document_type",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "mitigation_text",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "resolution_status",
+        "nullable": false,
+        "role": "DATA",
+        "type": "STRING",
+        "vocabulary": [
+          "NOT_STATED"
+        ]
+      },
+      {
+        "name": "extraction_status",
+        "nullable": true,
+        "role": "DATA",
+        "type": "STRING"
+      },
+      {
+        "name": "source_table",
+        "nullable": false,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "source_record_id",
+        "nullable": false,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "document_id",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "page_number",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "BIGINT"
+      },
+      {
+        "name": "section",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "STRING"
+      },
+      {
+        "name": "extraction_method",
+        "nullable": true,
+        "role": "PROVENANCE",
+        "type": "STRING",
+        "vocabulary": [
+          "DOCLING_TABLE",
+          "DOCLING_TEXT",
+          "PDF_TEXT_FALLBACK",
+          "DERIVED"
+        ]
+      },
+      {
+        "name": "provenance_class",
+        "nullable": false,
+        "role": "PROVENANCE",
+        "type": "STRING",
+        "vocabulary": [
+          "DOCUMENTED_FINDING"
+        ]
+      },
+      {
+        "name": "record_hash",
+        "nullable": false,
+        "role": "INTEGRITY",
+        "type": "STRING"
+      },
+      {
+        "name": "_source_snapshot_id",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      },
+      {
+        "name": "_load_run_id",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      },
+      {
+        "name": "_loaded_at",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "_pipeline_version",
+        "nullable": false,
+        "role": "OPERATIONAL",
+        "type": "STRING"
+      }
+    ],
+    "layer": "gold",
+    "name": "risk_register",
+    "natural_key": [
+      "source_table",
+      "source_record_id"
+    ],
+    "source_dataset": "gold.risk_register",
+    "write_mode": "SNAPSHOT_MERGE"
+  }
+}
