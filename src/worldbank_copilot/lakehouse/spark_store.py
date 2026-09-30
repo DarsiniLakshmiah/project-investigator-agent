@@ -134,7 +134,8 @@ class SparkDeltaStore:
         if not rows:
             raise LakehouseError(
                 f"Catalog {self.catalog!r} does not exist or is not visible to the current "
-                "principal. Phase 6 uses an existing catalog and never creates or substitutes one."
+                "principal. Create it once (CREATE CATALOG); the pipeline never creates or "
+                "substitutes a catalog."
             )
         self._sql(
             f"USE CATALOG {qualified(self.catalog)}",

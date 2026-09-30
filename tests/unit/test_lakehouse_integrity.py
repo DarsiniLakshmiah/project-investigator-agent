@@ -220,8 +220,9 @@ def test_core_modules_import_without_spark_and_local_is_a_dry_run():
 
 def test_databricks_settings_use_configured_unity_catalog_names(repo_config_dir):
     settings = load_settings("databricks", config_dir=repo_config_dir, env={})
-    assert settings.table_name("silver", "isr_snapshots") == "worldbank_ai.silver.isr_snapshots"
-    assert settings.table_name("bronze", "loans_raw") == "worldbank_ai.bronze.loans_raw"
-    assert settings.source_volume_path == "/Volumes/worldbank_ai/bronze/sources"
-    assert settings.artifact_volume_path == "/Volumes/worldbank_ai/silver/pipeline_artifacts"
+    isr = settings.table_name("silver", "isr_snapshots")
+    assert isr == "worldbank_copilot.silver.isr_snapshots"
+    assert settings.table_name("bronze", "loans_raw") == "worldbank_copilot.bronze.loans_raw"
+    assert settings.source_volume_path == "/Volumes/worldbank_copilot/bronze/sources"
+    assert settings.artifact_volume_path == "/Volumes/worldbank_copilot/silver/pipeline_artifacts"
     assert load_project_registry(repo_config_dir).project_ids == ["P130544", "P179039", "P506272"]

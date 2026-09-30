@@ -304,7 +304,7 @@ Databricks; only persistence differs.
 ### Unity Catalog layout
 
 ```
-worldbank_ai                      (existing catalog; validated, never created)
+worldbank_copilot                      (create once: CREATE CATALOG worldbank_copilot; the pipeline validates it, never creates it)
 ├── bronze                        (schema; created only if missing)
 │   ├── sources                   (Volume: original files, byte-for-byte)
 │   │   └── data/                 mirrors the local data/ layout
@@ -391,11 +391,13 @@ snapshot or an intended schema change.
 ### Running Phase 6 in Databricks
 
 1. Commit and push; in Databricks, create or pull the repository as a **Git folder**.
+   Create the catalog once (needs metastore privileges; add `MANAGED LOCATION '...'`
+   if your metastore requires one): `CREATE CATALOG IF NOT EXISTS worldbank_copilot;`
 2. Run `notebooks/05_platformize_databricks.py` once up to "Step 1". It validates the
    catalog and creates any missing schemas and Volumes, or reports the missing privilege.
 3. Copy the files into the Volumes (commands from `--upload-commands`), for example:
-   `databricks fs cp --recursive data dbfs:/Volumes/worldbank_ai/bronze/sources/data`
-   and `databricks fs cp --recursive .local_output/parsed dbfs:/Volumes/worldbank_ai/silver/pipeline_artifacts/parsed`.
+   `databricks fs cp --recursive data dbfs:/Volumes/worldbank_copilot/bronze/sources/data`
+   and `databricks fs cp --recursive .local_output/parsed dbfs:/Volumes/worldbank_copilot/silver/pipeline_artifacts/parsed`.
 4. Run the whole notebook on DBR 15.4 LTS or later (Python ≥ 3.11). It installs the
    pinned `requirements-databricks.txt`, then:
    - verifies every source hash;

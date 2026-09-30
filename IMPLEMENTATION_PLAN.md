@@ -69,7 +69,7 @@ files); `pytest -m docling` → 2 passed (real Docling models); `ruff check` +
 
 ### Approved on Phase 5 sign-off (user, 2026-09-30)
 
-16. **Unity Catalog layout:** existing catalog `worldbank_ai`, schemas `bronze` and
+16. **Unity Catalog layout:** catalog `worldbank_copilot` (renamed from `worldbank_ai`, which is already used in the workspace; created once by a user with metastore privileges), schemas `bronze` and
     `silver`; `gold` reserved for Phase 7 (supersedes §1a.6 for catalog/schemas only).
 17. **Restructuring candidate dates** are preserved as `candidate_event_date` /
     `candidate_date_basis` / `candidate_date_status = DERIVED_FROM_EXPLICIT_SOURCE`;
@@ -193,8 +193,8 @@ Phases 3 and 4 can proceed in parallel once Phase 2 is done.
 |---|---|---|
 | Business logic | `src/worldbank_copilot/**` (developed & unit-tested here) | same code, imported from the Git folder |
 | Notebooks | not executed | thin entry points: `%run ./_bootstrap`, call `src/` functions |
-| Raw files | `data/` (git-ignored) | Volume `worldbank_ai.bronze.sources` (`data/` mirrored) |
-| Tables | contract-shaped rows, dry-run reconciliation (`scripts/platformize.py`) | Delta tables `worldbank_ai.<bronze|silver>.<table>` (`notebooks/05_platformize_databricks.py`) |
+| Raw files | `data/` (git-ignored) | Volume `worldbank_copilot.bronze.sources` (`data/` mirrored) |
+| Tables | contract-shaped rows, dry-run reconciliation (`scripts/platformize.py`) | Delta tables `worldbank_copilot.<bronze|silver>.<table>` (`notebooks/05_platformize_databricks.py`) |
 | Vector Search, Model Serving, MLflow experiment | not required; tests use fixtures/mocks | real endpoints (names from config) |
 | Tests | `pytest` (Databricks-marked tests deselected) | `pytest -m databricks` for workspace integration tests |
 | Credentials | never needed to import or unit-test | workspace identity |
@@ -879,7 +879,7 @@ repository and opening it as a Git folder.
   parsed documents are uploaded to the artefact Volume. Docling is not run in Databricks.
 * **Pinned runtime dependencies** equal the local versions (PDF text and XLSX readers
   must be identical for identical results; reconciliation proves it).
-* **Configuration:** `databricks.catalog = worldbank_ai`, schemas, `source_volume`,
+* **Configuration:** `databricks.catalog = worldbank_copilot`, schemas, `source_volume`,
   `artifact_volume` in `base.yaml`; Databricks data/artefact roots derive from them.
   Updated two Phase 1 configuration tests that asserted "catalog unset" (the catalog is
   now an approved value); their failure behaviour is still tested with the value unset.

@@ -40,9 +40,9 @@ def test_databricks_data_root_requires_volume(repo_config_dir):
 
 def test_databricks_paths_default_from_unity_catalog_settings(repo_config_dir):
     settings = load_settings(config_dir=repo_config_dir, env={"WBC_ENV": "databricks"})
-    assert settings.data_root == "/Volumes/worldbank_ai/bronze/sources/data"
+    assert settings.data_root == "/Volumes/worldbank_copilot/bronze/sources/data"
     assert str(settings.local_output_root).replace("\\", "/") == (
-        "/Volumes/worldbank_ai/silver/pipeline_artifacts"
+        "/Volumes/worldbank_copilot/silver/pipeline_artifacts"
     )
     local = load_settings("local", config_dir=repo_config_dir, env={})
     assert local.local_output_root == (repo_config_dir.parent / ".local_output").resolve()

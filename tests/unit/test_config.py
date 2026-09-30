@@ -44,7 +44,7 @@ def test_repo_config_loads_with_local_defaults(repo_config_dir):
     assert settings.databricks.silver_schema == "silver"
     assert settings.databricks.gold_schema == "gold"
     # Unity Catalog layout approved for Phase 6; endpoints etc. stay placeholders.
-    assert settings.databricks.catalog == "worldbank_ai"
+    assert settings.databricks.catalog == "worldbank_copilot"
     assert settings.databricks.source_volume == "sources"
     assert settings.databricks.artifact_volume == "pipeline_artifacts"
     assert settings.vector_search.endpoint is None

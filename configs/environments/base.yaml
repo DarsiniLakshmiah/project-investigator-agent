@@ -26,9 +26,10 @@ sources:
   document_manifest: document_manifest.yaml   # relative to configs/
 
 databricks:
-  # Unity Catalog layout (Phase 6). The catalog already exists in the workspace;
+  # Unity Catalog layout (Phase 6). The catalog must be created once before the first
+  # run (CREATE CATALOG needs metastore privileges; the pipeline never creates catalogs);
   # schemas and Volumes are validated and created only where permitted.
-  catalog: worldbank_ai
+  catalog: worldbank_copilot
   bronze_schema: bronze
   silver_schema: silver
   gold_schema: gold            # reserved for Phase 7; nothing is written there yet

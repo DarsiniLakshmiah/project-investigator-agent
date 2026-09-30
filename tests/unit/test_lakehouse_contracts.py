@@ -163,17 +163,17 @@ def test_stable_id_and_content_hash_semantics():
 
 def test_generated_ddl_and_merge_statements():
     contract = _contract()
-    ddl = create_table_sql("worldbank_ai", "silver", contract)
-    assert ddl.startswith("CREATE TABLE IF NOT EXISTS `worldbank_ai`.`silver`.`sample`")
+    ddl = create_table_sql("worldbank_copilot", "silver", contract)
+    assert ddl.startswith("CREATE TABLE IF NOT EXISTS `worldbank_copilot`.`silver`.`sample`")
     assert "`amount` DECIMAL(38,6)" in ddl and "`record_id` STRING NOT NULL" in ddl
     assert "USING DELTA" in ddl and "'worldbank.natural_key' = 'key'" in ddl
-    merge = snapshot_merge_sql("worldbank_ai", "silver", contract, "stage")
+    merge = snapshot_merge_sql("worldbank_copilot", "silver", contract, "stage")
     assert "ON t.`record_id` = s.`record_id`" in merge
     assert "WHEN MATCHED AND t.`record_hash` <> s.`record_hash` THEN UPDATE" in merge
     assert "WHEN NOT MATCHED THEN INSERT" in merge
     assert merge.endswith("WHEN NOT MATCHED BY SOURCE THEN DELETE")
-    assert "IF NOT EXISTS `worldbank_ai`.`bronze`.`sources`" in create_volume_sql(
-        "worldbank_ai", "bronze", "sources", "c"
+    assert "IF NOT EXISTS `worldbank_copilot`.`bronze`.`sources`" in create_volume_sql(
+        "worldbank_copilot", "bronze", "sources", "c"
     )
 
 

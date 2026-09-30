@@ -40,7 +40,7 @@ class FakeSpark:
 
 
 def _store(spark):
-    return SparkDeltaStore(spark, "worldbank_ai", {"bronze": "bronze", "silver": "silver"})
+    return SparkDeltaStore(spark, "worldbank_copilot", {"bronze": "bronze", "silver": "silver"})
 
 
 def test_missing_catalog_is_never_created():
@@ -51,20 +51,20 @@ def test_missing_catalog_is_never_created():
 
 
 def test_existing_objects_are_reused_and_missing_ones_created():
-    spark = FakeSpark(existing={"worldbank_ai", "bronze", "sources"})
+    spark = FakeSpark(existing={"worldbank_copilot", "bronze", "sources"})
     store = _store(spark)
     assert store.validate_catalog().status == "EXISTS"
     assert store.ensure_schema("bronze", "c").status == "EXISTS"
     assert store.ensure_volume("bronze", "sources", "c").status == "EXISTS"
     created = store.ensure_schema("silver", "c")
-    assert (created.name, created.status) == ("worldbank_ai.silver", "CREATED")
+    assert (created.name, created.status) == ("worldbank_copilot.silver", "CREATED")
     creates = [s for s in spark.statements if s.startswith("CREATE")]
-    assert creates == ["CREATE SCHEMA IF NOT EXISTS `worldbank_ai`.`silver` COMMENT 'c'"]
+    assert creates == ["CREATE SCHEMA IF NOT EXISTS `worldbank_copilot`.`silver` COMMENT 'c'"]
 
 
 def test_permission_failure_names_object_and_operation():
-    spark = FakeSpark(existing={"worldbank_ai"}, fail_on="CREATE SCHEMA")
-    with pytest.raises(LakehouseError, match=r"CREATE SCHEMA on worldbank_ai\.silver failed"):
+    spark = FakeSpark(existing={"worldbank_copilot"}, fail_on="CREATE SCHEMA")
+    with pytest.raises(LakehouseError, match=r"CREATE SCHEMA on worldbank_copilot\.silver failed"):
         _store(spark).ensure_schema("silver", "c")
 
 
