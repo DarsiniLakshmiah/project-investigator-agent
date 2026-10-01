@@ -542,6 +542,15 @@ come from content, not filenames. Identified from first-page text:
     - **Root cause:** the Databricks SDK. `serving_endpoints.query` runs inside the SDK's `retried(timeout=retry_timeout_seconds)` loop (default 300 s = `0:05:00`) with a 60 s per-attempt HTTP timeout, and keeps re-sending a request that times out or is throttled (Retry-After) until 5 minutes pass. Our loop then retried that whole request 3 more times (up to about 20 minutes per request).
     - **Contributing factors:** the configured `timeout_seconds` (120) was never wired in; requests carried 64 long texts and ran strictly one at a time; results were persisted only after each 640-text slice, so nothing was saved.
     - **Fix:** an explicit HTTP transport (one POST per attempt with our own timeout; auth from the SDK config); bounded requests (16 inputs, 24,000 characters); classified retries (timeout, connection, 429, 5xx) with exponential backoff, jitter and Retry-After; validation before caching; insert-only checkpoints every 25 requests and before any error; resume through the existing (text_sha256, model) cache.
+64. **Embedding rate limiting (HTTP 429 REQUEST_LIMIT_EXCEEDED, workspace QPS).**
+    - **What happened:** the first Step 3 request was throttled; all 5 transient-style retries (about 1 minute) were used up; nothing was cached; the job stayed resumable.
+    - **Not known:** whether that 429 carried Retry-After, because it was not logged.
+    - **Fix:** 429 now has its own policy:
+      - paced sequential requests (>= 3 s between starts, doubling to 30 s after each 429, recovering x0.9 per success; the probe shares the pacing state);
+      - Retry-After honoured in full;
+      - otherwise a 60/120/240/300 s cooldown;
+      - at most 4 rate-limited retries per request and 20 minutes of rate-limit waiting per run, then a clean, checkpointed stop.
+    - **Logging:** each 429 logs status, Databricks error code, Retry-After, the chosen sleep, the attempt number and the cumulative wait.
 
 ---
 

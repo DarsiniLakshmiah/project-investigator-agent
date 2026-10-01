@@ -19,12 +19,31 @@ max_chars_per_request: 24000
 # 16-text request without letting one stuck request block the build for long.
 request_timeout_seconds: 60
 
-# Retries only for timeouts, connection errors, 429 and 5xx: exponential backoff
-# 2, 4, 8, 16, 32 s (capped at 60 s), with 50-100 % jitter; Retry-After is honoured.
-# Other 4xx and invalid responses fail immediately.
+# Transient failures only (timeouts, connection errors, 5xx): exponential backoff
+# 2, 4, 8, 16, 32 s (capped at 60 s) with 50-100 % jitter. Other 4xx fail immediately.
 max_retries: 5
 backoff_base_seconds: 2
 backoff_max_seconds: 60
+
+# Request pacing. Requests are sequential; at least 3 s between request starts
+# (<= 0.33 requests/s). The first Step 3 request was rejected with 429
+# REQUEST_LIMIT_EXCEEDED ("workspace QPS rate limit"), so this workspace's effective
+# quota is far below the documented pay-per-token figures (540,000 queries/hour, 200
+# QPS/workspace). Each 429 doubles the interval (up to 30 s); each success multiplies it
+# by 0.9 back towards 3 s. The pacing state is shared with the capability probe (same
+# provider object), so the probe request counts against the interval.
+min_request_interval_seconds: 3
+max_request_interval_seconds: 30
+pace_recovery_factor: 0.9
+
+# HTTP 429 (separate from transient retries). Retry-After is honoured in full; without
+# it, cool down 60 s, then 120, 240, 300 s (cap). At most 4 rate-limited retries per
+# request (60+120+240+300 = 12 min without Retry-After) and at most 20 minutes of
+# rate-limit waiting per run; then the job checkpoints and stops cleanly (rerun resumes).
+rate_limit_cooldown_seconds: 60
+rate_limit_cooldown_max_seconds: 300
+max_rate_limit_retries: 4
+rate_limit_max_total_wait_seconds: 1200
 
 # Persist validated vectors to silver.chunk_embeddings every 25 requests (~400 texts),
 # and always before an error is raised. A rerun embeds only what is still missing.

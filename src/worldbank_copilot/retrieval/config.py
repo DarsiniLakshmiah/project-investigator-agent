@@ -79,6 +79,15 @@ class EmbeddingConfig(_Model):
     backoff_max_seconds: float = Field(gt=0)
     # Persist to the embedding cache every N successful requests (and before failing).
     checkpoint_every_requests: int = Field(gt=0)
+    # Request pacing (sequential requests; minimum seconds between request starts).
+    min_request_interval_seconds: float = Field(ge=0)
+    max_request_interval_seconds: float = Field(gt=0)
+    pace_recovery_factor: float = Field(gt=0, le=1)
+    # HTTP 429 handling (separate from transient retries).
+    rate_limit_cooldown_seconds: float = Field(gt=0)
+    rate_limit_cooldown_max_seconds: float = Field(gt=0)
+    max_rate_limit_retries: int = Field(ge=0, le=20)
+    rate_limit_max_total_wait_seconds: float = Field(gt=0)
 
 
 class VectorSearchConfig(_Model):

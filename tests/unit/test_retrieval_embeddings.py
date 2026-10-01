@@ -24,7 +24,7 @@ DIM = RS.embeddings.expected_dimension
 def cfg(**changes):
     base = {"max_inputs_per_request": 2, "max_chars_per_request": 1000, "max_retries": 3,
             "backoff_base_seconds": 1, "backoff_max_seconds": 8,
-            "checkpoint_every_requests": 2}  # fmt: skip
+            "checkpoint_every_requests": 2, "min_request_interval_seconds": 0}  # fmt: skip
     return RS.embeddings.model_copy(update={**base, **changes})
 
 
@@ -50,6 +50,10 @@ class Script:
             raise RetryableEmbeddingError(f"request timed out after {timeout}s")
         if callable(outcome):
             return outcome(texts)
+        if isinstance(outcome, tuple):  # (status, headers)
+            return Response(outcome[0], {"error_code": "REQUEST_LIMIT_EXCEEDED",
+                                         "message": "Exceeded workspace QPS rate limit"},
+                            outcome[1])  # fmt: skip
         return Response(outcome, {"error_code": f"E{outcome}"},
                         {"Retry-After": "3"} if outcome == 429 else {})  # fmt: skip
 
@@ -125,7 +129,7 @@ def test_throttling_and_server_errors_are_retried(status):
 def test_backoff_is_capped_and_jittered():
     p = DatabricksServingEmbeddings(cfg(), Script(), sleep=lambda _s: None, rng=lambda: 0.0)
     assert p.backoff(0, None) == 0.5 and p.backoff(10, None) == 4.0  # cap 8 s, 50 % jitter
-    assert p.backoff(0, 120.0) == 8.0  # Retry-After capped too
+    assert p.backoff(0, 120.0) == 120.0  # Retry-After is honoured in full
 
 
 def test_retries_are_bounded():
@@ -173,7 +177,10 @@ def test_job_checkpoints_every_n_requests_and_logs_progress():
                               log=logs.append)  # fmt: skip
     assert stats.embedded == 9 and stats.remaining == 0 and stats.batches == 5
     assert cache.writes == 3  # after requests 2 and 4, then the final one
-    assert logs[0] == "cached=4, remaining=9, batch=0/5, embedded=0, retries=0, failed=0"
+    assert logs[0] == (
+        "cached=4, remaining=9, batch=0/5, embedded=0, retries=0, failed=0, "
+        "rate_limited=0, rate_limit_wait=0s, pace=0.0s"
+    )
     assert logs[-1].endswith("DONE") and "embedded=9" in logs[-1]
 
 
@@ -286,3 +293,113 @@ def test_configuration_values():
     assert e.max_inputs_per_request == 16 and e.max_chars_per_request == 24000
     assert e.request_timeout_seconds == 60 and e.max_retries == 5
     assert e.checkpoint_every_requests == 25
+
+
+# -- rate limiting (HTTP 429) and pacing ---------------------------------------------------
+
+
+class Clock:
+    """Fake monotonic clock; sleeping advances it."""
+
+    def __init__(self):
+        self.now, self.sleeps = 1000.0, []
+
+    def __call__(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleeps.append(round(seconds, 3))
+        self.now += seconds
+
+
+def paced(transport, **changes):
+    clock, logs = Clock(), []
+    settings = cfg(**{"min_request_interval_seconds": 3, "max_request_interval_seconds": 30,
+                      "pace_recovery_factor": 0.9, "rate_limit_cooldown_seconds": 60,
+                      "rate_limit_cooldown_max_seconds": 300, "max_rate_limit_retries": 4,
+                      "rate_limit_max_total_wait_seconds": 1200, **changes})  # fmt: skip
+    prov = DatabricksServingEmbeddings(settings, transport, sleep=clock.sleep, rng=lambda: 1.0,
+                                       clock=clock, log=logs.append)  # fmt: skip
+    return prov, clock, logs
+
+
+LIMIT = (429, {})
+
+
+def test_429_with_retry_after_waits_exactly_that_long_and_logs_it():
+    prov, clock, logs = paced(Script([(429, {"Retry-After": "7"}), "ok"]))
+    assert len(prov.embed(["a"])) == 1
+    assert 7.0 in clock.sleeps and prov.rate_limited == 1 and prov.rate_limit_wait == 7.0
+    assert ("rate-limited: HTTP 429 code=REQUEST_LIMIT_EXCEEDED retry_after=7.0 attempt=1/4 "
+            "sleep=7.0s (Retry-After)") in logs[0]  # fmt: skip
+
+
+def test_429_without_retry_after_uses_the_cooldown_then_succeeds():
+    prov, clock, logs = paced(Script([LIMIT, "ok"]))
+    assert len(prov.embed(["a"])) == 1
+    assert 60.0 in clock.sleeps and "retry_after=absent" in logs[0] and "(cooldown)" in logs[0]
+    assert prov.interval == pytest.approx(5.4)  # doubled to 6 s, then x0.9 after the success
+
+
+def test_rate_limit_does_not_consume_transient_retries():
+    prov, _, _ = paced(Script([LIMIT, LIMIT, "ok"]), max_retries=0)
+    assert len(prov.embed(["a"])) == 1 and prov.rate_limited == 2
+
+
+def test_repeated_rate_limiting_stops_cleanly_after_bounded_cooldowns():
+    transport = Script([LIMIT] * 20)
+    prov, clock, logs = paced(transport)
+    with pytest.raises(EmbeddingError, match="rate-limit retries exhausted"):
+        prov.embed(["a"])
+    cooldowns = [s for s in clock.sleeps if s >= 60]
+    assert cooldowns == [60.0, 120.0, 240.0, 300.0]  # doubling, capped, max 4 retries
+    assert len(transport.calls) == 5 and prov.interval == 30  # pacing slowed to the cap
+
+
+def test_rate_limit_wait_budget_stops_without_waiting_past_it():
+    prov, clock, _ = paced(Script([(429, {"Retry-After": "5000"})]))
+    with pytest.raises(EmbeddingError, match="wait budget exhausted"):
+        prov.embed(["a"])
+    assert clock.sleeps == []  # 5000 s exceeds the 1200 s budget: stop, do not sleep
+
+
+def test_job_with_persistent_rate_limiting_checkpoints_and_stays_resumable():
+    cache = Cache()
+    prov, _, logs = paced(Script(["ok"] + [LIMIT] * 20))
+    with pytest.raises(EmbeddingJobError) as failure:
+        run_embedding_job(items(6), prov, cache.sink, cached=0, checkpoint_every_requests=5,
+                          log=logs.append)  # fmt: skip
+    stats = failure.value.stats
+    assert stats.embedded == 2 and stats.remaining == 4 and stats.rate_limited == 5
+    assert len(cache.rows) == 2 and stats.rate_limit_wait == 720.0
+    assert "rate_limited=5, rate_limit_wait=720s, pace=30.0s  STOPPED" in logs[-1]
+
+
+def test_requests_are_paced_and_the_probe_counts_against_the_interval():
+    prov, clock, _ = paced(Script())
+    prov.embed(["probe"])  # capability probe with the same provider
+    clock.now += 1.0  # notebook moves on quickly
+    run_embedding_job(items(4), prov, Cache().sink, cached=0, checkpoint_every_requests=5)
+    # first job request waits the rest of the 3 s interval after the probe; then 3 s apart
+    assert clock.sleeps == [2.0, 3.0] and prov.pacing_wait == 5.0
+
+
+def test_pacing_recovers_towards_the_minimum_after_successes():
+    prov, _, _ = paced(Script([LIMIT, LIMIT] + ["ok"] * 30))
+    prov.embed(["a"])
+    assert prov.interval == pytest.approx(10.8)  # 3 -> 6 -> 12, x0.9 after success
+    for _ in range(30):
+        prov.embed(["b"])
+    assert prov.interval == 3  # floor
+
+
+def test_retry_after_parsing():
+    from worldbank_copilot.retrieval.embeddings import parse_retry_after
+
+    assert parse_retry_after({"retry-after": "12"}) == 12.0
+    assert parse_retry_after({"Retry-After": "-4"}) == 0.0
+    assert parse_retry_after({}) is None and parse_retry_after({"Retry-After": "soon"}) is None
+    when = parse_retry_after(
+        {"Retry-After": "Wed, 01 Oct 2026 10:00:30 GMT"}, now=1790848800.0
+    )  # 2026-10-01 10:00:00 UTC
+    assert when == pytest.approx(30.0)
