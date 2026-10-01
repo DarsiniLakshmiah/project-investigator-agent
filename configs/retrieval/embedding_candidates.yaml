@@ -1,0 +1,27 @@
+# Embedding endpoint candidates (Phase 8 experiments). Documentation of tested endpoints
+# and the load-probe plan. This file does NOT select the production model:
+# configs/retrieval/embeddings.yaml is unchanged until a separate decision.
+candidates:
+  databricks-gte-large-en:
+    status: FAILED_RATE_LIMITED   # experimental failure, kept on record
+    tested: 2026-10-01
+    notebook: 07_build_retrieval_and_evaluate (Step 3)
+    observations:
+      - "capability probe: 1 input OK, dimension 1024, ~1,179 ms"
+      - "first build (SDK path, 64 inputs/request): 'Timed out after 0:05:00' (SDK retry window)"
+      - "explicit transport, 16 inputs/request: first request HTTP 429 REQUEST_LIMIT_EXCEEDED
+        'Exceeded workspace QPS rate limit ... use a provisioned throughput endpoint'"
+      - "paced rerun: 5 rate-limited attempts, 720 s cooldown, 0 texts embedded"
+    decision: "Not usable from this workspace on pay-per-token; cooldown not increased further."
+  databricks-qwen3-embedding-0-6b:
+    status: UNTESTED
+    note: "Dimension is not assumed; the probe reports what the endpoint returns."
+
+# Load probe (notebooks/07a_embedding_endpoint_probe.py). One HTTP attempt per step, no
+# retries; steps are separated by pause_seconds so the probe itself cannot hammer the
+# endpoint. At most 1 + 2 requests (1 + 2 * batch_size texts).
+probe:
+  endpoint: databricks-qwen3-embedding-0-6b
+  request_timeout_seconds: 60
+  batch_size: 4
+  pause_seconds: 15

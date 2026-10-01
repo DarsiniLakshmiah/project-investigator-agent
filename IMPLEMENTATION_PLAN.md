@@ -551,6 +551,10 @@ come from content, not filenames. Identified from first-page text:
       - otherwise a 60/120/240/300 s cooldown;
       - at most 4 rate-limited retries per request and 20 minutes of rate-limit waiting per run, then a clean, checkpointed stop.
     - **Logging:** each 429 logs status, Databricks error code, Retry-After, the chosen sleep, the attempt number and the cumulative wait.
+65. **GTE kept as an experimental failure; Qwen load probe.**
+    - **GTE result:** `databricks-gte-large-en` failed in this workspace: 5 rate-limited attempts and 720 s of cooldown, 0 texts embedded. Recorded in `configs/retrieval/embedding_candidates.yaml`; the cooldown is not increased further.
+    - **Qwen probe:** `notebooks/07a_embedding_endpoint_probe.py` probes `databricks-qwen3-embedding-0-6b`: 1 input, a batch of 4, a 15 s pause, a batch of 4, each one attempt with no retries. It reports status, error code, Retry-After, latency, the returned dimension and a verdict.
+    - **No writes:** the probe writes nothing, and production `embeddings.yaml` stays unchanged until a separate decision.
 
 ---
 
