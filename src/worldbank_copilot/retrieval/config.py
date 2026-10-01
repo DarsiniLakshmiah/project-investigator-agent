@@ -68,9 +68,17 @@ class EmbeddingConfig(_Model):
     provider: Literal["databricks_serving"]
     endpoint: str
     expected_dimension: int = Field(gt=0)
-    batch_size: int = Field(gt=0, le=2048)
-    timeout_seconds: int = Field(gt=0)
-    max_retries: int = Field(ge=0)
+    # Request bounds (the endpoint accepts at most 4 MB per request).
+    max_inputs_per_request: int = Field(gt=0, le=256)
+    max_chars_per_request: int = Field(gt=0, le=1_000_000)
+    # One HTTP attempt; no hidden SDK retry loop (see embeddings.py).
+    request_timeout_seconds: float = Field(gt=0)
+    # Retries for timeouts, connection errors, 429 and 5xx only.
+    max_retries: int = Field(ge=0, le=10)
+    backoff_base_seconds: float = Field(gt=0)
+    backoff_max_seconds: float = Field(gt=0)
+    # Persist to the embedding cache every N successful requests (and before failing).
+    checkpoint_every_requests: int = Field(gt=0)
 
 
 class VectorSearchConfig(_Model):

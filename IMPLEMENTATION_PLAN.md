@@ -527,9 +527,9 @@ come from content, not filenames. Identified from first-page text:
     papers are excluded from chunks.
 59. **Rating glyphs.** Table cells contain rating glyphs (e.g. U+F06C, U+26AB).
     Evaluation relevance compares alphanumeric tokens only.
-60. **Embedding input limit.** gte-large-en reads at most 512 tokens. Retrieval chunks are
-    at most 1,200–1,500 characters; dense number-heavy tables may still be truncated at
-    the end (to be checked in Databricks).
+60. **Embedding input limit (corrected).** databricks-gte-large-en has an 8192-token
+    window (Databricks supported-models page), not 512; chunks of 1,200-1,500
+    characters are far below it, so no truncation is expected.
 61. **Local lexical baseline** (BM25 on the real corpus, no reranker, k=10): Recall@10
     0.75–0.80 across strategies. Every miss is a paraphrase question; dense, hybrid and
     reranked results exist only after the Databricks run.
@@ -537,6 +537,11 @@ come from content, not filenames. Identified from first-page text:
     - **Root cause:** `databricks-vectorsearch` 0.75 declares `protobuf<6.0,>=5.29.5`. Installing it notebook-scoped replaced the runtime's protobuf 6.33.5 with 5.29.6, breaking `grpcio-status` 1.76.0 (needs protobuf `>=6.31.1,<7`). Environment 6 ships `googleapis-common-protos` 1.71.0, which accepts protobuf `<7` and was not affected. The additional `googleapis-common-protos` conflict seen in the local reproduction came from the locally resolved 1.75.5, not from Databricks.
     - **Reproduced locally:** in a Python 3.12 environment seeded with serverless environment 6 versions.
     - **Fix:** migrated the adapter to `databricks-ai-search==0.78` (same client and index API, typed `NotFound`); `databricks-sdk` is no longer installed (runtime 0.122.0 is used); constraints protect protobuf and grpcio-status; the reranker moved to notebook 07b (ML base); a dependency-health check runs after every install.
+63. **Embedding build timeout (notebook 07 Step 3).**
+    - **Error:** `Timed out after 0:05:00` after 10,965 texts were queued.
+    - **Root cause:** the Databricks SDK. `serving_endpoints.query` runs inside the SDK's `retried(timeout=retry_timeout_seconds)` loop (default 300 s = `0:05:00`) with a 60 s per-attempt HTTP timeout, and keeps re-sending a request that times out or is throttled (Retry-After) until 5 minutes pass. Our loop then retried that whole request 3 more times (up to about 20 minutes per request).
+    - **Contributing factors:** the configured `timeout_seconds` (120) was never wired in; requests carried 64 long texts and ran strictly one at a time; results were persisted only after each 640-text slice, so nothing was saved.
+    - **Fix:** an explicit HTTP transport (one POST per attempt with our own timeout; auth from the SDK config); bounded requests (16 inputs, 24,000 characters); classified retries (timeout, connection, 429, 5xx) with exponential backoff, jitter and Retry-After; validation before caching; insert-only checkpoints every 25 requests and before any error; resume through the existing (text_sha256, model) cache.
 
 ---
 

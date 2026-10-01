@@ -3,8 +3,9 @@
 # changed setting yields new, recorded chunk identities; unchanged settings yield
 # identical chunk ids.
 #
-# Sizes are characters. The embedding model truncates at 512 tokens (~2,000 chars of
-# English), so no retrieval chunk exceeds max_chars (checked by tests and the pipeline).
+# Sizes are characters. databricks-gte-large-en has an 8192-token window, so chunk
+# size is chosen for retrieval precision, not to avoid truncation (checked by tests
+# and the pipeline: no retrieval chunk exceeds its max_chars).
 strategies:
   fixed:
     # Baseline A: recursive character splitting over the document's clean text in

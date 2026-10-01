@@ -1,12 +1,31 @@
-# Embedding configuration (Phase 8). The provider is pluggable: retrieval code depends
-# only on EmbeddingProvider.embed(texts) -> vectors.
+# Embedding configuration (Phase 8). Retrieval depends only on
+# EmbeddingProvider.embed(texts); see src/worldbank_copilot/retrieval/embeddings.py.
 #
-# provider: databricks_serving calls a Databricks Model Serving embedding endpoint
-# (Foundation Model API). The endpoint must exist in the workspace; notebook 07 probes
-# it before anything is built and stops with a clear message if it is missing.
+# databricks-gte-large-en (Foundation Model API): 1024 dimensions, 8192-token window.
+# Documented limits: 4 MB payload and 597 s execution per request, 540,000 queries per
+# hour, 200 queries per second per workspace; no documented maximum number of inputs.
+# Notebook 07 probes the endpoint before anything is built.
 provider: databricks_serving
-endpoint: databricks-gte-large-en    # 1024 dimensions, 512-token input limit, English
+endpoint: databricks-gte-large-en
 expected_dimension: 1024
-batch_size: 64
-timeout_seconds: 120
-max_retries: 3
+
+# Bounded requests. 16 inputs and 24,000 characters (~6k tokens, ~100 KB of JSON) keep
+# each request small and fast, far below the 4 MB limit; the first build (64 long texts
+# per request through the SDK) did not complete within the SDK's 5-minute retry window.
+max_inputs_per_request: 16
+max_chars_per_request: 24000
+
+# One HTTP attempt. Single-text probe latency was ~1.2 s; 60 s leaves wide headroom for a
+# 16-text request without letting one stuck request block the build for long.
+request_timeout_seconds: 60
+
+# Retries only for timeouts, connection errors, 429 and 5xx: exponential backoff
+# 2, 4, 8, 16, 32 s (capped at 60 s), with 50-100 % jitter; Retry-After is honoured.
+# Other 4xx and invalid responses fail immediately.
+max_retries: 5
+backoff_base_seconds: 2
+backoff_max_seconds: 60
+
+# Persist validated vectors to silver.chunk_embeddings every 25 requests (~400 texts),
+# and always before an error is raised. A rerun embeds only what is still missing.
+checkpoint_every_requests: 25

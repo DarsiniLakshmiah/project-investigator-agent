@@ -259,27 +259,74 @@ class EmbeddingReport:
     texts_needed: int
     already_cached: int
     embedded_now: int
+    retries: int
+    checkpoints: int
     seconds: float
+
+
+EMBEDDINGS_DDL = (
+    "CREATE TABLE IF NOT EXISTS {table} ("
+    "text_sha256 STRING NOT NULL, embedding_model STRING NOT NULL, "
+    "embedding_dimension INT NOT NULL, embedding ARRAY<FLOAT> NOT NULL, "
+    "embedded_at TIMESTAMP NOT NULL) USING DELTA "
+    "COMMENT 'Embedding cache: one validated vector per (search_text sha256, model). Phase 8.'"
+)
+
+
+def embedding_sink(spark: Any, table: str, model: str, dimension: int) -> Callable:
+    """Checkpoint writer: MERGE validated vectors, insert-only on (text_sha256, model).
+
+    Idempotent: re-sending a key that is already cached changes nothing.
+    """
+    from pyspark.sql import types as T
+
+    schema = T.StructType(
+        [
+            T.StructField("text_sha256", T.StringType(), False),
+            T.StructField("embedding_model", T.StringType(), False),
+            T.StructField("embedding_dimension", T.IntegerType(), False),
+            T.StructField("embedding", T.ArrayType(T.FloatType(), False), False),
+            T.StructField("embedded_at", T.TimestampType(), False),
+        ]
+    )
+
+    def write(batch: list[tuple[str, list[float]]]) -> None:
+        bad = [key for key, vector in batch if len(vector) != dimension]
+        if bad:  # second line of defence; the provider already validated
+            raise ReconciliationError(f"refusing to cache {len(bad)} vectors of wrong dimension")
+        now = datetime.now(UTC)
+        frame = spark.createDataFrame(
+            [(key, model, dimension, vector, now) for key, vector in batch], schema
+        )
+        frame.createOrReplaceTempView("_wbc_new_embeddings")
+        spark.sql(
+            f"MERGE INTO {table} t USING _wbc_new_embeddings s "
+            "ON t.text_sha256 = s.text_sha256 AND t.embedding_model = s.embedding_model "
+            "WHEN NOT MATCHED THEN INSERT *"
+        )
+
+    return write
 
 
 def update_embedding_cache(
     spark: Any,
     settings: Settings,
     rs: RetrievalSettings,
-    provider: EmbeddingProvider,
+    provider: Any,
     strategies: Sequence[str],
     progress: Say | None = None,
 ) -> EmbeddingReport:
-    """Embed only chunk texts that are not cached for this model (idempotent)."""
+    """Embed only texts not cached for this model, checkpointing as it goes (resumable).
+
+    Missing texts are found with a left-anti join against the cache, processed in
+    text_sha256 order and persisted every ``checkpoint_every_requests`` requests. After a
+    failure the completed part is already in the cache; a rerun embeds only the rest.
+    """
+    from worldbank_copilot.retrieval.embeddings import run_embedding_job
+
     say = _say(progress)
     n = names(settings, rs)
-    spark.sql(
-        f"CREATE TABLE IF NOT EXISTS {n['embeddings']} ("
-        "text_sha256 STRING NOT NULL, embedding_model STRING NOT NULL, "
-        "embedding_dimension INT NOT NULL, embedding ARRAY<FLOAT> NOT NULL, "
-        "embedded_at TIMESTAMP NOT NULL) USING DELTA "
-        "COMMENT 'Embedding cache: one vector per (search_text sha256, model). Phase 8.'"
-    )
+    spark.sql(EMBEDDINGS_DDL.format(table=n["embeddings"]))
     in_list = ", ".join(f"'{s}'" for s in strategies)
     needed = spark.sql(
         f"SELECT DISTINCT text_sha256, search_text FROM {n['chunks']} "
@@ -287,42 +334,26 @@ def update_embedding_cache(
     )
     cached = spark.table(n["embeddings"]).where(f"embedding_model = '{provider.model}'")
     missing = needed.join(cached.select("text_sha256"), "text_sha256", "left_anti")
-    total, rows = needed.count(), missing.collect()  # only texts not yet embedded
-    say(f"embeddings: {total} distinct texts, {total - len(rows)} cached, {len(rows)} to embed")
-    started = time.perf_counter()
-    if rows:
-        from pyspark.sql import types as T
-
-        now = datetime.now(UTC)
-        batch = max(rs.embeddings.batch_size * 10, 500)
-        for i in range(0, len(rows), batch):
-            part = rows[i : i + batch]
-            vectors = provider.embed([r["search_text"] for r in part])
-            schema = T.StructType(
-                [
-                    T.StructField("text_sha256", T.StringType(), False),
-                    T.StructField("embedding_model", T.StringType(), False),
-                    T.StructField("embedding_dimension", T.IntegerType(), False),
-                    T.StructField("embedding", T.ArrayType(T.FloatType(), False), False),
-                    T.StructField("embedded_at", T.TimestampType(), False),
-                ]
-            )
-            frame = spark.createDataFrame(
-                [
-                    (r["text_sha256"], provider.model, len(v), [float(x) for x in v], now)
-                    for r, v in zip(part, vectors, strict=True)
-                ],
-                schema,
-            )
-            frame.createOrReplaceTempView("_wbc_new_embeddings")
-            spark.sql(
-                f"MERGE INTO {n['embeddings']} t USING _wbc_new_embeddings s "
-                "ON t.text_sha256 = s.text_sha256 AND t.embedding_model = s.embedding_model "
-                "WHEN NOT MATCHED THEN INSERT *"
-            )
-            say(f"  embedded {min(i + batch, len(rows))}/{len(rows)}")
+    total = needed.count()
+    rows = missing.orderBy("text_sha256").collect()  # only texts not yet embedded
+    items = [(r["text_sha256"], r["search_text"]) for r in rows]
+    sink = embedding_sink(spark, n["embeddings"], provider.model, provider.dimension)
+    stats = run_embedding_job(
+        items,
+        provider,
+        sink,
+        cached=total - len(items),
+        checkpoint_every_requests=rs.embeddings.checkpoint_every_requests,
+        log=say,
+    )
     return EmbeddingReport(
-        provider.model, total, total - len(rows), len(rows), round(time.perf_counter() - started, 1)
+        provider.model,
+        total,
+        total - len(items),
+        stats.embedded,
+        stats.retries,
+        stats.checkpoints,
+        stats.seconds,
     )
 
 

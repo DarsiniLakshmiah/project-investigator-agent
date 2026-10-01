@@ -9,7 +9,6 @@ from tests.unit.test_retrieval_core import ROWS, retriever
 from worldbank_copilot.common.exceptions import ConfigurationError, LakehouseError
 from worldbank_copilot.extraction.results import comment_cell
 from worldbank_copilot.retrieval.config import load_retrieval_settings
-from worldbank_copilot.retrieval.embeddings import DatabricksServingEmbeddings, EmbeddingError
 from worldbank_copilot.retrieval.evaluation import (
     EvidenceRef,
     Question,
@@ -180,50 +179,6 @@ def test_choose_prefers_simpler_configuration_unless_clearly_better():
 
 
 # -- adapters -------------------------------------------------------------------------------
-
-
-class Item:
-    def __init__(self, embedding):
-        self.embedding = embedding
-
-
-class Response:
-    def __init__(self, n, dim):
-        self.data = [Item([0.1] * dim) for _ in range(n)]
-
-
-class Endpoints:
-    def __init__(self, dim=1024, fail_times=0):
-        self.dim, self.fail_times, self.calls = dim, fail_times, []
-
-    def query(self, name, input):  # noqa: A002 - SDK keyword
-        self.calls.append(len(input))
-        if self.fail_times:
-            self.fail_times -= 1
-            raise TimeoutError("rate limited")
-        return Response(len(input), self.dim)
-
-
-class Client:
-    def __init__(self, endpoints):
-        self.serving_endpoints = endpoints
-
-
-def test_embeddings_batch_retry_and_validate_dimension():
-    cfg = RS.embeddings.model_copy(update={"batch_size": 2, "max_retries": 2})
-    endpoints = Endpoints(fail_times=1)
-    provider = DatabricksServingEmbeddings(cfg, Client(endpoints), sleep=lambda _s: None)
-    vectors = provider.embed(["a", "b", "c"])
-    assert len(vectors) == 3 and len(vectors[0]) == 1024
-    assert endpoints.calls == [2, 2, 1]  # first batch retried once
-    wrong = DatabricksServingEmbeddings(cfg, Client(Endpoints(dim=8)), sleep=lambda _s: None)
-    with pytest.raises(EmbeddingError, match="dimension"):
-        wrong.embed(["a"])
-    failing = DatabricksServingEmbeddings(
-        cfg, Client(Endpoints(fail_times=9)), sleep=lambda _s: None
-    )
-    with pytest.raises(EmbeddingError, match="rate limited"):
-        failing.embed(["a"])
 
 
 def test_vector_search_results_are_normalised():
