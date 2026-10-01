@@ -243,9 +243,9 @@ class FakeVS:
         return self.index
 
 
-def vs(client):
+def vs(client, **config):
     return VectorSearchIndex(
-        RS.retrieval.vector_search,
+        RS.retrieval.vector_search.model_copy(update=config),
         "cat.silver.idx",
         "cat.silver.document_chunk_index",
         1024,
@@ -256,7 +256,7 @@ def vs(client):
 
 def test_vector_search_lifecycle_creates_missing_objects_with_self_managed_vectors():
     client = FakeVS(endpoint_state=None)
-    index = vs(client)
+    index = vs(client, create_endpoint=True)  # creation only when explicitly configured
     assert index.ensure_endpoint() == ("ONLINE", "CREATED")
     assert index.ensure_index() == "CREATED"
     spec = client.created[1][1]

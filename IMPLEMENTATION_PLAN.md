@@ -562,6 +562,14 @@ come from content, not filenames. Identified from first-page text:
     - **Pilot:** notebook 07 Step 3a stops cleanly after PILOT_REQUESTS = 50 (200 texts) for review.
     - **Model isolation:** cache key (text_sha256, embedding_model). Cache lookup and index source filter on model and dimension; a post-MERGE check allows no foreign-model rows; an existing index with another dimension is refused.
     - **GTE:** the failure history stays in `embedding_candidates.yaml`.
+67. **AI Search endpoint quota (Step 3b).**
+    - **What happened:** creating `worldbank-copilot-vs` failed with "Maximum number of AI Search endpoints per workspace exceeded quota of 1" (documented limit: 500).
+    - **Already done before the failure:** the index-source table had been built (12,797 rows), and the Qwen embedding cache was complete (10,965 texts; 0 retries, 0 failures, 0 rate limits).
+    - **Change:**
+      - reuse the existing ONLINE endpoint `worldbank-gep-ai-search` (configuration, `create_endpoint: false`) with a new project index `worldbank_copilot.silver.document_chunk_index_qwen3_v1` on `worldbank_copilot.silver.document_chunk_index`;
+      - a read-only pre-flight (endpoint ONLINE, existing indexes listed, no name collision, project namespace and source table, Qwen model, dimension 1024, no foreign-model rows, full coverage);
+      - a quota error at index creation stops cleanly.
+    - **GEP:** the existing indexes (`worldbank_ai.rag.*`) are never modified or deleted.
 
 ---
 

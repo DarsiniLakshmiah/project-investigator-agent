@@ -92,6 +92,8 @@ class EmbeddingConfig(_Model):
 
 class VectorSearchConfig(_Model):
     endpoint: str
+    # False: reuse an existing endpoint; never create or modify one (workspace quota).
+    create_endpoint: bool = False
     index_table: str
     index_name: str
     pipeline_type: Literal["TRIGGERED", "CONTINUOUS"] = "TRIGGERED"

@@ -93,6 +93,12 @@ if not embedding_report.complete:
 index_write, index_rows = rp.build_index_source(spark, settings, rs, provider.model, strategies)  # noqa: F821
 print(index_write)
 vs_index = rp.vector_index(settings, rs)  # noqa: F821
+# Read-only pre-flight on the reused endpoint (configs/retrieval/retrieval.yaml): ONLINE,
+# existing indexes, no name collision, this project's source table, model and dimension.
+preflight = rp.preflight_index(spark, settings, rs, vs_index, provider.model)  # noqa: F821
+print(preflight.format())
+if not preflight.ok:
+    raise RuntimeError("STOP: index pre-flight failed; nothing was created or modified")
 index_status = rp.ensure_vector_index(vs_index, index_rows, progress=print)
 print(index_status)
 

@@ -475,6 +475,114 @@ def build_index_source(
     return merge_result(n["index_table"], expected, before.get("version"), entry), expected
 
 
+@dataclass
+class PreflightCheck:
+    name: str
+    ok: bool
+    detail: str
+
+
+@dataclass
+class IndexPreflight:
+    endpoint: str
+    index_name: str
+    source_table: str
+    existing_indexes: list[str]
+    action: str  # CREATE | REUSE (index already exists with this project's source)
+    checks: list[PreflightCheck]
+
+    @property
+    def ok(self) -> bool:
+        return all(c.ok for c in self.checks)
+
+    def format(self) -> str:
+        lines = [
+            f"index pre-flight: {'OK' if self.ok else 'FAILED'} -> {self.action}",
+            f"  endpoint {self.endpoint}; proposed index {self.index_name}",
+            f"  source table {self.source_table}",
+            f"  existing indexes on the endpoint ({len(self.existing_indexes)}): "
+            f"{self.existing_indexes}",
+        ]
+        lines += [f"  [{'PASS' if c.ok else 'FAIL'}] {c.name}: {c.detail}" for c in self.checks]
+        return "\n".join(lines)
+
+
+def preflight_index(
+    spark: Any, settings: Settings, rs: RetrievalSettings, index: VectorSearchIndex, model: str
+) -> IndexPreflight:
+    """Read-only checks before an index is created or reused. Creates nothing."""
+    n = names(settings, rs)
+    dimension = rs.embeddings.expected_dimension
+    project_prefix = f"{n['catalog']}.{n['silver']}."
+    checks: list[PreflightCheck] = []
+
+    def check(name: str, ok: bool, detail: str) -> None:
+        checks.append(PreflightCheck(name, bool(ok), detail))
+
+    state = index.endpoint_state()
+    check("endpoint ONLINE", state == "ONLINE", f"{index.config.endpoint}: {state or 'absent'}")
+    existing = sorted(str(i.get("name")) for i in index.list_indexes()) if state else []
+    action = "CREATE"
+    if index.index_name in existing:
+        spec = index.describe().get("delta_sync_index_spec", {})
+        ours = spec.get("source_table") == index.source_table
+        action = "REUSE" if ours else "COLLISION"
+        check(
+            "index name free or ours",
+            ours,
+            f"{index.index_name} exists with source {spec.get('source_table')}",
+        )
+    else:
+        check("index name free or ours", True, f"{index.index_name} not on the endpoint")
+    check(
+        "index in this project's namespace",
+        index.index_name.startswith(project_prefix),
+        f"{index.index_name} (expected prefix {project_prefix})",
+    )
+    check(
+        "source table is this project's",
+        index.source_table == f"{project_prefix}{rs.retrieval.vector_search.index_table}",
+        index.source_table,
+    )
+    check(
+        "embedding model configured",
+        model == rs.embeddings.endpoint,
+        f"{model} (configured {rs.embeddings.endpoint})",
+    )
+    check(
+        "index dimension configured",
+        index.dimension == dimension,
+        f"{index.dimension} (configured {dimension})",
+    )
+    foreign = spark.sql(foreign_model_rows_sql(n["index_table"], model, dimension)).collect()[0][
+        "n"
+    ]
+    check(
+        "only configured model/dimension in source",
+        foreign == 0,
+        f"{foreign} rows of another model or dimension",
+    )
+    rows = spark.sql(f"SELECT count(*) AS n FROM {n['index_table']}").collect()[0]["n"]
+    expected = spark.sql(
+        f"SELECT count(*) AS n FROM {n['chunks']} WHERE chunk_role = 'RETRIEVAL' "
+        f"AND chunk_strategy IN ({_strategies(sorted(rs.chunking.strategies))})"
+    ).collect()[0]["n"]
+    check(
+        "source covers every retrieval chunk",
+        rows == expected and rows > 0,
+        f"{rows} source rows, {expected} retrieval chunks",
+    )
+    check(
+        "capacity (documented limit 50 indexes per endpoint)",
+        len(existing) < 50,
+        f"{len(existing)} indexes on the endpoint; the workspace may enforce a lower "
+        "quota, in which case creation stops cleanly",
+    )
+    return IndexPreflight(
+        index.config.endpoint, index.index_name, index.source_table, existing, action, checks
+    )
+
+
 def vector_index(
     settings: Settings, rs: RetrievalSettings, client: Any | None = None
 ) -> VectorSearchIndex:

@@ -1,10 +1,14 @@
 # Retrieval configuration (Phase 8).
 vector_search:
-  # Databricks Vector Search. The endpoint is created if missing (STANDARD type) and
-  # validated if present; the index is a Delta Sync index with self-managed vectors.
-  endpoint: worldbank-copilot-vs
-  index_table: document_chunk_index          # silver.<index_table> (index source)
-  index_name: document_chunk_index_vs        # silver.<index_name> (the index)
+  # Databricks AI Search (Vector Search). This workspace allows ONE endpoint (quota hit
+  # when creating 'worldbank-copilot-vs'), so the existing ONLINE endpoint is reused.
+  # It also serves the earlier GEP project's indexes (worldbank_ai.rag.*); this project
+  # only adds its own, independently named index and never modifies or deletes others.
+  endpoint: worldbank-gep-ai-search
+  create_endpoint: false                     # never create or modify an endpoint
+  index_table: document_chunk_index          # <catalog>.silver.<index_table> (index source)
+  # <catalog>.silver.<index_name>: this project's index (Qwen3 0.6B vectors, dim 1024).
+  index_name: document_chunk_index_qwen3_v1
   pipeline_type: TRIGGERED
   sync_timeout_seconds: 1800
   query_timeout_seconds: 30

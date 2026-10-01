@@ -51,6 +51,11 @@ def is_not_found(exc: BaseException) -> bool:
     )
 
 
+def is_quota_error(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    return any(word in text for word in ("quota", "exceeded", "limit reached", "maximum number"))
+
+
 class DenseSearcher(Protocol):
     def search(
         self, vector: Sequence[float], filters: dict[str, Any], k: int
@@ -127,9 +132,20 @@ class VectorSearchIndex:
             ) from exc
         return (endpoint.get("endpoint_status") or {}).get("state", "UNKNOWN")
 
+    def endpoint_state(self) -> str | None:
+        """State of the configured endpoint (None if it does not exist). Read-only."""
+        return self._endpoint_state()
+
     def ensure_endpoint(self) -> tuple[str, str]:
+        """Validate (and only if ``create_endpoint`` is true, create) the endpoint."""
         state = self._endpoint_state()
         action = "EXISTS"
+        if state is None and not self.config.create_endpoint:
+            raise VectorSearchUnavailable(
+                f"AI Search endpoint {self.config.endpoint!r} does not exist and "
+                "create_endpoint is false (configs/retrieval/retrieval.yaml); no endpoint "
+                "was created or modified"
+            )
         if state is None:
             try:
                 self.client.create_endpoint(name=self.config.endpoint, endpoint_type="STANDARD")
@@ -159,6 +175,11 @@ class VectorSearchIndex:
                 return None
             raise
 
+    def list_indexes(self) -> list[dict[str, Any]]:
+        """Indexes on the configured endpoint (read-only)."""
+        response = self.client.list_indexes(self.config.endpoint) or {}
+        return list(response.get("vector_indexes", []) or [])
+
     def ensure_index(self) -> str:
         index = self._get_index()
         if index is not None:
@@ -181,15 +202,24 @@ class VectorSearchIndex:
                 )
             self._index = index
             return "EXISTS"
-        self._index = self.client.create_delta_sync_index(
-            endpoint_name=self.config.endpoint,
-            source_table_name=self.source_table,
-            index_name=self.index_name,
-            pipeline_type=self.config.pipeline_type,
-            primary_key=PRIMARY_KEY,
-            embedding_dimension=self.dimension,
-            embedding_vector_column=VECTOR_COLUMN,
-        )
+        try:
+            self._index = self.client.create_delta_sync_index(
+                endpoint_name=self.config.endpoint,
+                source_table_name=self.source_table,
+                index_name=self.index_name,
+                pipeline_type=self.config.pipeline_type,
+                primary_key=PRIMARY_KEY,
+                embedding_dimension=self.dimension,
+                embedding_vector_column=VECTOR_COLUMN,
+            )
+        except Exception as exc:
+            if is_quota_error(exc):
+                raise VectorSearchUnavailable(
+                    f"index {self.index_name} was not created: quota reached on endpoint "
+                    f"{self.config.endpoint!r} ({exc}). No existing index was modified or "
+                    "deleted; free capacity or choose another endpoint deliberately."
+                ) from exc
+            raise
         return "CREATED"
 
     @property
