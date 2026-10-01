@@ -523,6 +523,27 @@ Phase 4 parsed documents (artifact Volume; nothing re-parsed)
 - **Experiments.** They run in stages (chunking -> retrieval -> reranking -> candidate depth -> query filters) over `evaluation/retrieval_questions.yaml`. Metrics: Recall@5/10, MRR, nDCG@5, Precision@5 and latency. A more complex configuration is chosen only if it beats the simpler one by `min_improvement`. Results are logged to MLflow when it's available.
 - **Capability probe.** Notebook 07 first checks Vector Search and the embedding endpoint (`configs/retrieval/embeddings.yaml`). If either is missing it stops and builds nothing. There is no local fallback vector store.
 
+### Phase 8 dependencies (Databricks notebooks)
+
+| File | Installed by | Content |
+|---|---|---|
+| `requirements-databricks.txt` | notebooks 05, 07, 07b | Phase 6 exact pins (pydantic, PyYAML, python-dotenv, openpyxl, pypdfium2) |
+| `requirements-retrieval.txt` | notebooks 07, 07b | `databricks-ai-search==0.78`, `deprecation==2.1.0` |
+| `requirements-reranker.txt` | notebook 07b only | `sentence-transformers==5.5.1`, `transformers==4.57.6`, `torch==2.12.0` |
+| `constraints-databricks.txt` | every install (`-c`) | `protobuf>=6.33.5,<7`, `grpcio-status>=1.76.0,<2` |
+
+**Runtime packages.** `databricks-sdk`, `mlflow-skinny`, `protobuf`, `requests` and `httpx` come from Databricks serverless environment 6 and are not reinstalled. Requirement files hold exact pins only. The constraints are ranges because they protect packages the runtime owns rather than install anything.
+
+**Vector Search client.** It is `databricks-ai-search`, the successor of the deprecated `databricks-vectorsearch`. The old package pins `protobuf<6` and downgraded the runtime's protobuf 6.33.5 to 5.29.6.
+
+**Dependency health.** After each install, `common/dependency_health.check_environment` runs before anything else. The notebook stops if any of these fails:
+- `pip check`;
+- an exact pin is not installed at its version;
+- a requirement file contains a line that is not an exact pin;
+- a notebook-scoped install replaces a protected runtime package (`configs/environments/dependencies.yaml`).
+
+**Reranking is isolated.** The CrossEncoder experiment runs in `notebooks/07b_rerank_experiment.py` on serverless environment 6 **ML**, which already ships those exact versions. So the capability probe and production retrieval in notebook 07 never depend on torch.
+
 ## Remaining documentation
 
 Sections for Vector Search, FastAPI,

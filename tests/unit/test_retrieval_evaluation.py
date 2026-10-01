@@ -258,13 +258,17 @@ class FakeIndex:
         }
 
 
+class NotFound(Exception):  # same class name as databricks.ai_search.exceptions.NotFound
+    status_code = 404
+
+
 class FakeVS:
     def __init__(self, index=None, endpoint_state="ONLINE"):
         self.index, self.endpoint_state, self.created = index, endpoint_state, []
 
     def get_endpoint(self, name):
         if self.endpoint_state is None:
-            raise Exception("Endpoint not found")
+            raise NotFound("endpoint")
         return {"endpoint_status": {"state": self.endpoint_state}}
 
     def create_endpoint(self, name, endpoint_type):
@@ -273,7 +277,7 @@ class FakeVS:
 
     def get_index(self, endpoint_name, index_name):
         if self.index is None:
-            raise Exception("Index does not exist")
+            raise NotFound("index")
         return self.index
 
     def create_delta_sync_index(self, **kw):
@@ -364,3 +368,47 @@ def test_comment_cell_skips_repeated_label_and_refuses_fragments():
 
 def test_rows_fixture_is_consistent():
     assert {r["project_id"] for r in ROWS} == {"P1", "P2"}
+
+
+def test_not_found_detection_uses_sdk_exception_types_not_messages():
+    from worldbank_copilot.retrieval.vector_search import is_not_found
+
+    class ResourceDoesNotExist(Exception):
+        pass
+
+    class Http(Exception):
+        status_code = 404
+
+    assert is_not_found(NotFound("x")) and is_not_found(ResourceDoesNotExist("x"))
+    assert is_not_found(Http("x"))
+    assert not is_not_found(Exception("index not found"))  # message text is not trusted
+
+
+def test_other_errors_reading_the_endpoint_are_reported_as_unavailable():
+    from worldbank_copilot.retrieval.vector_search import VectorSearchUnavailable
+
+    class Denied(FakeVS):
+        def get_endpoint(self, name):
+            raise PermissionError("PERMISSION_DENIED")
+
+    with pytest.raises(VectorSearchUnavailable, match="PERMISSION_DENIED"):
+        vs(Denied()).ensure_endpoint()
+
+
+def test_client_is_the_databricks_ai_search_client(monkeypatch):
+    import sys
+    import types
+
+    created = {}
+
+    class AISearchClient:
+        def __init__(self, **kw):
+            created.update(kw)
+
+    package = types.ModuleType("databricks.ai_search")
+    client_module = types.ModuleType("databricks.ai_search.client")
+    client_module.AISearchClient = AISearchClient
+    monkeypatch.setitem(sys.modules, "databricks.ai_search", package)
+    monkeypatch.setitem(sys.modules, "databricks.ai_search.client", client_module)
+    index = VectorSearchIndex(RS.retrieval.vector_search, "c.s.i", "c.s.t", 1024)
+    assert isinstance(index.client, AISearchClient) and created == {"disable_notice": True}

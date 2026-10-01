@@ -3,17 +3,23 @@
 # MAGIC ## 07_build_retrieval_and_evaluate: Retrieval corpus, Vector Search and experiments (Phase 8)
 # MAGIC Thin entry point. All logic lives in `worldbank_copilot.retrieval`.
 # MAGIC
-# MAGIC Prerequisites: Phase 6 (Silver + parsed artefacts in the Volume) and, for the comments
-# MAGIC fix, a re-run of notebooks 05 and 06 (see README, Phase 8).
+# MAGIC Environment: serverless **environment version 6 (standard)**. Only the minimum
+# MAGIC dependencies are installed (`databricks-ai-search`); runtime packages (protobuf,
+# MAGIC databricks-sdk, mlflow-skinny) are used as provided. The optional CrossEncoder
+# MAGIC experiment runs separately in `07b_rerank_experiment` so its dependencies never
+# MAGIC touch this environment.
 # MAGIC
-# MAGIC Steps: 0 capability probe (stops if Vector Search or the embedding endpoint is missing)
-# MAGIC → 1 corpus (`silver.document_chunks`) → 2 embeddings cache, index source, Vector Search
-# MAGIC index → 3 staged experiments → 4 project-isolation checks → 5 sample evidence
-# MAGIC → 6 idempotency re-run → 7 validation SQL.
+# MAGIC Prerequisites: Phase 6 (Silver + parsed artefacts in the Volume) and, for the
+# MAGIC comments fix, a re-run of notebooks 05 and 06.
+# MAGIC
+# MAGIC Steps: 0 dependency health → 1 capability probe (stops if Vector Search or the
+# MAGIC embedding endpoint is missing) → 2 corpus → 3 embeddings, index source, Vector Search
+# MAGIC index → 4 staged experiments without reranker → 5 project isolation → 6 idempotency
+# MAGIC → 7 validation SQL.
 
 # COMMAND ----------
 
-# MAGIC %pip install -q -r ../requirements-databricks.txt -r ../requirements-retrieval.txt
+# MAGIC %pip install -q -r ../requirements-databricks.txt -r ../requirements-retrieval.txt -c ../constraints-databricks.txt
 
 # COMMAND ----------
 
@@ -25,14 +31,28 @@ dbutils.library.restartPython()  # noqa: F821 (Databricks built-in)
 
 # COMMAND ----------
 
-# Step 0: capability probe. Nothing is built if a blocking capability is missing.
+# Step 0: dependency health (pip check, exact pins, no protected runtime package replaced).
+from worldbank_copilot.common.dependency_health import check_environment  # noqa: E402
+
+health = check_environment(
+    settings.repo_root,  # noqa: F821
+    ["requirements-databricks.txt", "requirements-retrieval.txt"],
+    settings.config_dir,  # noqa: F821
+)
+print(health.format())
+if not health.ok:
+    raise RuntimeError("STOP: notebook environment is inconsistent (see dependency health)")
+
+# COMMAND ----------
+
+# Step 1: capability probe (minimum dependencies; the reranker is not probed here).
 from worldbank_copilot.retrieval import pipeline as rp  # noqa: E402
 from worldbank_copilot.retrieval.config import load_retrieval_settings  # noqa: E402
 from worldbank_copilot.retrieval.embeddings import embedding_provider  # noqa: E402
 
 rs = load_retrieval_settings(settings.config_dir)  # noqa: F821
 provider = embedding_provider(rs.embeddings)
-capabilities = rp.probe_capabilities(rs, provider)
+capabilities = rp.probe_capabilities(rs, provider, check_reranker=False)
 print(capabilities.format())
 if capabilities.blocking_failures:
     raise RuntimeError(
@@ -42,7 +62,7 @@ if capabilities.blocking_failures:
 
 # COMMAND ----------
 
-# Step 1: governed retrieval corpus (all chunking strategies) with read-back reconciliation.
+# Step 2: governed retrieval corpus (all chunking strategies) with read-back reconciliation.
 corpus = rp.build_corpus(spark, settings, rs, registry, progress=print)  # noqa: F821
 print(corpus.write)
 for group, counts in corpus.counts.items():
@@ -50,7 +70,7 @@ for group, counts in corpus.counts.items():
 
 # COMMAND ----------
 
-# Step 2: embeddings (cache: only new text is embedded), index source, Vector Search index.
+# Step 3: embeddings (cache: only new text is embedded), index source, Vector Search index.
 strategies = sorted(rs.chunking.strategies)
 embedding_report = rp.update_embedding_cache(spark, settings, rs, provider, strategies, print)  # noqa: F821
 print(embedding_report)
@@ -62,10 +82,11 @@ print(index_status)
 
 # COMMAND ----------
 
-# Step 3: staged retrieval experiments (configs/retrieval/evaluation.yaml).
+# Step 4: staged experiments WITHOUT the reranker (cross_encoder runs are reported as
+# UNAVAILABLE here and evaluated in 07b_rerank_experiment).
 from worldbank_copilot.retrieval import evaluation as ev  # noqa: E402
 from worldbank_copilot.retrieval import report  # noqa: E402
-from worldbank_copilot.retrieval.rerank import CrossEncoderReranker, NoReranker  # noqa: E402
+from worldbank_copilot.retrieval.rerank import NoReranker  # noqa: E402
 from worldbank_copilot.retrieval.retriever import ChunkStore, Retriever  # noqa: E402
 
 names = rp.names(settings, rs)  # noqa: F821
@@ -73,53 +94,35 @@ store = ChunkStore.from_table(spark, names["chunks"])  # noqa: F821
 retriever = Retriever(store, rs, registry.project_ids, embeddings=provider, dense=vs_index)  # noqa: F821
 questions = ev.load_questions(settings.repo_root / rs.evaluation.questions_file)  # noqa: F821
 rerankers = {"none": NoReranker()}
-if any(c.name == "cross_encoder" and c.status == "OK" for c in capabilities.checks):
-    rerankers["cross_encoder"] = CrossEncoderReranker(rs.retrieval.reranker)
-baseline = ev.RunConfig("structure", "dense", "none", 10)
-decisions = ev.run_stages(retriever, questions, rs.evaluation, rerankers, baseline, print)
+decisions = ev.run_stages(retriever, questions, rs.evaluation, rerankers,
+                          ev.RunConfig("structure", "dense", "none", 10), print)
 display(spark.createDataFrame(report.decisions_table(decisions)))  # noqa: F821
 for d in decisions:
     print(f"[{d.stage}] winner {d.winner.name}: {d.reason}")
-
-# COMMAND ----------
-
-# Step 3b: selected configuration: breakdowns, failure analysis, abstention calibration, MLflow.
-final = decisions[-1]
-selected = next(r for r in final.runs if r.config == final.winner)
-print("SELECTED:", selected.config.name, selected.summary)
+selected = next(r for r in decisions[-1].runs if r.config == decisions[-1].winner)
+print("SELECTED WITHOUT RERANKER:", selected.config.name, selected.summary)
 display(spark.createDataFrame(report.breakdown(selected)))  # noqa: F821
 misses = ev.classify_misses(retriever, questions, selected)
 if misses:
     display(spark.createDataFrame(misses))  # noqa: F821
-print("abstention:", ev.abstention_calibration(selected))
 if rs.evaluation.mlflow.enabled:
     run_ids = ev.log_to_mlflow(
         decisions,
         {"embedding_model": provider.model, "questions": len(questions),
-         "index": names["index_name"]},
+         "index": names["index_name"], "notebook": "07"},
         rs.evaluation.mlflow.experiment_name,
     )
     print(f"MLflow: {len(run_ids)} runs logged")
 
 # COMMAND ----------
 
-# Step 4: project isolation (ERROR-level). Every question under every project scope.
+# Step 5: project isolation (ERROR-level). Every question under every project scope.
 cfg = selected.config
 checks = report.isolation_checks(retriever, questions, registry.project_ids, cfg.chunk_strategy,  # noqa: F821
-                                 cfg.retrieval, rerankers[cfg.reranker], cfg.candidate_k)
+                                 cfg.retrieval, NoReranker(), cfg.candidate_k)
 for c in checks:
     print(f"[{'PASS' if c.passed else 'FAIL'}] {c.name}: {c.detail}")
 assert all(c.passed for c in checks), "cross-project isolation failed"
-
-# COMMAND ----------
-
-# Step 5: representative evidence for manual inspection (citation-ready).
-for qid in ("q01", "q04", "q07", "q28", "q33", "q39", "q44", "q25"):
-    q = next(x for x in questions if x.id == qid)
-    result = retriever.retrieve(q.question, q.project_id, strategy=cfg.chunk_strategy,
-                                method=cfg.retrieval, reranker=rerankers[cfg.reranker],
-                                candidate_k=cfg.candidate_k, final_k=5)
-    print(report.format_evidence(result), "\n")
 
 # COMMAND ----------
 

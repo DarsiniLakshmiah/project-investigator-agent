@@ -533,6 +533,10 @@ come from content, not filenames. Identified from first-page text:
 61. **Local lexical baseline** (BM25 on the real corpus, no reranker, k=10): Recall@10
     0.75–0.80 across strategies. Every miss is a paraphrase question; dense, hybrid and
     reranked results exist only after the Databricks run.
+62. **Dependency fix (notebook 07 install failure).**
+    - **Root cause:** `databricks-vectorsearch` 0.75 declares `protobuf<6.0,>=5.29.5`. Installing it notebook-scoped replaced the runtime's protobuf 6.33.5 with 5.29.6, breaking `grpcio-status` 1.76.0 (needs protobuf `>=6.31.1,<7`). Environment 6 ships `googleapis-common-protos` 1.71.0, which accepts protobuf `<7` and was not affected. The additional `googleapis-common-protos` conflict seen in the local reproduction came from the locally resolved 1.75.5, not from Databricks.
+    - **Reproduced locally:** in a Python 3.12 environment seeded with serverless environment 6 versions.
+    - **Fix:** migrated the adapter to `databricks-ai-search==0.78` (same client and index API, typed `NotFound`); `databricks-sdk` is no longer installed (runtime 0.122.0 is used); constraints protect protobuf and grpcio-status; the reranker moved to notebook 07b (ML base); a dependency-health check runs after every install.
 
 ---
 
@@ -1098,7 +1102,7 @@ Jev/SLM, agents, memory, cache, MLflow AI evaluation, API, UI.
 - `pipeline`: capability probe, corpus MERGE, embedding cache, index source, index;
 - `report`: isolation checks and formatting.
 
-**Notebook:** `notebooks/07_build_retrieval_and_evaluate.py` (it replaces the 07/08 placeholders).
+**Notebooks:** `notebooks/07_build_retrieval_and_evaluate.py` (it replaces the 07/08 placeholders; no reranker) and `notebooks/07b_rerank_experiment.py` (CrossEncoder; ML base environment).
 **SQL:** `sql/phase8_validation.sql`.
 **Questions:** `evaluation/retrieval_questions.yaml`.
 

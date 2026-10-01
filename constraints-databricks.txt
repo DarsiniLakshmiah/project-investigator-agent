@@ -1,0 +1,12 @@
+# Constraints for every notebook-scoped %pip install (passed with -c). They install
+# nothing; they stop pip from replacing runtime-owned packages with incompatible versions.
+# Ranges (not pins) because these packages belong to the Databricks runtime: an exact pin
+# would force an unnecessary up/downgrade whenever the runtime patch level differs.
+#
+# protobuf: Databricks serverless environment 6 ships protobuf 6.33.5 and grpcio-status
+# 1.76.0, which needs protobuf >=6.31.1,<7 (googleapis-common-protos 1.71.0 in the same
+# environment accepts >=3.20.2,<7). The floor keeps the runtime's protobuf. A package that
+# requires protobuf<6 (e.g. databricks-vectorsearch 0.75) now fails resolution instead
+# of silently downgrading protobuf.
+protobuf>=6.33.5,<7
+grpcio-status>=1.76.0,<2

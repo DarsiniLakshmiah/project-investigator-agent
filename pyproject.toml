@@ -22,15 +22,15 @@ dependencies = [
 [project.optional-dependencies]
 # Extras are grouped by the phase that first needs them. Nothing here is
 # required to import the package or run the unit tests.
-databricks = [          # Phases 2-7: Delta / Unity Catalog / Vector Search access
-    "databricks-sdk",
-    "databricks-vectorsearch",
+databricks = [          # Databricks access. In notebooks the runtime provides databricks-sdk;
+    "databricks-sdk",     # Vector Search uses databricks-ai-search (requirements-retrieval.txt).
+    "databricks-ai-search==0.78",
 ]
 documents = [           # Phase 4: layout-aware PDF parsing (validated with docling 2.130.0)
     "docling>=2.130,<3",
 ]
-retrieval = [           # Phase 8: reranking
-    "sentence-transformers>=2.2",
+retrieval = [           # Phase 8: optional CrossEncoder reranking (requirements-reranker.txt)
+    "sentence-transformers==5.5.1",
 ]
 agents = [              # Phase 11
     "langgraph>=0.2",

@@ -1,0 +1,11 @@
+# Optional CrossEncoder reranking experiment ONLY (notebook 07b). Never installed by
+# notebook 07, so the capability probe and the production retrieval path do not depend
+# on it.
+#
+# Run notebook 07b on the serverless ML base environment (environment version 6 ML),
+# which already provides exactly these versions: the install is then a no-op and changes
+# no runtime package. On a standard environment pip would download torch; the
+# dependency-health check fails if that shadows a protected runtime package.
+sentence-transformers==5.5.1
+transformers==4.57.6
+torch==2.12.0

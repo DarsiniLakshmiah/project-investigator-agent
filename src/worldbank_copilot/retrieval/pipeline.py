@@ -96,9 +96,9 @@ def probe_capabilities(
 ) -> CapabilityReport:
     report = CapabilityReport()
     try:
-        from databricks.vector_search.client import VectorSearchClient
+        from databricks.ai_search.client import AISearchClient
 
-        client = VectorSearchClient(disable_notice=True)
+        client = AISearchClient(disable_notice=True)
         endpoints = client.list_endpoints().get("endpoints", []) or []
         found = [e for e in endpoints if e.get("name") == rs.retrieval.vector_search.endpoint]
         state = (found[0].get("endpoint_status") or {}).get("state") if found else "absent"
@@ -113,11 +113,18 @@ def probe_capabilities(
         )
     except ImportError:
         report.checks.append(
-            Check("vector_search", "UNAVAILABLE", True, "databricks-vectorsearch not installed")
+            Check(
+                "vector_search",
+                "UNAVAILABLE",
+                True,
+                "databricks-ai-search not installed (requirements-retrieval.txt)",
+            )
         )
     except Exception as exc:  # permission / feature not enabled
         report.checks.append(
-            Check("vector_search", "FAILED", True, f"Vector Search API not usable: {exc}")
+            Check(
+                "vector_search", "FAILED", True, f"Vector Search (AI Search) API not usable: {exc}"
+            )
         )
     try:
         started = time.perf_counter()

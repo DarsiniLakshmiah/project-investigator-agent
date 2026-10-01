@@ -9,7 +9,12 @@ Separation of concerns:
 
 Downstream code never sees raw Vector Search responses: results are chunk ids and
 scores, and all metadata/text comes back from the governed corpus. The client is created
-lazily (``databricks-vectorsearch``), so importing needs no credentials.
+lazily, so importing needs no credentials.
+
+Client library: ``databricks-ai-search`` (``databricks.ai_search.client.AISearchClient``),
+the successor of the deprecated ``databricks-vectorsearch``. The old package pins
+protobuf<6, which downgraded the runtime's protobuf 6.33.5 (Phase 8 dependency fix).
+The endpoint / Delta Sync index / similarity_search API used here is unchanged.
 """
 
 from __future__ import annotations
@@ -36,6 +41,14 @@ VECTOR_COLUMN = "embedding"
 
 class VectorSearchUnavailable(LakehouseError):
     """Vector Search cannot be used in this workspace (capability / permission)."""
+
+
+def is_not_found(exc: BaseException) -> bool:
+    """The AI Search SDK's NotFound (alias ResourceDoesNotExist), or an HTTP 404."""
+    names = {type(exc).__name__} | {c.__name__ for c in type(exc).__mro__}
+    return bool(names & {"NotFound", "ResourceDoesNotExist"}) or (
+        getattr(exc, "status_code", None) == 404
+    )
 
 
 class DenseSearcher(Protocol):
@@ -93,12 +106,12 @@ class VectorSearchIndex:
     def client(self) -> Any:
         if self._client is None:
             try:
-                from databricks.vector_search.client import VectorSearchClient
+                from databricks.ai_search.client import AISearchClient
             except ImportError as exc:
                 raise VectorSearchUnavailable(
-                    "databricks-vectorsearch is not installed (pip install databricks-vectorsearch)"
+                    "databricks-ai-search is not installed (requirements-retrieval.txt)"
                 ) from exc
-            self._client = VectorSearchClient(disable_notice=True)
+            self._client = AISearchClient(disable_notice=True)
         return self._client
 
     # -- lifecycle ---------------------------------------------------------------
@@ -107,7 +120,7 @@ class VectorSearchIndex:
         try:
             endpoint = self.client.get_endpoint(self.config.endpoint)
         except Exception as exc:
-            if "not found" in str(exc).lower() or "does not exist" in str(exc).lower():
+            if is_not_found(exc):
                 return None
             raise VectorSearchUnavailable(
                 f"cannot read Vector Search endpoint {self.config.endpoint!r}: {exc}"
@@ -142,7 +155,7 @@ class VectorSearchIndex:
                 endpoint_name=self.config.endpoint, index_name=self.index_name
             )
         except Exception as exc:
-            if "not found" in str(exc).lower() or "does not exist" in str(exc).lower():
+            if is_not_found(exc):
                 return None
             raise
 

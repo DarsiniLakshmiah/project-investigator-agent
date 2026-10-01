@@ -1,6 +1,12 @@
-# Phase 8 retrieval dependencies, installed notebook-scoped by
-# notebooks/07_build_retrieval_and_evaluate.py (after requirements-databricks.txt).
-# They do not affect Bronze/Silver/Gold content, so lower bounds are used.
-databricks-sdk>=0.30
-databricks-vectorsearch>=0.40
-sentence-transformers>=3.0
+# Phase 8 retrieval dependencies (notebook-scoped, notebook 07 and 07b), installed with
+#   %pip install -r requirements-databricks.txt -r requirements-retrieval.txt -c constraints-databricks.txt
+#
+# Exact pins. Packages the Databricks runtime already provides are NOT listed (they are
+# used as provided and verified by the dependency-health check):
+#   databricks-sdk (serving endpoint calls), mlflow-skinny, requests, httpx, protobuf.
+#
+# databricks-ai-search replaces the deprecated databricks-vectorsearch. The old package
+# (0.75) pins protobuf<6, which downgraded the runtime's protobuf 6.33.5 to 5.29.6 and
+# broke grpcio-status 1.76.0 (protobuf>=6.31.1,<7). databricks-ai-search has no protobuf pin.
+databricks-ai-search==0.78
+deprecation==2.1.0
