@@ -309,6 +309,13 @@ def embedding_sink(spark: Any, table: str, model: str, dimension: int) -> Callab
     return write
 
 
+def configured_strategies(
+    rs: RetrievalSettings, strategies: Sequence[str] | None = None
+) -> list[str]:
+    """The given strategies, or every configured chunking strategy (sorted)."""
+    return sorted(strategies) if strategies is not None else sorted(rs.chunking.strategies)
+
+
 def _strategies(strategies: Sequence[str]) -> str:
     bad = [x for x in strategies if not x.replace("_", "").isalnum()]
     if bad:
@@ -361,7 +368,7 @@ def update_embedding_cache(
     settings: Settings,
     rs: RetrievalSettings,
     provider: Any,
-    strategies: Sequence[str],
+    strategies: Sequence[str] | None = None,
     progress: Say | None = None,
     max_requests: int | None = None,
 ) -> EmbeddingReport:
@@ -374,6 +381,7 @@ def update_embedding_cache(
     """
     from worldbank_copilot.retrieval.embeddings import run_embedding_job
 
+    strategies = configured_strategies(rs, strategies)
     say = _say(progress)
     n = names(settings, rs)
     if (
@@ -416,9 +424,14 @@ def update_embedding_cache(
 
 
 def build_index_source(
-    spark: Any, settings: Settings, rs: RetrievalSettings, model: str, strategies: Sequence[str]
+    spark: Any,
+    settings: Settings,
+    rs: RetrievalSettings,
+    model: str,
+    strategies: Sequence[str] | None = None,
 ) -> tuple[WriteResult, int]:
     """MERGE RETRIEVAL chunks + cached vectors of ONE model into the Vector Search source."""
+    strategies = configured_strategies(rs, strategies)
     n = names(settings, rs)
     dimension = rs.embeddings.expected_dimension
     if model != rs.embeddings.endpoint:

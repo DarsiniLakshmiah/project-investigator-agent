@@ -74,9 +74,8 @@ for group, counts in corpus.counts.items():
 # only what is still missing for the configured model (configs/retrieval/embeddings.yaml).
 # PILOT_REQUESTS caps this run (sequential, paced); set it to None for the full build.
 PILOT_REQUESTS = 50  # 50 requests x 4 inputs = 200 texts; review before the full build
-strategies = sorted(rs.chunking.strategies)
 embedding_report = rp.update_embedding_cache(
-    spark, settings, rs, provider, strategies, print, max_requests=PILOT_REQUESTS  # noqa: F821
+    spark, settings, rs, provider, progress=print, max_requests=PILOT_REQUESTS  # noqa: F821
 )
 print(embedding_report)
 if not embedding_report.complete:
@@ -90,7 +89,8 @@ if not embedding_report.complete:
 
 # Step 3b: index source (vectors of the configured model only) and the AI Search index,
 # created with the configured dimension. Runs only after Step 3a completed.
-index_write, index_rows = rp.build_index_source(spark, settings, rs, provider.model, strategies)  # noqa: F821
+# All configured chunking strategies (derived inside the function; Step 3a is not needed).
+index_write, index_rows = rp.build_index_source(spark, settings, rs, provider.model)  # noqa: F821
 print(index_write)
 vs_index = rp.vector_index(settings, rs)  # noqa: F821
 # Read-only pre-flight on the reused endpoint (configs/retrieval/retrieval.yaml): ONLINE,
@@ -150,8 +150,8 @@ assert all(c.passed for c in checks), "cross-project isolation failed"
 
 # Step 6: idempotency - rebuilding with unchanged inputs must change nothing.
 again = rp.build_corpus(spark, settings, rs, registry)  # noqa: F821
-embeddings_again = rp.update_embedding_cache(spark, settings, rs, provider, strategies)  # noqa: F821
-index_again, _ = rp.build_index_source(spark, settings, rs, provider.model, strategies)  # noqa: F821
+embeddings_again = rp.update_embedding_cache(spark, settings, rs, provider)  # noqa: F821
+index_again, _ = rp.build_index_source(spark, settings, rs, provider.model)  # noqa: F821
 print("corpus:", again.write)
 print("embeddings:", embeddings_again)
 print("index source:", index_again)

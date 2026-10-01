@@ -181,3 +181,27 @@ def test_index_is_created_once_and_reused_on_rerun():
 def test_quota_error_detection():
     assert is_quota_error(Exception("Maximum number of AI Search endpoints exceeded quota of 1"))
     assert not is_quota_error(Exception("PERMISSION_DENIED"))
+
+
+def test_strategies_default_to_every_configured_strategy():
+    assert rp.configured_strategies(RS) == sorted(RS.chunking.strategies)
+    assert rp.configured_strategies(RS, ["structure", "fixed"]) == ["fixed", "structure"]
+
+
+def test_step_3b_does_not_depend_on_state_created_in_step_3a():
+    from tests.conftest import REPO_ROOT
+
+    text = (REPO_ROOT / "notebooks" / "07_build_retrieval_and_evaluate.py").read_text(
+        encoding="utf-8"
+    )
+    cells = text.split("# COMMAND ----------")
+    step_3a = next(c for c in cells if "# Step 3a:" in c)
+    step_3b = next(c for c in cells if "# Step 3b:" in c)
+    defined_in_3a = {
+        line.split("=")[0].strip()
+        for line in step_3a.splitlines()
+        if "=" in line and not line.startswith((" ", "#")) and "==" not in line
+    }
+    assert "strategies" not in text.replace("chunking strategies", "")
+    for name in defined_in_3a:
+        assert f"{name}" not in step_3b.replace("embedding_report.", ""), name

@@ -17,7 +17,7 @@ still open. Updated at the end of every phase.
 | 5 | Structured document extraction (ISR snapshots, results, appraisal risks, events) | **Complete, approved** (2026-09-30) |
 | 6 | Databricks platformization and governed Delta foundation | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 7 | Deterministic Gold intelligence layer | **Complete, validated in Databricks, approved** (2026-09-30) |
-| 8 | Databricks-native retrieval foundation + experiments | **Implemented and tested locally; Databricks run pending** (2026-09-30) |
+| 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings and AI Search index validated in Databricks (2026-10-01); retrieval experiments pending** |
 | 9–13 | See §3 (roadmap from Claude.md §36) | Not started |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
@@ -1162,3 +1162,19 @@ Jev/SLM, agents, memory, cache, MLflow AI evaluation, API, UI.
 - All 44 answerable questions are representable in `structure` chunks.
 - Lexical isolation: 49 questions x 3 project scopes, 0 foreign chunks.
 - Tests: 479 unit, 34 integration and 22 Spark tests pass; ruff clean.
+
+### Phase 8 — Databricks validation of the embedding build and index (user, 2026-10-01)
+
+Executed in Databricks:
+
+- **Qwen embedding build (Step 3a)** with `databricks-qwen3-embedding-0-6b`:
+  - 10,965 of 10,965 texts complete;
+  - the full run embedded 10,565 after 400 had been cached by the pilot;
+  - 0 retries, 0 failures, 0 rate limits;
+  - 53 checkpoints, 5,360.8 seconds.
+- **Index source (Step 3b):** `worldbank_copilot.silver.document_chunk_index` holds 12,797 rows. The rerun was idempotent (0 inserted, 0 updated, 0 deleted).
+- **Endpoint:** `worldbank-gep-ai-search` was ONLINE and was reused, not created. Its 3 pre-existing GEP indexes (`worldbank_ai.rag.*`) were left untouched.
+- **Pre-flight:** passed every check.
+- **New index:** `worldbank_copilot.silver.document_chunk_index_qwen3_v1` is ready, in state ONLINE_NO_PENDING_UPDATE, with 12,797 indexed rows (equal to the source table).
+- **Orchestration fix after validation:** Step 3b raised `NameError: strategies` when Step 3a was skipped. `build_index_source` and `update_embedding_cache` now default to every configured strategy (`configured_strategies`), so Steps 3b and 6 run independently after restart and bootstrap.
+- **Not yet run:** retrieval experiments (Steps 4–7, notebook 07b). Phase 9 has not been started.
