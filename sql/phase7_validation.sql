@@ -91,8 +91,8 @@ WITH evidence AS (
          evidence_extraction_method AS method, evidence_text AS text, document_id
   FROM {catalog}.{silver}.project_results
   UNION ALL
-  SELECT record_id, source_document, pdo_rating_page_number, NULL, pdo_rating_table_id,
-         pdo_rating_extraction_method, NULL, document_id
+  -- ISR rows: page and method come from the signal itself (the rating that fired it).
+  SELECT record_id, source_document, NULL, NULL, NULL, NULL, NULL, document_id
   FROM {catalog}.{silver}.isr_snapshots
   UNION ALL
   SELECT record_id, evidence_filename, evidence_page_number, evidence_section,
@@ -104,7 +104,9 @@ WITH evidence AS (
   FROM {catalog}.{silver}.project_enrichment
 )
 SELECT s.project_id, s.rule_id, s.severity, s.subject, s.source_table, s.source_record_id,
-       e.filename, e.page, e.section, e.table_id, e.method, substr(e.text, 1, 160) AS text,
+       e.filename, coalesce(s.page_number, e.page) AS page, coalesce(s.section, e.section) AS section,
+       e.table_id, coalesce(s.extraction_method, e.method) AS method,
+       substr(e.text, 1, 160) AS text,
        d.relative_path, d.sha256 AS source_sha256, size(s.supporting_record_ids) AS supporting
 FROM {catalog}.{gold}.attention_signals s
 LEFT JOIN evidence e ON e.record_id = s.source_record_id

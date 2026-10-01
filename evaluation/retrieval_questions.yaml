@@ -1,0 +1,424 @@
+# Phase 8 retrieval evaluation set.
+#
+# Ground truth comes from the source documents (Phase 4 parsed text) and validated Phase
+# 5 Silver facts; it was NOT produced by the retrieval system. Every evidence item names
+# a document, the PDF page(s) and a short verbatim phrase. tests/unit/test_retrieval_
+# questions.py checks that each phrase really occurs on those pages of that document.
+#
+# A retrieved chunk is RELEVANT to an evidence item when it comes from the same document,
+# shares at least one page, and its text contains the phrase (case/whitespace-insensitive).
+# evidence_mode: all = every item is needed (multi-evidence); any = one item answers it
+# (the same statement repeated in several reports).
+# answerable: false = the corpus holds no answer (used to calibrate abstention; excluded
+# from ranking metrics).
+
+questions:
+# ---------------------------------------------------------------- P130544
+- id: q01
+  project_id: P130544
+  category: project_status
+  kind: temporal
+  question: What progress was reported in the latest ISR on the city water supply contracts?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-9fa1d6d298ab, pages: [2], contains: "water treatment plant in Hubbali-Dharwad has been commissioned"}
+- id: q02
+  project_id: P130544
+  category: results
+  kind: exact
+  question: How many persons were benefiting from metered household connections according to ISR 23?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-3c3bc526b1a5, pages: [2], contains: "benefiting around 458,000 persons"}
+- id: q03
+  project_id: P130544
+  category: closing_dates
+  kind: paraphrase
+  question: Why did the Bank agree in 2021 to push back the date by which the loan had to end?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-a10516ee827a, pages: [3], contains: "is too short to achieve its PDO"}
+- id: q04
+  project_id: P130544
+  category: cancellation
+  kind: multi_evidence
+  question: What does the restructuring paper say about the cancellation of part of the Additional Financing?
+  evidence_mode: all
+  evidence:
+  - {document_id: P130544-dc4201ccaf76, pages: [6], contains: "partial cancellation is requested on account of exchange rate gains"}
+  - {document_id: P130544-dc4201ccaf76, pages: [7], contains: "partial cancellation of JPY 4.01 billion"}
+- id: q05
+  project_id: P130544
+  category: restructuring
+  kind: exact
+  question: Why was the currency of the Additional Financing loan changed from USD to JPY?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-d829e49941f9, pages: [6], contains: "at the request of the State of Karnataka"}
+  - {document_id: P130544-d829e49941f9, pages: [6], contains: "currency of the Loan is being changed from USD to JPY"}
+- id: q06
+  project_id: P130544
+  category: closing_dates
+  kind: exact
+  question: By how many months was the closing date of the Additional Financing extended in the latest restructuring?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-5b5965b630fe, pages: [7], contains: "extend the closing date of the AF by fifteen months"}
+- id: q07
+  project_id: P130544
+  category: restructuring
+  kind: paraphrase
+  question: What justified giving the project more time in the most recent restructuring?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-5b5965b630fe, pages: [6], contains: "additional time is needed to complete water distribution works"}
+- id: q08
+  project_id: P130544
+  category: restructuring
+  kind: paraphrase
+  question: Why did the operator fee allocation have to be increased?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-dc4201ccaf76, pages: [7], contains: "execution delays on account of COVID-19"}
+- id: q09
+  project_id: P130544
+  category: ratings
+  kind: temporal
+  question: What were the overall ratings in the latest ISR?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-9fa1d6d298ab, pages: [2], contains: "Overall Risk Rating | Substantial"}
+- id: q10
+  project_id: P130544
+  category: ratings
+  kind: exact
+  question: Since when has the PDO rating been Moderately Unsatisfactory according to the restructuring paper?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-dc4201ccaf76, pages: [6], contains: "Moderately Unsatisfactory since November 2023"}
+- id: q11
+  project_id: P130544
+  category: implementation_issues
+  kind: temporal
+  question: What was holding back progress towards the development objective in ISR 18?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-11e676f3134b, pages: [1], contains: "delays in implementation of the three city-wide continuous water supply contracts"}
+- id: q12
+  project_id: P130544
+  category: restructuring
+  kind: paraphrase
+  question: Which cities was the project being restructured to include in 2018?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-f8e8cd83b4a1, pages: [1], contains: "restructured to include Kalaburagi and Belgavi"}
+  - {document_id: P130544-3862994a2b22, pages: [1], contains: "restructured to include Kalaburagi and Belgavi"}
+- id: q13
+  project_id: P130544
+  category: procurement
+  kind: paraphrase
+  question: How did the government re-tender the city contracts after the original operator contract ran into trouble?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-b749942c67d0, pages: [1], contains: "re-bidding the contract on a Design Build Operate Transfer"}
+  - {document_id: P130544-7a151dc2f3ab, pages: [1], contains: "re-bid the contract on a Design Build Operate Transfer"}
+  - {document_id: P130544-f7b0121cdfc7, pages: [1], contains: "re-bid the contract on a Design Build Operate Transfer"}
+- id: q14
+  project_id: P130544
+  category: implementation_issues
+  kind: multi_evidence
+  question: What problem with the operator's start-up period was reported in ISR 5 and ISR 6?
+  evidence_mode: all
+  evidence:
+  - {document_id: P130544-a89c3a11401c, pages: [2], contains: "considerable delay in completion of start-up period activities"}
+  - {document_id: P130544-8a37f05685e4, pages: [2], contains: "considerable delay in completion of start-up period activities"}
+- id: q15
+  project_id: P130544
+  category: results
+  kind: exact
+  question: What are the baseline, current value and target for direct project beneficiaries provided with water?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-9fa1d6d298ab, pages: [3], contains: "Direct project beneficiaries - People provided with water (Number) | 254,700"}
+- id: q16
+  project_id: P130544
+  category: finance
+  kind: exact
+  question: How much of loan IBRD-93240 had been disbursed according to ISR 24?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-9fa1d6d298ab, pages: [8], contains: "IBRD-93240 | Effective | 150.00"}
+- id: q17
+  project_id: P130544
+  category: risks
+  kind: exact
+  question: What rating was given to institutional capacity for implementation and sustainability at appraisal?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-0164e0420e9b, pages: [27], contains: "Institutional Capacity for Implementation and Sustainability | Substantial"}
+- id: q18
+  project_id: P130544
+  category: finance
+  kind: paraphrase
+  question: What approval does the Additional Financing project paper seek?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-0cfd1d0a3b42, pages: [11], contains: "seeks approval for a proposed Additional Financing"}
+- id: q19
+  project_id: P130544
+  category: results
+  kind: temporal
+  question: What share of grievances was addressed within 30 days in the latest ISR?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-9fa1d6d298ab, pages: [7], contains: "Percentage of grievances addressed within 30 days of receipt"}
+- id: q20
+  project_id: P130544
+  category: project_status
+  kind: exact
+  question: What was the physical progress of bulk works and distribution works stated in the 2026 restructuring paper?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-5b5965b630fe, pages: [6], contains: "Physical progress of bulk works stands at 81 percent"}
+- id: q21
+  project_id: P130544
+  category: procurement
+  kind: exact
+  question: Which procurement guidelines apply to the project according to the Project Appraisal Document?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-0164e0420e9b, pages: [31], contains: "Procurement for the proposed Project will be carried out in accordance"}
+- id: q22
+  project_id: P130544
+  category: finance
+  kind: exact
+  question: What were the approval, signing and effectiveness dates of IBRD-86010 in the 2021 restructuring paper?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-a10516ee827a, pages: [2], contains: "Approval: 31-Mar-2016 | Signing: 24-May-2016"}
+- id: q23
+  project_id: P130544
+  category: closing_dates
+  kind: paraphrase
+  question: Which exception to Bank rules was needed to extend the loan closing date in 2021?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-a10516ee827a, pages: [3], contains: "processed on the basis of a waiver"}
+- id: q24
+  project_id: P130544
+  category: project_status
+  kind: temporal
+  question: How far had the bulk works progressed in each city according to ISR 21?
+  evidence_mode: any
+  evidence:
+  - {document_id: P130544-c3f92899568d, pages: [2], contains: "Physical progress of bulk works is around 62 percent in Belagavi"}
+- id: q25
+  project_id: P130544
+  category: no_answer
+  kind: no_answer
+  question: What progress has the project made on its metro rail stations?
+  answerable: false
+  evidence: []
+# ---------------------------------------------------------------- P179039
+- id: q26
+  project_id: P179039
+  category: project_status
+  kind: temporal
+  question: What did the latest ISR say about the Program's standing at mid-term?
+  evidence_mode: any
+  evidence:
+  - {document_id: P179039-95c180d52c77, pages: [1], contains: "remains on track to achieve"}
+- id: q27
+  project_id: P179039
+  category: results
+  kind: exact
+  question: How many Functional Household Tap Connections had been provided according to ISR 6?
+  evidence_mode: any
+  evidence:
+  - {document_id: P179039-6e523a4cae7d, pages: [1], contains: "1,081,365 Functional Household Tap Connections"}
+- id: q28
+  project_id: P179039
+  category: implementation_issues
+  kind: paraphrase
+  question: How has the way citizens can register complaints been improved?
+  evidence_mode: any
+  evidence:
+  - {document_id: P179039-0c083a777f23, pages: [1], contains: "integrated helpline accessible"}
+  - {document_id: P179039-6e523a4cae7d, pages: [1], contains: "integrated helpline accessible"}
+  - {document_id: P179039-bb3fd90dec00, pages: [1], contains: "integrated helpline accessible"}
+  - {document_id: P179039-95c180d52c77, pages: [1], contains: "integrated helpline accessible"}
+- id: q29
+  project_id: P179039
+  category: project_status
+  kind: paraphrase
+  question: What policy on the upkeep of water schemes has the Program helped put in place?
+  evidence_mode: any
+  evidence:
+  - {document_id: P179039-6e523a4cae7d, pages: [1], contains: "notification of the Operation and Maintenance Policy"}
+  - {document_id: P179039-bb3fd90dec00, pages: [1], contains: "notification of the Operation and Maintenance Policy"}
+  - {document_id: P179039-95c180d52c77, pages: [1], contains: "statewide adoption of the Operation and Maintenance"}
+- id: q30
+  project_id: P179039
+  category: finance
+  kind: exact
+  question: What is the size of the Program in US dollars and how many districts does it cover?
+  evidence_mode: any
+  evidence:
+  - {document_id: P179039-f7ed04f303a1, pages: [1], contains: "US$363 million Karnataka Sustainable Rural Water Supply Program"}
+  - {document_id: P179039-bcf7325a42d2, pages: [1], contains: "US$363 million Karnataka Sustainable Rural Water Supply Program"}
+  - {document_id: P179039-70d117b0eb94, pages: [1], contains: "US$363 million Karnataka Sustainable Rural Water Supply Program"}
+  - {document_id: P179039-6ed1067bf5c4, pages: [1], contains: "US$363 million Karnataka Sustainable Rural Water Supply Program"}
+- id: q31
+  project_id: P179039
+  category: ratings
+  kind: temporal
+  question: What was the overall implementation progress rating in ISR 4?
+  evidence_mode: any
+  evidence:
+  - {document_id: P179039-6ed1067bf5c4, pages: [1], contains: "Overall Implementation Progress (IP) | Satisfactory | Moderately Satisfactory"}
+- id: q32
+  project_id: P179039
+  category: risks
+  kind: exact
+  question: What was the overall risk rating of the Program at appraisal?
+  evidence_mode: any
+  evidence:
+  - {document_id: P179039-8b561105309e, pages: [8], contains: "Overall | Rating: Moderate"}
+- id: q33
+  project_id: P179039
+  category: procurement
+  kind: exact
+  question: What procurement risks were identified in the fiduciary systems assessment?
+  evidence_mode: any
+  evidence:
+  - {document_id: P179039-cdd5677b8787, pages: [38], contains: "multiplicity of circulars and instructions"}
+- id: q34
+  project_id: P179039
+  category: assessment_findings
+  kind: paraphrase
+  question: What environmental problems with rural water sources did the ESSA point out?
+  evidence_mode: any
+  evidence:
+  - {document_id: P179039-4ba986003549, pages: [15], contains: "unsustainable water sources in few places"}
+  - {document_id: P179039-4ba986003549, pages: [10], contains: "groundwater stress issues"}
+- id: q35
+  project_id: P179039
+  category: assessment_findings
+  kind: paraphrase
+  question: Which trends threaten the sustainability of rural water supply according to the technical assessment?
+  evidence_mode: any
+  evidence:
+  - {document_id: P179039-c0a3ff27e135, pages: [6], contains: "depleting groundwater table and deteriorating groundwater quality"}
+- id: q36
+  project_id: P179039
+  category: finance
+  kind: exact
+  question: On what basis will Program funds be disbursed?
+  evidence_mode: any
+  evidence:
+  - {document_id: P179039-8b561105309e, pages: [23], contains: "disbursed based on the achievement of eight DLIs"}
+- id: q37
+  project_id: P179039
+  category: no_answer
+  kind: no_answer
+  question: Which restructuring extended the Program's closing date and why?
+  answerable: false
+  evidence: []
+- id: q38
+  project_id: P179039
+  category: no_answer
+  kind: no_answer
+  question: How much additional financing was approved for the rural water Program?
+  answerable: false
+  evidence: []
+# ---------------------------------------------------------------- P506272
+- id: q39
+  project_id: P506272
+  category: project_status
+  kind: temporal
+  question: How many Disbursement-Linked Indicators had been achieved according to the latest ISR?
+  evidence_mode: any
+  evidence:
+  - {document_id: P506272-c70c73ae1a46, pages: [1], contains: "achieved under four of the eight Disbursement-Linked Indicators"}
+- id: q40
+  project_id: P506272
+  category: results
+  kind: exact
+  question: How many kilometres of sewer network had been completed?
+  evidence_mode: any
+  evidence:
+  - {document_id: P506272-c70c73ae1a46, pages: [1], contains: "129 km of sewer network completed"}
+- id: q41
+  project_id: P506272
+  category: project_status
+  kind: paraphrase
+  question: What are the main infrastructure investments around Bengaluru?
+  evidence_mode: any
+  evidence:
+  - {document_id: P506272-432f802e1515, pages: [1], contains: "nine sewage treatment plants"}
+  - {document_id: P506272-cfdbc4e44702, pages: [1], contains: "nine sewage treatment plants"}
+- id: q42
+  project_id: P506272
+  category: implementation_issues
+  kind: paraphrase
+  question: What early progress was made by implementing agencies on raising their own revenues?
+  evidence_mode: any
+  evidence:
+  - {document_id: P506272-cfdbc4e44702, pages: [1], contains: "increased their own source revenue"}
+- id: q43
+  project_id: P506272
+  category: risks
+  kind: exact
+  question: What is the overall risk rating of the Program?
+  evidence_mode: any
+  evidence:
+  - {document_id: P506272-34de36393306, pages: [9], contains: "Overall | Substantial"}
+  - {document_id: P506272-34de36393306, pages: [36], contains: "The overall risk rating is Substantial"}
+- id: q44
+  project_id: P506272
+  category: assessment_findings
+  kind: paraphrase
+  question: What are the main environmental risks identified for the Program?
+  evidence_mode: any
+  evidence:
+  - {document_id: P506272-ac25b4911bfb, pages: [7], contains: "substantial occupational safety and hazard risks"}
+  - {document_id: P506272-ac25b4911bfb, pages: [27], contains: "substantial occupational safety and hazard risks"}
+- id: q45
+  project_id: P506272
+  category: procurement
+  kind: exact
+  question: Does the Program include any high-value contracts?
+  evidence_mode: any
+  evidence:
+  - {document_id: P506272-cd50142b5c08, pages: [7], contains: "does not have any High-Value Contracts"}
+  - {document_id: P506272-34de36393306, pages: [31], contains: "does not include any high-value contracts"}
+- id: q46
+  project_id: P506272
+  category: closing_dates
+  kind: exact
+  question: What is the closing date stated in the loan agreement?
+  evidence_mode: any
+  evidence:
+  - {document_id: P506272-0fa72213d014, pages: [9], contains: "The Closing Date is December 31, 2030"}
+- id: q47
+  project_id: P506272
+  category: assessment_findings
+  kind: exact
+  question: How much wastewater does Bengaluru generate compared with its treatment capacity?
+  evidence_mode: any
+  evidence:
+  - {document_id: P506272-b0bac656dd3f, pages: [5], contains: "generates 2,000 MLD of wastewater"}
+- id: q48
+  project_id: P506272
+  category: no_answer
+  kind: no_answer
+  question: What additional financing has been approved for the Program?
+  answerable: false
+  evidence: []
+- id: q49
+  project_id: P506272
+  category: no_answer
+  kind: no_answer
+  question: Why was part of the Program loan cancelled?
+  answerable: false
+  evidence: []

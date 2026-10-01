@@ -1,0 +1,12 @@
+# Embedding configuration (Phase 8). The provider is pluggable: retrieval code depends
+# only on EmbeddingProvider.embed(texts) -> vectors.
+#
+# provider: databricks_serving calls a Databricks Model Serving embedding endpoint
+# (Foundation Model API). The endpoint must exist in the workspace; notebook 07 probes
+# it before anything is built and stops with a clear message if it is missing.
+provider: databricks_serving
+endpoint: databricks-gte-large-en    # 1024 dimensions, 512-token input limit, English
+expected_dimension: 1024
+batch_size: 64
+timeout_seconds: 120
+max_retries: 3

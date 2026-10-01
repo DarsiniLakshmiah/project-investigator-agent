@@ -1,0 +1,33 @@
+# Retrieval evaluation (Phase 8). Questions and ground truth: evaluation/retrieval_questions.yaml.
+questions_file: evaluation/retrieval_questions.yaml
+metrics_k: [5, 10]
+# Staged experiments (not the full Cartesian product). Each stage fixes the winner of
+# the previous stage. "winner" is chosen by the primary metric, ties broken by the
+# simpler configuration (order of the list = simplicity).
+primary_metric: recall_at_10
+stages:
+  - name: chunking
+    vary: chunk_strategy
+    values: [fixed, structure, parent_child]
+    fixed: {retrieval: dense, reranker: none, candidate_k: 10}
+  - name: retrieval
+    vary: retrieval
+    values: [dense, lexical, hybrid]
+    fixed: {reranker: none, candidate_k: 10}
+  - name: reranking
+    vary: reranker
+    values: [none, cross_encoder]
+    fixed: {candidate_k: 20}
+  - name: candidate_depth
+    vary: candidate_k
+    values: [10, 20, 50]
+  - name: query_filters
+    # Document-type filters inferred from the question wording (query.yaml hints).
+    vary: use_type_filters
+    values: [false, true]
+# A configuration must beat the simpler one by at least this much on the primary
+# metric to be preferred (avoids choosing complexity on noise).
+min_improvement: 0.02
+mlflow:
+  enabled: true
+  experiment_name: null   # default: /Users/<current user>/worldbank_copilot_retrieval

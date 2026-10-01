@@ -1,6 +1,7 @@
-"""Query processing and hybrid retrieval (Phases 7-8, 10).
+"""Databricks-native document retrieval (Phase 8).
 
-Planned modules: query_processor, metadata_filters, lexical_retriever,
-vector_retriever, hybrid_retriever, reranker, context_builder.
-Not implemented yet.
+chunking/corpus -> silver.document_chunks; embeddings -> silver.chunk_embeddings;
+vector_search -> Databricks Vector Search; lexical (BM25 + RRF); rerank; query
+(deterministic processing); retriever (scope, guardrails, citation-ready evidence);
+evaluation (metrics, staged experiments); pipeline (notebook 07 orchestration).
 """

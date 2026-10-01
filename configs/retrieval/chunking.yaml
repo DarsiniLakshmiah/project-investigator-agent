@@ -1,0 +1,32 @@
+# Chunking strategies (Phase 8). Every strategy is built from the Phase 4 parsed
+# documents (no re-parsing). The strategy version is a hash of its settings, so a
+# changed setting yields new, recorded chunk identities; unchanged settings yield
+# identical chunk ids.
+#
+# Sizes are characters. The embedding model truncates at 512 tokens (~2,000 chars of
+# English), so no retrieval chunk exceeds max_chars (checked by tests and the pipeline).
+strategies:
+  fixed:
+    # Baseline A: recursive character splitting over the document's clean text in
+    # reading order (tables rendered as text). Ignores section boundaries.
+    kind: fixed
+    max_chars: 1200
+    overlap_chars: 150
+  structure:
+    # Baseline B: sections -> paragraphs; tables are separate units (row groups with
+    # the header repeated). A chunk never crosses a section boundary.
+    kind: structure
+    max_chars: 1200
+    table_max_chars: 1200
+  parent_child:
+    # Baseline C: small children are retrieved; the section (parent, <= parent_max_chars,
+    # split when longer) is used for context assembly.
+    kind: parent_child
+    child_max_chars: 500
+    table_max_chars: 1000
+    parent_max_chars: 4000
+# Minimum length of a text chunk worth indexing (drops stray fragments such as "ISR07744").
+min_chars: 40
+# Every chunk's embedding/lexical text starts with a context header:
+# "<project> | <document label> | <section>". The raw chunk text is stored separately.
+context_header: true

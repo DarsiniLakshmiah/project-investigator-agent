@@ -1,0 +1,31 @@
+# Deterministic query processing (Phase 8). No model is involved.
+# Acronyms are expanded by appending the expansion (the original term is kept, so exact
+# lexical matches still work).
+acronyms:
+  ISR: Implementation Status and Results Report
+  PDO: Project Development Objective
+  IP: implementation progress
+  DO: development objective
+  AF: additional financing
+  DLI: Disbursement-Linked Indicator
+  PforR: Program-for-Results
+  PAD: Project Appraisal Document
+  ESSA: Environmental and Social Systems Assessment
+  SORT: Systematic Operations Risk-Rating Tool
+  PMU: Project Management Unit
+  PIU: Project Implementation Unit
+  SPV: Special Purpose Vehicle
+  ULB: Urban Local Body
+  KUIDFC: Karnataka Urban Infrastructure Development and Finance Corporation
+  O&M: operation and maintenance
+  GRM: grievance redress mechanism
+# Words that indicate a document type (used only as optional filters in experiments).
+document_type_hints:
+  ISR: [isr, implementation status, status and results report]
+  RESTRUCTURING_PAPER: [restructuring paper, restructuring]
+  ADDITIONAL_FINANCING: [additional financing]
+  APPRAISAL_DOCUMENT: [appraisal document, pad, program appraisal]
+  ESSA: [essa, environmental and social systems assessment]
+  FIDUCIARY_ASSESSMENT: [fiduciary systems assessment, fiduciary assessment]
+  TECHNICAL_ASSESSMENT: [technical assessment]
+  LOAN_AGREEMENT: [loan agreement]

@@ -1,0 +1,32 @@
+# Retrieval configuration (Phase 8).
+vector_search:
+  # Databricks Vector Search. The endpoint is created if missing (STANDARD type) and
+  # validated if present; the index is a Delta Sync index with self-managed vectors.
+  endpoint: worldbank-copilot-vs
+  index_table: document_chunk_index          # silver.<index_table> (index source)
+  index_name: document_chunk_index_vs        # silver.<index_name> (the index)
+  pipeline_type: TRIGGERED
+  sync_timeout_seconds: 1800
+  query_timeout_seconds: 30
+lexical:
+  k1: 1.5
+  b: 0.75
+hybrid:
+  rrf_k: 60
+reranker:
+  model: cross-encoder/ms-marco-MiniLM-L-6-v2
+  max_length: 512
+  batch_size: 32
+# Filters every query must carry. Retrieval without project scope is refused.
+required_filters: [project_id]
+# Abstention: with a reranker, return INSUFFICIENT_EVIDENCE when the best rerank score
+# is below this value (calibrated on the no-answer evaluation questions; see
+# evaluation report). Without a reranker, abstain only when nothing is retrieved.
+min_rerank_score: null
+# Selected production configuration. Set from the Phase 8 experiment results.
+production:
+  chunk_strategy: null
+  retrieval: null
+  reranker: null
+  candidate_k: null
+  final_k: 5

@@ -257,6 +257,22 @@ def _is_subheader(cells: list[str]) -> bool:
     )
 
 
+_COMMENT_LABEL = "comments on achieving"
+
+
+def comment_cell(cells: list[str]) -> str | None:
+    """Comment text of a WIDE 'Comments on achieving targets' row.
+
+    Docling repeats a merged cell across the columns it spans, so the label itself can
+    appear again after column 1. The comment is the merged text cell that follows the
+    label. When the non-label cells differ, the paragraph was split into column
+    fragments with interleaved words; it cannot be rebuilt reliably, so no comment is
+    stored (NULL) rather than a fragment.
+    """
+    text = [c for c in cells if c and not c.lower().startswith(_COMMENT_LABEL)]
+    return text[0] if text and len(set(text)) == 1 else None
+
+
 @dataclass
 class WideState:
     mapping: ColumnMap | None = None
@@ -301,7 +317,7 @@ def parse_wide(
             data = cells
             if len(cells) > 1 and cells[1].lower().startswith("comments on achieving"):
                 if out and out[-1].name[:20] == cells[0][:20]:
-                    out[-1].comments = next((c for c in cells[2:] if c), None)
+                    out[-1].comments = comment_cell(cells[2:])
                 continue
             if not any(cells[1:]):
                 if out:  # a name fragment on its own row: the neighbouring name is incomplete

@@ -1212,7 +1212,7 @@
         "source_document": 35
       },
       "distinct_record_ids": 837,
-      "fingerprint": "dd0d8b7e64e08087375c5079c81bdb3542bb17812eb5c2f18619ca13cad9ab8c",
+      "fingerprint": "dbbfa527b05062b5f909b91847efc867f969c0af1b34e0186c73f3dbf8146840",
       "groups": {
         "extraction_method": {
           "DOCLING_TABLE": 523,

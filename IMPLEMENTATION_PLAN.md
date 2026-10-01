@@ -16,8 +16,9 @@ still open. Updated at the end of every phase.
 | 4 | Docling parsing, document metadata validation, parsed representation | **Complete, approved** (2026-09-27) |
 | 5 | Structured document extraction (ISR snapshots, results, appraisal risks, events) | **Complete, approved** (2026-09-30) |
 | 6 | Databricks platformization and governed Delta foundation | **Complete, validated in Databricks, approved** (2026-09-30) |
-| 7 | Deterministic Gold intelligence layer | **Implemented and validated on local Spark; Databricks run pending** (2026-09-30) |
-| 8–13 | See §3 (roadmap from Claude.md §36) | Not started |
+| 7 | Deterministic Gold intelligence layer | **Complete, validated in Databricks, approved** (2026-09-30) |
+| 8 | Databricks-native retrieval foundation + experiments | **Implemented and tested locally; Databricks run pending** (2026-09-30) |
+| 9–13 | See §3 (roadmap from Claude.md §36) | Not started |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
 passed (unit); `pytest -m integration` → 18 passed (5 Bronze + 7 Silver + 6 parsed, real
@@ -511,6 +512,28 @@ come from content, not filenames. Identified from first-page text:
     better choice for Photon/serverless); local Spark tests create DataFrames from JSON
     with the contract schemas.
 
+### Additional issues found in Phase 8
+
+57. **Comments fix applied (resolves 55).** `extraction/results.comment_cell` skips the
+    repeated label cells and takes the merged comment text.
+    - Silver: 89 rows change, in `comments` only; every other Silver table's fingerprint is unchanged.
+    - `configs/reconciliation/expected_profiles.json` changes by one line.
+    - Gold (local Spark): all 5 business-table fingerprints are unchanged; only
+      `gold.quality_observations` changes (SILVER_COMMENTS_LABEL_EXTRACTION 89 -> 0).
+    - One comment row split into word-interleaved column fragments (P130544 ISR 20,
+      revenue collection) is stored as NULL rather than rebuilt; that row is not in
+      Silver, so no data changes.
+58. **Template markers.** Operations-portal markers (`@#&OPS~...`) in restructuring
+    papers are excluded from chunks.
+59. **Rating glyphs.** Table cells contain rating glyphs (e.g. U+F06C, U+26AB).
+    Evaluation relevance compares alphanumeric tokens only.
+60. **Embedding input limit.** gte-large-en reads at most 512 tokens. Retrieval chunks are
+    at most 1,200–1,500 characters; dense number-heavy tables may still be truncated at
+    the end (to be checked in Databricks).
+61. **Local lexical baseline** (BM25 on the real corpus, no reranker, k=10): Recall@10
+    0.75–0.80 across strategies. Every miss is a paraphrase question; dense, hybrid and
+    reranked results exist only after the Databricks run.
+
 ---
 
 ## 7. Assumptions
@@ -551,7 +574,7 @@ Open:
 6. **Canonical ISR date for P179039 ISR 5 (Phase 5):** keep the header-first policy
    (canonical 2025-05-31, out of sequence order) or use the archive date for this
    case. Currently: header-first, flagged; timelines should order ISRs by sequence.
-8. **Comments label fix (Phase 7 finding, issue 55):** apply the deterministic WIDE
+8. **[RESOLVED in Phase 8] Comments label fix (issue 55):** apply the deterministic WIDE
    comment-row fix in extraction and reload Silver through the Phase 6 notebook (89 rows
    change; expected profiles must be regenerated) before comments are used for RAG
    or display (Phase 8).
@@ -965,7 +988,7 @@ Executed in Databricks by the user and approved:
 - the idempotent second run changed no rows;
 - all validation SQL succeeded.
 
-### Phase 7 — Deterministic Gold intelligence layer (validated on local Spark; Databricks run pending)
+### Phase 7 — Deterministic Gold intelligence layer (validated in Databricks)
 
 **Execution model:** production runs in Databricks from `worldbank_copilot.silver.*`
 (`notebooks/06_build_gold_intelligence.py`), with native Spark only. Locally, the same
@@ -1043,8 +1066,62 @@ this environment.**
   - Spark tests: 15 synthetic plus 6 on real data (including all 17 Phase 7 validation queries executed on local Spark);
   - `ruff check` and `ruff format --check` clean.
 
-**Pending (Databricks):** `gold` schema creation, Delta MERGE, read-back
-reconciliation, idempotent second run and validation queries on Unity Catalog tables.
+**Databricks validation (notebook 06, run by the user, 2026-09-30):**
+- The `worldbank_copilot.gold` schema and all 6 tables were created.
+- The Silver input fingerprint matched the local rehearsal (`ab355c39…`).
+- All 5 business-table fingerprints matched the local Spark build exactly.
+- First run: 1,124 rows inserted (3 / 74 / 837 / 116 / 69 / 25).
+- Read-back reconciliation: OK.
+- All 16 ERROR invariants passed.
+- Second run: 0 inserted, 0 updated and 0 deleted in every table; fingerprints unchanged; idempotent = True.
+- All 17 validation queries executed.
+- Fix after the run: in `signal_provenance`, ISR-sourced signals showed the PDO rating's page and method. The query now takes page, section and method from the signal itself.
 
 **Not done (by design):** RAG, chunking, embeddings, Vector Search, reranking, routing,
 Jev/SLM, agents, memory, cache, MLflow AI evaluation, API, UI.
+
+### Phase 7 — approved by the user (2026-09-30)
+
+### Phase 8 — Databricks-native retrieval foundation (implemented; Databricks validation pending)
+
+**Modules** (`src/worldbank_copilot/retrieval/`):
+- `config` (configs/retrieval/*.yaml);
+- `chunking`: 3 strategies, deterministic ids;
+- `corpus`: `silver.document_chunks` contract;
+- `embeddings`: pluggable provider; Databricks Model Serving, batching, retries, dimension check;
+- `vector_search`: endpoint and Delta Sync index lifecycle, normalised `(chunk_id, score)` results;
+- `lexical`: BM25 and RRF;
+- `rerank`: none or CrossEncoder;
+- `query`: deterministic normalisation, acronyms, ISR references, foreign-project refusal;
+- `models` and `retriever`: scope, guardrails, citation-ready Evidence, abstention;
+- `evaluation`: relevance, metrics, staged experiments, miss classification, abstention calibration, MLflow;
+- `pipeline`: capability probe, corpus MERGE, embedding cache, index source, index;
+- `report`: isolation checks and formatting.
+
+**Notebook:** `notebooks/07_build_retrieval_and_evaluate.py` (it replaces the 07/08 placeholders).
+**SQL:** `sql/phase8_validation.sql`.
+**Questions:** `evaluation/retrieval_questions.yaml`.
+
+**Decisions**
+* **One corpus table.** All strategies live in one table (`chunk_strategy` column) behind
+  one Vector Search index filtered by strategy. That means one endpoint and one index,
+  which suits workspace limits.
+* **Self-managed vectors.** The embedding model can be swapped, and unchanged text is never
+  re-embedded (cache keyed by `text_sha256` and model).
+* **Bounded driver work** (documented):
+  - chunking reads the 53 parsed JSON files;
+  - only uncached texts are sent to the embedding endpoint;
+  - BM25 and evidence metadata use the governed corpus loaded once (about 14k rows).
+* **Dense vs governed metadata.** Dense hits are only chunk ids. Text and citations always
+  come from `silver.document_chunks`, and out-of-scope or unknown ids raise.
+* **Type filters.** Document-type filters inferred from question wording are an experiment
+  dimension; they are not applied by default.
+* **No answer generation** (optional in the brief): retrieval comes first. Abstention is a
+  calibrated reranker-score threshold, reported and not auto-applied.
+
+**Local results (real parsed corpus):**
+- 53 documents.
+- Retrieval chunks: fixed 2,620; structure 3,979; parent_child 6,198 (+1,530 parents).
+- All 44 answerable questions are representable in `structure` chunks.
+- Lexical isolation: 49 questions x 3 project scopes, 0 foreign chunks.
+- Tests: 479 unit, 34 integration and 22 Spark tests pass; ruff clean.

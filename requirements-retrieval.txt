@@ -1,0 +1,6 @@
+# Phase 8 retrieval dependencies, installed notebook-scoped by
+# notebooks/07_build_retrieval_and_evaluate.py (after requirements-databricks.txt).
+# They do not affect Bronze/Silver/Gold content, so lower bounds are used.
+databricks-sdk>=0.30
+databricks-vectorsearch>=0.40
+sentence-transformers>=3.0

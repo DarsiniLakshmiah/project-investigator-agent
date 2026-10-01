@@ -152,7 +152,7 @@ The same code selects its environment automatically (`WBC_ENV`, otherwise
 │   ├── lakehouse/                  contracts · identities · reconciliation · Delta store (Phase 6)
 │   ├── intelligence/               Gold: timeline · results · risks · signals · 360 (Phase 7, Spark)
 │   ├── transformations/            bronze · normalize · silver (+ models, lineage, quality); Gold in Phase 6
-│   ├── retrieval/                  Phases 7–8
+│   ├── retrieval/                  chunking · embeddings · Vector Search · BM25 · rerank · evaluation (Phase 8)
 │   ├── tools/                      Phase 9
 │   ├── agents/                     Phase 11
 │   ├── guardrails/                 Phase 12
@@ -162,7 +162,7 @@ The same code selects its environment automatically (`WBC_ENV`, otherwise
 ├── sql/                            Phase 6 and Phase 7 validation queries
 ├── review/                         human review artefacts (indicator alias candidates)
 ├── requirements-databricks.txt     pinned notebook-scoped runtime dependencies
-├── evaluation/                     Phase 16
+├── evaluation/                     retrieval evaluation questions (Phase 8)
 ├── frontend/                       Phase 15
 ├── scripts/                        validate_data.py (Bronze/Silver) · parse_documents.py (Docling)
 │                                   · extract_document_facts.py (document-derived Silver)
@@ -496,6 +496,32 @@ The `spark` tests have two parts:
 - **Real Silver rows:** uses the rows exported by `scripts/platformize.py`. It checks invariants and determinism across two builds, and runs every query in `sql/phase7_validation.sql`.
 
 Delta MERGE, read-back and idempotency are proven only by the Databricks run.
+
+## Retrieval foundation (Phase 8)
+
+Phase 8 builds evidence retrieval only: no agents and no routing. It runs in Databricks with
+`notebooks/07_build_retrieval_and_evaluate.py`.
+
+```
+Phase 4 parsed documents (artifact Volume; nothing re-parsed)
+  -> silver.document_chunks       3 chunking strategies, deterministic ids, full provenance
+  -> silver.chunk_embeddings      embedding cache keyed by (text hash, model)
+  -> silver.document_chunk_index  RETRIEVAL chunks + vectors (Change Data Feed)
+  -> Databricks Vector Search     Delta Sync index, self-managed vectors
+  -> Retriever: project scope -> lexical (BM25) | dense (Vector Search) | hybrid (RRF)
+                -> isolation guardrail -> de-duplication -> CrossEncoder (optional)
+                -> citation-ready Evidence (or INSUFFICIENT_EVIDENCE)
+```
+
+- **Project isolation.** Every retrieval needs a `project_id`. Filters are applied before scoring. Every result is re-checked against the governed corpus, and a chunk from another project raises an error. A question that names another project is refused.
+- **Governed metadata.** Text, citations and provenance always come from `silver.document_chunks`, never from the index.
+- **Chunking strategies:**
+  - `fixed`: recursive, with overlap;
+  - `structure`: sections, paragraphs, and table row groups with the header repeated;
+  - `parent_child`: small children retrieved, section parents used for context.
+  - Settings live in `configs/retrieval/chunking.yaml`. A changed setting changes the strategy version, and with it the chunk ids.
+- **Experiments.** They run in stages (chunking -> retrieval -> reranking -> candidate depth -> query filters) over `evaluation/retrieval_questions.yaml`. Metrics: Recall@5/10, MRR, nDCG@5, Precision@5 and latency. A more complex configuration is chosen only if it beats the simpler one by `min_improvement`. Results are logged to MLflow when it's available.
+- **Capability probe.** Notebook 07 first checks Vector Search and the embedding endpoint (`configs/retrieval/embeddings.yaml`). If either is missing it stops and builds nothing. There is no local fallback vector store.
 
 ## Remaining documentation
 
