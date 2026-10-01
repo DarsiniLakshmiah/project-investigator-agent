@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "6"
+# ///
 # MAGIC %md
 # MAGIC ## 07_build_retrieval_and_evaluate: Retrieval corpus, Vector Search and experiments (Phase 8)
 # MAGIC Thin entry point. All logic lives in `worldbank_copilot.retrieval`.
@@ -73,7 +77,7 @@ for group, counts in corpus.counts.items():
 # Step 3a: embeddings into the cache (key: text sha256 + model). Resumable: a rerun embeds
 # only what is still missing for the configured model (configs/retrieval/embeddings.yaml).
 # PILOT_REQUESTS caps this run (sequential, paced); set it to None for the full build.
-PILOT_REQUESTS = 50  # 50 requests x 4 inputs = 200 texts; review before the full build
+PILOT_REQUESTS = None
 strategies = sorted(rs.chunking.strategies)
 embedding_report = rp.update_embedding_cache(
     spark, settings, rs, provider, strategies, print, max_requests=PILOT_REQUESTS  # noqa: F821
@@ -101,6 +105,11 @@ if not preflight.ok:
     raise RuntimeError("STOP: index pre-flight failed; nothing was created or modified")
 index_status = rp.ensure_vector_index(vs_index, index_rows, progress=print)
 print(index_status)
+
+# COMMAND ----------
+
+indexes = client.list_indexes("worldbank-gep-ai-search")
+print(indexes)
 
 # COMMAND ----------
 
