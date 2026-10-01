@@ -17,7 +17,7 @@ still open. Updated at the end of every phase.
 | 5 | Structured document extraction (ISR snapshots, results, appraisal risks, events) | **Complete, approved** (2026-09-30) |
 | 6 | Databricks platformization and governed Delta foundation | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 7 | Deterministic Gold intelligence layer | **Complete, validated in Databricks, approved** (2026-09-30) |
-| 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings and AI Search index validated in Databricks (2026-10-01); retrieval experiments pending** |
+| 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings, AI Search index and notebook 07 Steps 4–7 and 07b staged experiments (incl. CrossEncoder) validated in Databricks (2026-10-01). Selected direction: adaptive reranking (trigger policy not yet implemented or evaluated)** |
 | 9–13 | See §3 (roadmap from Claude.md §36) | Not started |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
@@ -598,8 +598,21 @@ Open:
 2. **Databricks runtime / dependency install:** Phase 6 proposes DBR 15.4 LTS+ with the
    notebook-scoped, pinned `requirements-databricks.txt`; to be confirmed by the first
    real run in the workspace.
-3. **Lexical retrieval implementation** (Phase 8): Databricks Vector Search hybrid
-   mode vs. a separate BM25 library — decide in Phase 8 with evaluation.
+3. **[RESOLVED in Phase 8] Lexical retrieval implementation:** in-process BM25 fused
+   with dense results by RRF (`hybrid`) won the retrieval stage in 07b (+0.023
+   recall@10 over dense; see the Phase 8 07b results).
+10. **Adaptive reranking trigger (Phase 8 decision, open design):** the selected direction
+    is adaptive reranking, not "rerank every query". Which queries are reranked is
+    not yet defined, implemented or evaluated. It must be measured against the two
+    07b baselines: never rerank (`fixed|hybrid|none|k10`) and always rerank
+    (`fixed|hybrid|cross_encoder|k50`).
+11. **P179039 retrieval quality (Phase 8):** recall@10 is 0.545 for P179039
+    (6 of 11 questions), against 0.917 for P130544 and 1.000 for P506272. Five of the
+    seven misses of the selected configuration are P179039 questions. The cause is
+    not established; see the Phase 8 07b results.
+12. **Abstention threshold (Phase 8):** `min_rerank_score` stays `null`. The 07b
+    calibration was computed on the k20 CrossEncoder run, not the selected k50, and the
+    score ranges overlap. Review it before any threshold is applied.
 4. **JPY loan (P506272):** US$ figures fluctuate with FX; decide in Silver/tools
    whether to show the exchange adjustment explicitly. Bronze only preserves source values.
 5. **Restructuring paper dates (Phase 5):** each undated P130544 paper has one
@@ -1119,7 +1132,7 @@ Jev/SLM, agents, memory, cache, MLflow AI evaluation, API, UI.
 
 ### Phase 7 — approved by the user (2026-09-30)
 
-### Phase 8 — Databricks-native retrieval foundation (implemented; Databricks validation pending)
+### Phase 8 — Databricks-native retrieval foundation (implemented; validated in Databricks through notebook 07b)
 
 **Modules** (`src/worldbank_copilot/retrieval/`):
 - `config` (configs/retrieval/*.yaml);
@@ -1177,7 +1190,7 @@ Executed in Databricks:
 - **Pre-flight:** passed every check.
 - **New index:** `worldbank_copilot.silver.document_chunk_index_qwen3_v1` is ready, in state ONLINE_NO_PENDING_UPDATE, with 12,797 indexed rows (equal to the source table).
 - **Orchestration fix after validation:** Step 3b raised `NameError: strategies` when Step 3a was skipped. `build_index_source` and `update_embedding_cache` now default to every configured strategy (`configured_strategies`), so Steps 3b and 6 run independently after restart and bootstrap.
-- **Not yet run:** retrieval experiments (Steps 4–7, notebook 07b). Phase 9 has not been started.
+- **At the time of this run, not yet run:** retrieval experiments (Steps 4–7, notebook 07b). Notebook 07b was run later the same day (see "Phase 8 — notebook 07b results"). Phase 9 has not been started.
 - **Step 6 idempotency (Databricks):** the rerun showed no change in any table up to its last assertion:
 
   | Table | Rows | Inserted / updated / deleted | Embeddings |
@@ -1186,7 +1199,7 @@ Executed in Databricks:
   | Qwen cache | – | – | 10,965 of 10,965 cached, 0 newly embedded |
   | `silver.document_chunk_index` | 12,797 | 0 / 0 / 0 | – |
 
-  The cell then raised `NameError: corpus`, because its fingerprint assertion used a variable from Step 2.
+  The cell then raised `NameError: corpus`, because its fingerprint assertion used a variable from Step 2. (Superseded: the fixed Step 6 later passed every assertion; see the notebook 07 Steps 4–7 results.)
 - **Notebook orchestration fix (after that run):**
   - **Committed problems:** notebook 07 contained committed merge-conflict markers in Step 3a (resolved to the validated `PILOT_REQUESTS = None`) and a debugging cell (an undefined `client` and a hard-coded endpoint), now removed.
   - **Step 4:** opens the existing, ready index and the corpus itself (`open_retriever` / `open_vector_index`, read-only).
@@ -1199,3 +1212,243 @@ Executed in Databricks:
   - Step 5: cfg, questions, report, rerankers, retriever.
 
   The retriever (existing index + corpus), questions, imports, names and reranker objects are now rebuilt in each cell (read-only). The experiment state is declared with `require_state`: `decisions` (Step 3), `selected` (Steps 4 and 5). `tests/unit/test_notebook_cells.py` covers both notebooks, including detection of accidental dependencies.
+
+### Phase 8 — notebook 07 Steps 4–7 results (Databricks, user run, 2026-10-01)
+
+**Source and scope of the evidence**
+- The record comes from the user's export of the orchestration-fixed `notebooks/07_build_retrieval_and_evaluate.py`. Every cell finished.
+- Steps 2–3b show no output in this export, so it adds no evidence for them; their validation is recorded above.
+- The workspace copy had one extra unnamed cell (`strategies = sorted(rs.chunking.strategies)`) between Steps 3a and 3b. That cell is not in the repository, and no step depends on it.
+
+**Step 4, staged experiments without a reranker.** 44 answerable questions; recall@10 primary; minimum gain 0.02.
+
+| Stage | Configuration | R@5 | R@10 | MRR | nDCG@5 | p50 ms | Decision |
+|---|---|---|---|---|---|---|---|
+| chunking | fixed\|dense\|none\|k10 | 0.602 | 0.773 | 0.476 | 0.493 | 1,996.8¹ | kept |
+| chunking | structure\|dense\|none\|k10 | 0.568 | 0.773 | 0.471 | 0.453 | 99.9 | +0.000 |
+| chunking | parent_child\|dense\|none\|k10 | 0.636 | 0.727 | 0.510 | 0.520 | 98.1 | −0.045 |
+| retrieval | fixed\|dense\|none\|k10 | 0.602 | 0.773 | 0.476 | 0.493 | 99.3 | |
+| retrieval | fixed\|lexical\|none\|k10 | 0.682 | 0.750 | 0.565 | 0.604 | 2.1 | −0.023 |
+| retrieval | fixed\|hybrid\|none\|k10 | 0.773 | 0.795 | 0.590 | 0.642 | 98.8 | **+0.023, winner** |
+| candidate_depth | fixed\|hybrid\|none\|k10 | 0.773 | 0.795 | 0.590 | 0.642 | 102.8 | kept |
+| candidate_depth | fixed\|hybrid\|none\|k20 | 0.773 | 0.773 | 0.592 | 0.636 | 104.3 | −0.023 |
+| candidate_depth | fixed\|hybrid\|none\|k50 | 0.773 | 0.795 | 0.597 | 0.650 | 108.0 | +0.000 |
+| query_filters | fixed\|hybrid\|none\|k10+typefilter | 0.773 | 0.795 | 0.630 | 0.669 | 103.2 | +0.000, not preferred |
+
+¹ Same first-run effect as in 07b (identical configuration: 99.3 ms in the retrieval stage).
+
+- **Reranking stage:** the CrossEncoder run is `UNAVAILABLE` by design, because notebook 07 installs no reranker. The CrossEncoder is evaluated only in 07b.
+- **Reproducibility:** the chunking and retrieval stages produced the same quality metrics in 07 and 07b.
+- **Depth without a reranker adds nothing:** k20 lost one question and k50 equalled k10. Depth helps only together with the CrossEncoder (07b).
+- **Type filter:** without a reranker it gave R@10 +0.000 (MRR +0.040, nDCG@5 +0.027). With the CrossEncoder at k50 (07b) it gave −0.023. It is not adopted in either case.
+
+**Selected without a reranker (measured baseline): `fixed|hybrid|none|k10`**
+- R@5 0.7727, R@10 0.7955, MRR 0.5904, nDCG@5 0.6415, P@5 0.1909.
+- leakage@5 and leakage@10 both 0.
+- p50 100.5 ms, p95 143.2 ms.
+- **By project (R@10):** P130544 0.875, **P179039 0.545** (MRR 0.351), P506272 0.889.
+- **By kind (R@10):** paraphrase 0.571, exact 0.850, temporal 1.000.
+- **Misses:** 9 questions, all `retrieval_miss`: q03, q13, q22, q28, q29, q30, q35, q36, q42.
+- **Compared with the always-rerank winner (07b):**
+  - q03, q22 and q42 were recovered;
+  - q35 moved from `retrieval_miss` to `ranking`;
+  - q10 became a new `ranking` miss.
+  - The five P179039 misses (q28, q29, q30, q35, q36) are the same with and without the reranker.
+
+**Step 5, isolation (no reranker):** 7 of 7 PASS.
+- Under each project scope, all 49 questions returned only that project's evidence: 490, 450 and 420 items for P130544, P179039 and P506272.
+- The 3 cross-project questions and the unknown project P000000 were refused.
+
+**Step 6, idempotency:** the cell completed and every assertion passed, including the corpus fingerprint and row count against the persisted profile. This supersedes the earlier `NameError: corpus` run.
+
+| Table | Rows in snapshot | Inserted / updated / deleted | Delta version |
+|---|---|---|---|
+| `silver.document_chunks` | 14,327 | 0 / 0 / 0 | 5 |
+| `silver.document_chunk_index` | 12,797 | 0 / 0 / 0 | 5 |
+
+- **Embedding cache:** 10,965 texts needed, 10,965 already cached, 0 embedded now, complete.
+- **Warning:** Spark Connect reported "'verifySchema' is ignored" (informational).
+
+**Step 7, read-only SQL (`sql/phase8_validation.sql`):** every violation check was 0.
+- **Corpus:**
+  - fixed: 2,620 chunks;
+  - structure: 3,979 chunks;
+  - parent_child: 6,198 retrieval chunks plus 1,530 parents.
+  - That is 14,327 rows in total; the 12,797 retrieval rows equal the index source.
+- **Identity:** 0 duplicate chunk or record ids; 0 chunks without pages or scope.
+- **Provenance:** 0 chunks without an inventory document; 0 hash mismatches; 0 project mismatches. The sample chains show page, section, element ids, extraction method and a matching `inventory_sha256`.
+- **Parent-child:** 0 orphans; 0 parents in another document; 0 wrong roles.
+- **Index alignment:** 0 retrieval chunks not indexed; 0 index rows missing from the corpus; 0 disagreeing.
+- **Embedding cache:** `databricks-qwen3-embedding-0-6b`, 10,965 vectors, every one of dimension 1024.
+- **Comments fix (issue 55):** 0 label-instead-of-comment rows. Rows with comments: P130544 95, P179039 59, P506272 36.
+
+**MLflow:** 13 runs logged by notebook 07, in addition to the 13 runs from 07b.
+
+### Phase 8 — notebook 07b results (Databricks, user run, 2026-10-01)
+
+Source: the user's export of `notebooks/07b_rerank_experiment.py` (the orchestration-fixed version), run on serverless environment 6, ML base. Every cell finished; none raised an error. The run read the existing corpus and the index `document_chunk_index_qwen3_v1`. It created, embedded and wrote nothing to Delta.
+
+**Environment**
+- **Step 0, dependency health:** OK. `pip check` OK; protobuf 6.33.5, grpcio-status 1.76.0, googleapis-common-protos 1.71.0, databricks-ai-search 0.78, sentence-transformers 5.5.1, transformers 4.57.6, torch 2.12.0.
+- **Step 1, probe:** every check OK.
+  - AI Search: endpoint `worldbank-gep-ai-search` ONLINE.
+  - Qwen embeddings: dimension 1024, single-call latency 166 ms.
+  - CrossEncoder: `cross-encoder/ms-marco-MiniLM-L-6-v2`.
+  - MLflow: available.
+
+**Step 2, staged experiments.** 44 answerable questions; primary metric recall@10; a more complex option must gain at least 0.02.
+
+| Stage | Configuration | R@5 | R@10 | MRR | nDCG@5 | P@5 | p50 ms | p95 ms | Winner |
+|---|---|---|---|---|---|---|---|---|---|
+| chunking | fixed\|dense\|none\|k10 | 0.602 | 0.773 | 0.476 | 0.493 | 0.141 | 2,001.4¹ | 2,098.2 | ✔ |
+| chunking | structure\|dense\|none\|k10 | 0.568 | 0.773 | 0.471 | 0.453 | 0.136 | 98.3 | 158.9 | |
+| chunking | parent_child\|dense\|none\|k10 | 0.636 | 0.727 | 0.510 | 0.520 | 0.150 | 91.9 | 124.4 | |
+| retrieval | fixed\|dense\|none\|k10 | 0.602 | 0.773 | 0.476 | 0.493 | 0.141 | 94.5 | 128.5 | |
+| retrieval | fixed\|lexical\|none\|k10 | 0.682 | 0.750 | 0.565 | 0.604 | 0.177 | 3.6 | 170.8 | |
+| retrieval | fixed\|hybrid\|none\|k10 | 0.773 | 0.795 | 0.590 | 0.642 | 0.191 | 96.3 | 142.9 | ✔ |
+| reranking | fixed\|hybrid\|none\|k20 | 0.773 | 0.773 | 0.592 | 0.636 | 0.191 | 100.5 | 150.7 | |
+| reranking | fixed\|hybrid\|cross_encoder\|k20 | 0.773 | 0.818 | 0.643 | 0.681 | 0.191 | 2,405.7 | 2,924.5 | ✔ |
+| candidate_depth | fixed\|hybrid\|cross_encoder\|k10 | 0.727 | 0.795 | 0.637 | 0.658 | 0.177 | 1,054.2 | 1,596.4 | |
+| candidate_depth | fixed\|hybrid\|cross_encoder\|k20 | 0.773 | 0.818 | 0.643 | 0.681 | 0.191 | 2,341.5 | 2,981.1 | |
+| candidate_depth | fixed\|hybrid\|cross_encoder\|k50 | 0.795 | 0.841 | 0.683 | 0.717 | 0.196 | 5,541.3 | 6,433.8 | ✔ |
+| query_filters | fixed\|hybrid\|cross_encoder\|k50 | 0.795 | 0.841 | 0.683 | 0.717 | 0.196 | 5,383.2 | 6,606.8 | ✔ |
+| query_filters | fixed\|hybrid\|cross_encoder\|k50+typefilter | 0.773 | 0.818 | 0.683 | 0.717 | 0.191 | 5,109.4 | 6,510.9 | |
+
+¹ This was the first configuration the run executed. The identical configuration measured 94.5 ms p50 in the retrieval stage, so the 2,001 ms figure is not representative of dense retrieval. The table does not show the cause.
+
+**Stage decisions (as printed by the run)**
+- **Chunking:** `fixed` was kept. `structure` gained +0.000; `parent_child` lost 0.045.
+- **Retrieval:** `hybrid` beat dense by +0.023 recall@10. Lexical alone was −0.023.
+- **Reranking:** the CrossEncoder beat no reranker at k20 by +0.045 recall@10. MRR rose by +0.051 and nDCG@5 by +0.046.
+- **Candidate depth:** k20 beat k10 by +0.023, and k50 beat k20 by +0.023.
+- **Query filters:** the inferred document-type filter was not preferred (−0.023).
+
+On 44 questions, one question is 0.0227 of recall. Each depth step and the hybrid gain therefore equal exactly one more question found; the reranker gain at k20 equals two.
+
+**Experiment winner (Step 3):** `fixed|hybrid|cross_encoder|k50`.
+- recall@5 0.7955, recall@10 0.8409, MRR 0.6827, nDCG@5 0.7169, P@5 0.1955.
+- leakage@5 and leakage@10 both 0.0.
+- p50 5,383.2 ms, p95 6,606.8 ms.
+
+**Selected configuration: adaptive reranking, not "rerank every query" (user decision, 2026-10-01)**
+- **What the winner is:** in the 07b methodology, `fixed|hybrid|cross_encoder|k50` applies the CrossEncoder to every query. It is recorded as the measured quality ceiling of reranking, not as the production path.
+- **The selected production direction is adaptive reranking.** The default path is hybrid retrieval without a reranker. The CrossEncoder over a deeper candidate set (k50) is applied only to the queries where the harness decides it is needed.
+- **Fixed parts:** `fixed` chunks, `hybrid` (BM25 + dense, RRF k=60), no type filter, final_k 5.
+- **Not yet implemented or evaluated:** the trigger policy, meaning which queries are reranked. 07b did not test any trigger. The code has no adaptive mode: `RunConfig` applies one reranker to every query, and `configs/retrieval/retrieval.yaml` `production` is unchanged (all `null`).
+- **No adaptive figure exists yet.** No quality or latency number for adaptive reranking may be reported until a trigger is implemented and evaluated against both measured bounds:
+
+  | Bound | Configuration | R@10 | MRR | nDCG@5 | p50 ms | p95 ms |
+  |---|---|---|---|---|---|---|
+  | never rerank | fixed\|hybrid\|none\|k10 | 0.7955 | 0.5904 | 0.6415 | 96.3 | 142.9 |
+  | always rerank | fixed\|hybrid\|cross_encoder\|k50 | 0.8409 | 0.6827 | 0.7169 | 5,383.2 | 6,606.8 |
+
+- **Trigger candidates:** these are hypotheses to be evaluated, not decided.
+  - a deterministic rule, such as hybrid score margin or a lexical/dense disagreement;
+  - question kind (paraphrase questions have the lowest recall);
+  - a bounded decision model, owned by harness policy per CLAUDE.md §15.
+
+  Each must report recall, MRR, the fraction of queries reranked, and latency.
+
+**Latency/quality tradeoff (measured)**
+- **Always-on CrossEncoder at k50 vs. hybrid without a reranker at k10:**
+  - recall@10 +0.045 (2 of 44 questions);
+  - MRR +0.092; nDCG@5 +0.075; recall@5 +0.023;
+  - p50 latency about 56× (96 ms → 5,383 ms); p95 about 46× (143 ms → 6,607 ms).
+- **Depth drives the cost:** reranking 10, 20 and 50 candidates took 1,054, 2,342 and 5,541 ms p50. The cost is roughly linear in candidates scored, on CPU (torch 2.12.0+cpu).
+- **The last depth step (k20 → k50)** found one more question for about +3.2 s p50.
+- **Lexical BM25 alone is the fastest** (3.6 ms p50) and has the best R@5 among the non-hybrid methods. It does not win on recall@10.
+- **Latency is not part of the selection rule.** The staged winner is chosen on recall@10 alone. The adaptive decision above is the response to that gap. Latency was measured on serverless CPU, with no GPU serving tried.
+
+**Breakdown of the experiment winner**
+
+| Group | Questions | R@10 | R@5 | MRR | nDCG@5 |
+|---|---|---|---|---|---|
+| P130544 | 24 | 0.917 | 0.875 | 0.733 | 0.752 |
+| **P179039** | **11** | **0.545** | **0.545** | **0.462** | **0.592** |
+| P506272 | 9 | 1.000 | 0.889 | 0.818 | 0.777 |
+| kind: exact | 20 | 0.850 | 0.800 | 0.680 | 0.721 |
+| kind: paraphrase | 14 | 0.714 | 0.714 | 0.523 | 0.542 |
+| kind: temporal | 8 | 1.000 | 0.875 | 0.889 | 0.954 |
+| kind: multi_evidence | 2 | 1.000 | 1.000 | 1.000 | 0.960 |
+
+Weakest categories: finance (R@10 0.60, 5 questions), ratings (0.67, 3), and procurement (R@10 0.75, but nDCG@5 0.311, 4).
+
+**Misses of the experiment winner.** There are 7 questions; the classification comes from `classify_misses`.
+
+| Question | Project | Category | Cause | Labeled evidence |
+|---|---|---|---|---|
+| q10 | P130544 | ratings | ranking | 1 restructuring paper, p. 6 |
+| q13 | P130544 | procurement | retrieval_miss | 3 documents, p. 1 ("re-bid(ding) the contract on a Design Build Operate Transfer") |
+| q28 | P179039 | implementation_issues | retrieval_miss | 4 documents, p. 1 ("integrated helpline accessible") |
+| q29 | P179039 | project_status | retrieval_miss | 3 documents, p. 1 (Operation and Maintenance Policy) |
+| q30 | P179039 | finance | retrieval_miss | 4 documents, p. 1 ("US$363 million Karnataka Sustainable Rural Water Supply Program") |
+| q35 | P179039 | assessment_findings | ranking | 1 document, p. 6 |
+| q36 | P179039 | finance | retrieval_miss | 1 document, p. 23 ("disbursed based on the achievement of eight DLIs") |
+
+**P179039 limitation (recorded, not resolved)**
+- **Scale:** P179039 accounts for 5 of the 7 misses. Its recall@10 is 0.545 (6 of 11 questions) and its MRR 0.462. The other two projects reach 0.917 and 1.000.
+- **Bias in the overall figure:** the overall 0.841 is not representative of P179039, the Program-for-Results water project. Results for this project must be treated as the weakest retrieval coverage in the corpus.
+- **Observed facts:**
+  - 4 of the 5 are `retrieval_miss`: chunks containing the evidence phrase exist in scope but were not retrieved. The other one (q35) is `ranking`: a matching chunk was retrieved but ranked below 10.
+  - No P179039 miss was classified `bad_chunking` or `metadata_filter`. The evidence phrases are present in in-scope `fixed` chunks.
+  - 3 of the misses (q28, q29, q30) have labeled evidence only on page 1 of several documents. Each is phrased as a paraphrase of that page-1 text.
+  - Sample evidence for q28 (Step 5) returned a grievance-redress passage from the Technical Assessment (pp. 25–26: complainants "register and track their complaints through internet, phone, or social media"). It was not in the labeled evidence. All five reranker scores were negative (top −2.834).
+- **Not established:**
+  - whether the cause is how page-1 chunks are represented (for example, front-matter text diluting the passage), vocabulary mismatch in paraphrased questions, or incomplete relevance labels;
+  - whether the q28 passage should count as supporting evidence. That is a labeling decision for review, not something the system resolves. No label was changed.
+- **Not attempted in Phase 8:** no project-specific tuning, re-chunking or label edits were made to raise this number.
+
+**Abstention calibration (reported, not applied)**
+- **Which run:** computed on the first CrossEncoder run, `fixed|hybrid|cross_encoder|k20` (reranking stage). It was not computed on the selected k50.
+- **Scores:**
+  - answerable: minimum −4.788, median 3.804;
+  - no-answer: maximum 1.770, median −3.777.
+- **Best threshold:** −2.834, with accuracy 0.939, which is 46 of 49 questions classified correctly.
+- **The ranges overlap,** so no threshold separates them perfectly.
+- **Sample:** the no-answer question in Step 5 (q25, "metro rail stations") had a top reranker score of −5.897, below that threshold.
+- **Config:** `min_rerank_score` remains `null`.
+
+**Step 4, isolation with the experiment winner:** 7 of 7 PASS.
+- All 49 questions under each project scope returned only that project's evidence: P130544 2,051, P179039 2,071 and P506272 2,000 evidence items.
+- Three cross-project questions were refused before retrieval.
+- The unsupported project P000000 was refused.
+
+**Step 5, sample evidence:** 8 questions; each result carries project, document, ISR sequence and date, pages, section and reranker score. The CrossEncoder took 4,221–6,903 ms per query.
+
+**MLflow:** 13 runs logged (one per stage configuration).
+
+**Warnings, none blocking:**
+- **Authentication notice:** the AI Search client printed "Using a notebook authentication token. Recommended for development only" on every query. A service principal is needed before any non-development use.
+- **MLflow tag warnings:** 13 × "Encountered unexpected error during resolving tags: getContext().extraContext()…" from tag resolution. The runs were still logged.
+
+**Not done:** no trigger policy was implemented, no configuration was changed, no tests were added, and no Databricks operation was run by Claude. Phase 9 has not been started.
+
+### Phase 8 — validation summary (notebooks 07 and 07b, Databricks, 2026-10-01)
+
+**Measured results (executed in Databricks)**
+- **Data foundation:**
+  - corpus 14,327 rows;
+  - index source and AI Search index 12,797 rows;
+  - Qwen cache 10,965 of 10,965 vectors, dimension 1024;
+  - every Step 7 violation check 0;
+  - Step 6 idempotent (0/0/0 and 0 newly embedded).
+- **Measured no-reranker baseline, `fixed|hybrid|none|k10`:** R@10 0.7955, MRR 0.5904, nDCG@5 0.6415, p50 about 100 ms, p95 about 143 ms.
+- **Measured always-rerank quality winner and quality ceiling, `fixed|hybrid|cross_encoder|k50`:** R@10 0.8409, MRR 0.6827, nDCG@5 0.7169, p50 5,383 ms, p95 6,607 ms.
+- **Isolation:** 7 of 7 PASS in both notebooks, with leakage 0. MLflow logged 13 + 13 runs.
+
+**Experimentally selected configurations (by the staged recall@10 rule)**
+- **Without a reranker (07):** `fixed|hybrid|none|k10`. Fixed chunks, hybrid BM25+dense with RRF, k10, and no type filter all won or were kept.
+- **With the CrossEncoder (07b):** `fixed|hybrid|cross_encoder|k50`. This means reranking every query; latency is not part of the rule.
+
+**Production design direction (user decision; not implemented)**
+- **Adaptive reranking:** the no-reranker baseline is the default path, and the CrossEncoder at k50 runs only on queries a trigger selects.
+- **Not implemented or evaluated:** adaptive reranking has **not** been implemented or evaluated, and **no adaptive performance numbers exist**.
+- **Config:** `configs/retrieval/retrieval.yaml` `production` stays unset (all `null`) until a trigger has been evaluated against both measured bounds.
+
+**Unresolved / open issues** (also listed in §8, items 10–12)
+- **Adaptive reranking trigger:** undefined. Candidates such as rules, question kind or a bounded decision model are hypotheses only.
+- **P179039:** R@10 0.545 with or without the reranker; the same 5 questions are missed in both. The cause is **not established**.
+- **q28 is a ground-truth-label review question:** the Technical Assessment grievance-redress passage it retrieves is not labeled as evidence. The label is unchanged pending review.
+- **Abstention threshold:** experimental only (−2.834, computed on the k20 run; the score ranges overlap). `min_rerank_score` stays `null`.
+- **Notebook-token authentication:** AI Search used a notebook token ("development only"). A service principal is required before production use.
+- **Latency:** the always-rerank latency was measured on serverless CPU only.
