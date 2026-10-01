@@ -1178,3 +1178,24 @@ Executed in Databricks:
 - **New index:** `worldbank_copilot.silver.document_chunk_index_qwen3_v1` is ready, in state ONLINE_NO_PENDING_UPDATE, with 12,797 indexed rows (equal to the source table).
 - **Orchestration fix after validation:** Step 3b raised `NameError: strategies` when Step 3a was skipped. `build_index_source` and `update_embedding_cache` now default to every configured strategy (`configured_strategies`), so Steps 3b and 6 run independently after restart and bootstrap.
 - **Not yet run:** retrieval experiments (Steps 4–7, notebook 07b). Phase 9 has not been started.
+- **Step 6 idempotency (Databricks):** the rerun showed no change in any table up to its last assertion:
+
+  | Table | Rows | Inserted / updated / deleted | Embeddings |
+  |---|---|---|---|
+  | `silver.document_chunks` | 14,327 | 0 / 0 / 0 | – |
+  | Qwen cache | – | – | 10,965 of 10,965 cached, 0 newly embedded |
+  | `silver.document_chunk_index` | 12,797 | 0 / 0 / 0 | – |
+
+  The cell then raised `NameError: corpus`, because its fingerprint assertion used a variable from Step 2.
+- **Notebook orchestration fix (after that run):**
+  - **Committed problems:** notebook 07 contained committed merge-conflict markers in Step 3a (resolved to the validated `PILOT_REQUESTS = None`) and a debugging cell (an undefined `client` and a hard-coded endpoint), now removed.
+  - **Step 4:** opens the existing, ready index and the corpus itself (`open_retriever` / `open_vector_index`, read-only).
+  - **Step 5:** builds its own retriever and declares its only deliberate dependency, the Step 4 selection, with `require_state` (a clear error, not a NameError).
+  - **Step 6:** compares against the persisted `silver.document_chunks` profile, read before the rebuild (`persisted_corpus_profile`).
+  - **Tests:** `tests/unit/test_notebook_cells.py` checks, by static analysis, that every phase cell after Steps 0/1 is independent. Data, model, cache, index, retrieval logic and experiment methodology are unchanged.
+- **Notebook 07b orchestration audit:** the committed 07b had these hidden dependencies:
+  - Step 3: decisions, ev, names, questions, report, retriever;
+  - Step 4: questions, report, rerankers, retriever, selected;
+  - Step 5: cfg, questions, report, rerankers, retriever.
+
+  The retriever (existing index + corpus), questions, imports, names and reranker objects are now rebuilt in each cell (read-only). The experiment state is declared with `require_state`: `decisions` (Step 3), `selected` (Steps 4 and 5). `tests/unit/test_notebook_cells.py` covers both notebooks, including detection of accidental dependencies.

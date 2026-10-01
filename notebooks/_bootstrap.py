@@ -23,3 +23,10 @@ configure_logging(settings.log_level)
 registry = load_project_registry(settings.config_dir)
 
 print(f"environment={settings.environment.value} projects={registry.project_ids}")
+
+def require_state(*names: str, step: str) -> None:
+    """Deliberate cross-cell dependency: a clear error instead of a raw NameError."""
+    missing = [name for name in names if name not in globals()]
+    if missing:
+        raise RuntimeError(f"{', '.join(missing)} not defined in this session: run {step} first")
+

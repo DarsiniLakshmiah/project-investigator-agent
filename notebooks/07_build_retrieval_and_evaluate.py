@@ -77,12 +77,7 @@ for group, counts in corpus.counts.items():
 # Step 3a: embeddings into the cache (key: text sha256 + model). Resumable: a rerun embeds
 # only what is still missing for the configured model (configs/retrieval/embeddings.yaml).
 # PILOT_REQUESTS caps this run (sequential, paced); set it to None for the full build.
-<<<<<<< HEAD
-PILOT_REQUESTS = 50  # 50 requests x 4 inputs = 200 texts; review before the full build
-=======
-PILOT_REQUESTS = None
-strategies = sorted(rs.chunking.strategies)
->>>>>>> 445b01726a9d48120c0ff69492f64e1d4d12589a
+PILOT_REQUESTS = None  # full build (validated; the cache is complete). Use e.g. 50 for a pilot.
 embedding_report = rp.update_embedding_cache(
     spark, settings, rs, provider, progress=print, max_requests=PILOT_REQUESTS  # noqa: F821
 )
@@ -113,21 +108,15 @@ print(index_status)
 
 # COMMAND ----------
 
-indexes = client.list_indexes("worldbank-gep-ai-search")
-print(indexes)
-
-# COMMAND ----------
-
 # Step 4: staged experiments WITHOUT the reranker (cross_encoder runs are reported as
 # UNAVAILABLE here and evaluated in 07b_rerank_experiment).
 from worldbank_copilot.retrieval import evaluation as ev  # noqa: E402
 from worldbank_copilot.retrieval import report  # noqa: E402
 from worldbank_copilot.retrieval.rerank import NoReranker  # noqa: E402
-from worldbank_copilot.retrieval.retriever import ChunkStore, Retriever  # noqa: E402
 
 names = rp.names(settings, rs)  # noqa: F821
-store = ChunkStore.from_table(spark, names["chunks"])  # noqa: F821
-retriever = Retriever(store, rs, registry.project_ids, embeddings=provider, dense=vs_index)  # noqa: F821
+# Existing, ready index and governed corpus (read-only; Step 3b is not needed in this session).
+retriever = rp.open_retriever(spark, settings, rs, registry.project_ids, provider)  # noqa: F821
 questions = ev.load_questions(settings.repo_root / rs.evaluation.questions_file)  # noqa: F821
 rerankers = {"none": NoReranker()}
 decisions = ev.run_stages(retriever, questions, rs.evaluation, rerankers,
@@ -153,9 +142,17 @@ if rs.evaluation.mlflow.enabled:
 # COMMAND ----------
 
 # Step 5: project isolation (ERROR-level). Every question under every project scope.
-cfg = selected.config
-checks = report.isolation_checks(retriever, questions, registry.project_ids, cfg.chunk_strategy,  # noqa: F821
-                                 cfg.retrieval, NoReranker(), cfg.candidate_k)
+# Deliberate dependency: the configuration selected by the Step 4 experiments.
+from worldbank_copilot.retrieval import evaluation as ev  # noqa: E402
+from worldbank_copilot.retrieval import report  # noqa: E402
+from worldbank_copilot.retrieval.rerank import NoReranker  # noqa: E402
+
+require_state("selected", step="Step 4 (staged experiments)")  # noqa: F821
+cfg = selected.config  # noqa: F821
+isolation_retriever = rp.open_retriever(spark, settings, rs, registry.project_ids, provider)  # noqa: F821
+isolation_questions = ev.load_questions(settings.repo_root / rs.evaluation.questions_file)  # noqa: F821
+checks = report.isolation_checks(isolation_retriever, isolation_questions, registry.project_ids,  # noqa: F821
+                                 cfg.chunk_strategy, cfg.retrieval, NoReranker(), cfg.candidate_k)
 for c in checks:
     print(f"[{'PASS' if c.passed else 'FAIL'}] {c.name}: {c.detail}")
 assert all(c.passed for c in checks), "cross-project isolation failed"
@@ -163,15 +160,18 @@ assert all(c.passed for c in checks), "cross-project isolation failed"
 # COMMAND ----------
 
 # Step 6: idempotency - rebuilding with unchanged inputs must change nothing.
+# The baseline is the persisted corpus (read before the rebuild), not a variable of Step 2.
+persisted = rp.persisted_corpus_profile(spark, settings, rs)  # noqa: F821
 again = rp.build_corpus(spark, settings, rs, registry)  # noqa: F821
 embeddings_again = rp.update_embedding_cache(spark, settings, rs, provider)  # noqa: F821
 index_again, _ = rp.build_index_source(spark, settings, rs, provider.model)  # noqa: F821
 print("corpus:", again.write)
 print("embeddings:", embeddings_again)
 print("index source:", index_again)
-assert again.profile["fingerprint"] == corpus.profile["fingerprint"]
+assert again.profile["fingerprint"] == persisted["fingerprint"]
+assert again.profile["row_count"] == persisted["row_count"]
 assert (again.write.inserted, again.write.updated, again.write.deleted) == (0, 0, 0)
-assert embeddings_again.embedded_now == 0
+assert embeddings_again.embedded_now == 0 and embeddings_again.complete
 assert (index_again.inserted, index_again.updated, index_again.deleted) == (0, 0, 0)
 
 # COMMAND ----------

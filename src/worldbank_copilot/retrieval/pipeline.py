@@ -35,7 +35,7 @@ from worldbank_copilot.lakehouse.spark_store import SparkDeltaStore, WriteResult
 from worldbank_copilot.lakehouse.sql import history_sql, qualified
 from worldbank_copilot.parsing.pipeline import run_parsing
 from worldbank_copilot.retrieval.config import RetrievalSettings
-from worldbank_copilot.retrieval.corpus import corpus_dataset
+from worldbank_copilot.retrieval.corpus import chunks_contract, corpus_dataset
 from worldbank_copilot.retrieval.embeddings import EmbeddingProvider
 from worldbank_copilot.retrieval.vector_search import VectorSearchIndex
 
@@ -594,6 +594,51 @@ def preflight_index(
     return IndexPreflight(
         index.config.endpoint, index.index_name, index.source_table, existing, action, checks
     )
+
+
+def persisted_corpus_profile(
+    spark: Any, settings: Settings, rs: RetrievalSettings
+) -> dict[str, Any]:
+    """Profile (row count, fingerprint) of silver.document_chunks as persisted. Read-only."""
+    n = names(settings, rs)
+    contract = chunks_contract(rs.chunking.strategies)
+    store = SparkDeltaStore(spark, n["catalog"], {"silver": n["silver"]})
+    return profile(contract, store.read_rows(contract))
+
+
+def open_vector_index(
+    settings: Settings, rs: RetrievalSettings, client: Any | None = None
+) -> VectorSearchIndex:
+    """Handle to the EXISTING, ready index (creates nothing; run Step 3b if absent)."""
+    index = vector_index(settings, rs, client=client)
+    try:
+        status = index.describe().get("status", {})
+    except Exception as exc:
+        raise ReconciliationError(
+            f"AI Search index {index.index_name} is not available ({exc}); run Step 3b first"
+        ) from exc
+    if not status.get("ready"):
+        raise ReconciliationError(
+            f"AI Search index {index.index_name} is not ready "
+            f"({status.get('detailed_state')}); run or finish Step 3b first"
+        )
+    return index
+
+
+def open_retriever(
+    spark: Any,
+    settings: Settings,
+    rs: RetrievalSettings,
+    project_ids: Sequence[str],
+    provider: Any,
+    index: VectorSearchIndex | None = None,
+) -> Any:
+    """Retriever over the governed corpus and the existing index (read-only)."""
+    from worldbank_copilot.retrieval.retriever import ChunkStore, Retriever
+
+    store = ChunkStore.from_table(spark, names(settings, rs)["chunks"])
+    dense = index if index is not None else open_vector_index(settings, rs)
+    return Retriever(store, rs, project_ids, embeddings=provider, dense=dense)
 
 
 def vector_index(

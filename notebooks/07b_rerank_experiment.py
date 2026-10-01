@@ -59,12 +59,9 @@ if capabilities.blocking_failures:
 from worldbank_copilot.retrieval import evaluation as ev  # noqa: E402
 from worldbank_copilot.retrieval import report  # noqa: E402
 from worldbank_copilot.retrieval.rerank import CrossEncoderReranker, NoReranker  # noqa: E402
-from worldbank_copilot.retrieval.retriever import ChunkStore, Retriever  # noqa: E402
 
-names = rp.names(settings, rs)  # noqa: F821
-vs_index = rp.vector_index(settings, rs)  # noqa: F821
-store = ChunkStore.from_table(spark, names["chunks"])  # noqa: F821
-retriever = Retriever(store, rs, registry.project_ids, embeddings=provider, dense=vs_index)  # noqa: F821
+# Existing, ready index and governed corpus (read-only; nothing is created or embedded).
+retriever = rp.open_retriever(spark, settings, rs, registry.project_ids, provider)  # noqa: F821
 questions = ev.load_questions(settings.repo_root / rs.evaluation.questions_file)  # noqa: F821
 rerankers = {"none": NoReranker()}
 if any(c.name == "cross_encoder" and c.status == "OK" for c in capabilities.checks):
@@ -78,21 +75,28 @@ for d in decisions:
 # COMMAND ----------
 
 # Step 3: selected configuration, breakdowns, failure analysis, abstention, MLflow.
-selected = next(r for r in decisions[-1].runs if r.config == decisions[-1].winner)
+# Deliberate dependency: the experiment results of Step 2.
+from worldbank_copilot.retrieval import evaluation as ev  # noqa: E402
+from worldbank_copilot.retrieval import report  # noqa: E402
+
+require_state("decisions", step="Step 2 (full staged experiments)")  # noqa: F821
+selected = next(r for r in decisions[-1].runs if r.config == decisions[-1].winner)  # noqa: F821
 print("SELECTED:", selected.config.name, selected.summary)
 display(spark.createDataFrame(report.breakdown(selected)))  # noqa: F821
-misses = ev.classify_misses(retriever, questions, selected)
+analysis_retriever = rp.open_retriever(spark, settings, rs, registry.project_ids, provider)  # noqa: F821
+analysis_questions = ev.load_questions(settings.repo_root / rs.evaluation.questions_file)  # noqa: F821
+misses = ev.classify_misses(analysis_retriever, analysis_questions, selected)
 if misses:
     display(spark.createDataFrame(misses))  # noqa: F821
-reranked = [r for d in decisions for r in d.runs
+reranked = [r for d in decisions for r in d.runs  # noqa: F821
             if r.status == "OK" and r.config.reranker == "cross_encoder"]
 for run in reranked[:1]:
     print("abstention calibration:", ev.abstention_calibration(run))
 if rs.evaluation.mlflow.enabled:
     run_ids = ev.log_to_mlflow(
-        decisions,
-        {"embedding_model": provider.model, "questions": len(questions),
-         "index": names["index_name"], "notebook": "07b"},
+        decisions,  # noqa: F821
+        {"embedding_model": provider.model, "questions": len(analysis_questions),
+         "index": rp.names(settings, rs)["index_name"], "notebook": "07b"},  # noqa: F821
         rs.evaluation.mlflow.experiment_name,
     )
     print(f"MLflow: {len(run_ids)} runs logged")
@@ -100,9 +104,18 @@ if rs.evaluation.mlflow.enabled:
 # COMMAND ----------
 
 # Step 4: project isolation with the final configuration (ERROR-level).
-cfg = selected.config
-checks = report.isolation_checks(retriever, questions, registry.project_ids, cfg.chunk_strategy,  # noqa: F821
-                                 cfg.retrieval, rerankers[cfg.reranker], cfg.candidate_k)
+# Deliberate dependency: the configuration selected in Step 3.
+from worldbank_copilot.retrieval import evaluation as ev  # noqa: E402
+from worldbank_copilot.retrieval import report  # noqa: E402
+from worldbank_copilot.retrieval.rerank import reranker_for  # noqa: E402
+
+require_state("selected", step="Step 3 (selected configuration)")  # noqa: F821
+cfg = selected.config  # noqa: F821
+isolation_retriever = rp.open_retriever(spark, settings, rs, registry.project_ids, provider)  # noqa: F821
+isolation_questions = ev.load_questions(settings.repo_root / rs.evaluation.questions_file)  # noqa: F821
+checks = report.isolation_checks(isolation_retriever, isolation_questions, registry.project_ids,  # noqa: F821
+                                 cfg.chunk_strategy, cfg.retrieval,
+                                 reranker_for(cfg.reranker, rs.retrieval.reranker), cfg.candidate_k)
 for c in checks:
     print(f"[{'PASS' if c.passed else 'FAIL'}] {c.name}: {c.detail}")
 assert all(c.passed for c in checks), "cross-project isolation failed"
@@ -110,9 +123,19 @@ assert all(c.passed for c in checks), "cross-project isolation failed"
 # COMMAND ----------
 
 # Step 5: representative evidence for manual inspection (citation-ready).
+# Deliberate dependency: the configuration selected in Step 3.
+from worldbank_copilot.retrieval import evaluation as ev  # noqa: E402
+from worldbank_copilot.retrieval import report  # noqa: E402
+from worldbank_copilot.retrieval.rerank import reranker_for  # noqa: E402
+
+require_state("selected", step="Step 3 (selected configuration)")  # noqa: F821
+cfg = selected.config  # noqa: F821
+evidence_retriever = rp.open_retriever(spark, settings, rs, registry.project_ids, provider)  # noqa: F821
+evidence_questions = ev.load_questions(settings.repo_root / rs.evaluation.questions_file)  # noqa: F821
+evidence_reranker = reranker_for(cfg.reranker, rs.retrieval.reranker)
 for qid in ("q01", "q04", "q07", "q28", "q33", "q39", "q44", "q25"):
-    q = next(x for x in questions if x.id == qid)
-    result = retriever.retrieve(q.question, q.project_id, strategy=cfg.chunk_strategy,
-                                method=cfg.retrieval, reranker=rerankers[cfg.reranker],
-                                candidate_k=cfg.candidate_k, final_k=5)
+    q = next(x for x in evidence_questions if x.id == qid)
+    result = evidence_retriever.retrieve(q.question, q.project_id, strategy=cfg.chunk_strategy,
+                                         method=cfg.retrieval, reranker=evidence_reranker,
+                                         candidate_k=cfg.candidate_k, final_k=5)
     print(report.format_evidence(result), "\n")
