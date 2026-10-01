@@ -1,7 +1,7 @@
 """Embeddings from the Databricks Model Serving endpoint (Phase 8).
 
 Retrieval depends only on ``EmbeddingProvider.embed(texts)``; the endpoint is
-configured in configs/retrieval/embeddings.yaml (databricks-gte-large-en).
+configured in configs/retrieval/embeddings.yaml (endpoint and expected dimension).
 
 Why an explicit transport. The Databricks SDK's ``serving_endpoints.query`` wraps every
 call in its own retry loop (``retry_timeout_seconds``, default 300 s) and per-attempt
@@ -166,7 +166,7 @@ class RateLimited(RetryableEmbeddingError):
 
 
 class DatabricksServingEmbeddings:
-    """Embeddings from a Databricks Model Serving endpoint (databricks-gte-large-en).
+    """Embeddings from the Databricks Model Serving endpoint named in the configuration.
 
     Request pacing: consecutive request starts are at least ``interval`` seconds apart
     (``min_request_interval_seconds``). The pacing state lives on this object, so a
@@ -377,6 +377,7 @@ class JobStats:
     rate_limited: int = 0
     rate_limit_wait: float = 0.0
     pace: float = 0.0
+    paused: bool = False  # stopped at max_requests (pilot); a rerun continues
 
     def line(self) -> str:
         return (
@@ -398,12 +399,15 @@ def run_embedding_job(
     *,
     cached: int,
     checkpoint_every_requests: int,
+    max_requests: int | None = None,
     log: Callable[[str], None] | None = None,
 ) -> JobStats:
     """Embed (key, text) items in bounded requests, persisting every N requests.
 
     ``sink`` receives only validated (key, vector) pairs. On failure the completed
     requests are flushed first, then EmbeddingJobError is raised with the statistics.
+    ``max_requests`` (pilot runs) stops cleanly after that many requests, flushed and
+    marked ``paused``; a rerun continues with what is still missing.
     """
     say = log or (lambda _m: None)
     started = time.perf_counter()
@@ -435,6 +439,9 @@ def run_embedding_job(
     stats.pace = provider.interval
     say(stats.line())
     for number, batch in enumerate(batches, 1):
+        if max_requests is not None and number > max_requests:
+            stats.paused = True
+            break
         stats.batch = number
         try:
             vectors = provider.embed_request([texts[i] for i in batch])
@@ -456,5 +463,5 @@ def run_embedding_job(
             say(stats.line())
     flush()
     stats.seconds = round(time.perf_counter() - started, 1)
-    say(stats.line() + "  DONE")
+    say(stats.line() + ("  PAUSED (max_requests reached)" if stats.paused else "  DONE"))
     return stats

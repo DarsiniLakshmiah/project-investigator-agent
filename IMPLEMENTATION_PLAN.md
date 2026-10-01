@@ -555,6 +555,13 @@ come from content, not filenames. Identified from first-page text:
     - **GTE result:** `databricks-gte-large-en` failed in this workspace: 5 rate-limited attempts and 720 s of cooldown, 0 texts embedded. Recorded in `configs/retrieval/embedding_candidates.yaml`; the cooldown is not increased further.
     - **Qwen probe:** `notebooks/07a_embedding_endpoint_probe.py` probes `databricks-qwen3-embedding-0-6b`: 1 input, a batch of 4, a 15 s pause, a batch of 4, each one attempt with no retries. It reports status, error code, Retry-After, latency, the returned dimension and a verdict.
     - **No writes:** the probe writes nothing, and production `embeddings.yaml` stays unchanged until a separate decision.
+66. **Qwen selected as the embedding candidate.**
+    - **Probe:** `databricks-qwen3-embedding-0-6b` probe (notebook 07a): USABLE, dimension 1024, no 429.
+    - **07a reporting error, explained:** `[CANNOT_DETERMINE_TYPE]` came from schema inference. On a fully successful probe, `error_code`, `retry_after` and `error` are NULL in every row (reproduced on local Spark); fixed with an explicit result schema.
+    - **Configuration:** `embeddings.yaml` now points to Qwen (1024). Settings are conservative because only 4-input requests were proven: 4 inputs and <= 6,000 characters per request, sequential, >= 2 s between requests, the same 429/retry protections, checkpoints every 50 requests.
+    - **Pilot:** notebook 07 Step 3a stops cleanly after PILOT_REQUESTS = 50 (200 texts) for review.
+    - **Model isolation:** cache key (text_sha256, embedding_model). Cache lookup and index source filter on model and dimension; a post-MERGE check allows no foreign-model rows; an existing index with another dimension is refused.
+    - **GTE:** the failure history stays in `embedding_candidates.yaml`.
 
 ---
 

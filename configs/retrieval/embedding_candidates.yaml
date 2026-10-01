@@ -14,8 +14,15 @@ candidates:
       - "paced rerun: 5 rate-limited attempts, 720 s cooldown, 0 texts embedded"
     decision: "Not usable from this workspace on pay-per-token; cooldown not increased further."
   databricks-qwen3-embedding-0-6b:
-    status: UNTESTED
-    note: "Dimension is not assumed; the probe reports what the endpoint returns."
+    status: PROBED_USABLE   # selected candidate for the corpus build (embeddings.yaml)
+    tested: 2026-10-01
+    notebook: 07a_embedding_endpoint_probe
+    observations:
+      - "single input: HTTP 200, 1/1 vector, dimension 1024, finite, 1,826 ms"
+      - "batch 1 (4 inputs): HTTP 200, 4/4 vectors, dimension 1024, finite, 212 ms"
+      - "after 15 s pause, batch 2 (4 inputs): HTTP 200, 4/4 vectors, dimension 1024, finite, 178 ms"
+      - "no 429, no Retry-After; verdict USABLE"
+    not_yet_proven: "sustained throughput and requests larger than 4 inputs"
 
 # Load probe (notebooks/07a_embedding_endpoint_probe.py). One HTTP attempt per step, no
 # retries; steps are separated by pause_seconds so the probe itself cannot hammer the

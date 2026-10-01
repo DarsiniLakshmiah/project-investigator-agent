@@ -40,7 +40,11 @@ if not health.ok:
 # Step 1: representative inputs (read-only): 9 real retrieval texts in a fixed order.
 from worldbank_copilot.retrieval import pipeline as rp  # noqa: E402
 from worldbank_copilot.retrieval.config import load_retrieval_settings  # noqa: E402
-from worldbank_copilot.retrieval.endpoint_probe import load_probe_config, run_probe  # noqa: E402
+from worldbank_copilot.retrieval.endpoint_probe import (  # noqa: E402
+    load_probe_config,
+    result_schema,
+    run_probe,
+)
 
 rs = load_retrieval_settings(settings.config_dir)  # noqa: F821
 probe_config = load_probe_config(settings.config_dir)  # noqa: F821
@@ -60,5 +64,6 @@ print(f"{len(samples)} sample texts, {min(map(len, samples))}-{max(map(len, samp
 # Step 2: load probe (1 input -> batch -> pause -> batch). No retries, nothing persisted.
 report = run_probe(probe_config, samples, log=print)
 print(report.format())
-display(spark.createDataFrame(report.rows()))  # noqa: F821
+# Explicit schema: NULL-only columns (error_code, retry_after, error) are typed.
+display(spark.createDataFrame(report.records(), schema=result_schema()))  # noqa: F821
 print("VERDICT:", report.verdict, "| dimension:", report.dimension)

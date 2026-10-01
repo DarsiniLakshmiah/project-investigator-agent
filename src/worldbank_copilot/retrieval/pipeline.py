@@ -262,6 +262,7 @@ class EmbeddingReport:
     retries: int
     checkpoints: int
     seconds: float
+    complete: bool = True  # False after a pilot (max_requests) run
 
 
 EMBEDDINGS_DDL = (
@@ -308,6 +309,53 @@ def embedding_sink(spark: Any, table: str, model: str, dimension: int) -> Callab
     return write
 
 
+def _strategies(strategies: Sequence[str]) -> str:
+    bad = [x for x in strategies if not x.replace("_", "").isalnum()]
+    if bad:
+        raise ValueError(f"invalid chunk strategy names {bad}")
+    return ", ".join(f"'{x}'" for x in strategies)
+
+
+def _model(model: str) -> str:
+    if not model or "'" in model:
+        raise ValueError(f"invalid embedding model identity {model!r}")
+    return model
+
+
+def missing_embeddings_sql(
+    chunks: str, embeddings: str, model: str, strategies: Sequence[str]
+) -> str:
+    """Retrieval texts without a cached vector FOR THIS MODEL (cache key: text + model)."""
+    return (
+        f"SELECT DISTINCT c.text_sha256, c.search_text FROM {chunks} c "
+        f"WHERE c.chunk_role = 'RETRIEVAL' AND c.chunk_strategy IN ({_strategies(strategies)}) "
+        f"AND NOT EXISTS (SELECT 1 FROM {embeddings} e WHERE e.text_sha256 = c.text_sha256 "
+        f"AND e.embedding_model = '{_model(model)}')"
+    )
+
+
+def index_source_sql(
+    chunks: str, embeddings: str, model: str, dimension: int, strategies: Sequence[str]
+) -> str:
+    """RETRIEVAL chunks joined to vectors of exactly one model and dimension."""
+    return (
+        "SELECT c.chunk_id, c.project_id, c.chunk_strategy, c.document_type, c.document_id, "
+        "c.isr_sequence, c.text_sha256, e.embedding_model, e.embedding "
+        f"FROM {chunks} c JOIN {embeddings} e "
+        f"ON c.text_sha256 = e.text_sha256 AND e.embedding_model = '{_model(model)}' "
+        f"AND e.embedding_dimension = {int(dimension)} AND size(e.embedding) = {int(dimension)} "
+        f"WHERE c.chunk_role = 'RETRIEVAL' AND c.chunk_strategy IN ({_strategies(strategies)})"
+    )
+
+
+def foreign_model_rows_sql(index_table: str, model: str, dimension: int) -> str:
+    """Index-source rows that are not of the configured model and dimension (must be 0)."""
+    return (
+        f"SELECT count(*) AS n FROM {index_table} WHERE embedding_model <> '{_model(model)}' "
+        f"OR size(embedding) <> {int(dimension)}"
+    )
+
+
 def update_embedding_cache(
     spark: Any,
     settings: Settings,
@@ -315,27 +363,35 @@ def update_embedding_cache(
     provider: Any,
     strategies: Sequence[str],
     progress: Say | None = None,
+    max_requests: int | None = None,
 ) -> EmbeddingReport:
     """Embed only texts not cached for this model, checkpointing as it goes (resumable).
 
-    Missing texts are found with a left-anti join against the cache, processed in
-    text_sha256 order and persisted every ``checkpoint_every_requests`` requests. After a
-    failure the completed part is already in the cache; a rerun embeds only the rest.
+    The cache key is (text_sha256, embedding_model): vectors of different models never
+    collide or substitute for each other. Missing texts are processed in text_sha256 order
+    and persisted every ``checkpoint_every_requests`` requests; ``max_requests`` stops a
+    pilot run cleanly. After a stop or failure a rerun embeds only the rest.
     """
     from worldbank_copilot.retrieval.embeddings import run_embedding_job
 
     say = _say(progress)
     n = names(settings, rs)
+    if (
+        provider.model != rs.embeddings.endpoint
+        or provider.dimension != rs.embeddings.expected_dimension
+    ):
+        raise ReconciliationError("provider does not match configs/retrieval/embeddings.yaml")
     spark.sql(EMBEDDINGS_DDL.format(table=n["embeddings"]))
-    in_list = ", ".join(f"'{s}'" for s in strategies)
-    needed = spark.sql(
-        f"SELECT DISTINCT text_sha256, search_text FROM {n['chunks']} "
+    in_list = _strategies(strategies)
+    total = spark.sql(
+        f"SELECT count(DISTINCT text_sha256) AS n FROM {n['chunks']} "
         f"WHERE chunk_role = 'RETRIEVAL' AND chunk_strategy IN ({in_list})"
+    ).collect()[0]["n"]
+    rows = (
+        spark.sql(missing_embeddings_sql(n["chunks"], n["embeddings"], provider.model, strategies))
+        .orderBy("text_sha256")
+        .collect()
     )
-    cached = spark.table(n["embeddings"]).where(f"embedding_model = '{provider.model}'")
-    missing = needed.join(cached.select("text_sha256"), "text_sha256", "left_anti")
-    total = needed.count()
-    rows = missing.orderBy("text_sha256").collect()  # only texts not yet embedded
     items = [(r["text_sha256"], r["search_text"]) for r in rows]
     sink = embedding_sink(spark, n["embeddings"], provider.model, provider.dimension)
     stats = run_embedding_job(
@@ -344,6 +400,7 @@ def update_embedding_cache(
         sink,
         cached=total - len(items),
         checkpoint_every_requests=rs.embeddings.checkpoint_every_requests,
+        max_requests=max_requests,
         log=say,
     )
     return EmbeddingReport(
@@ -354,14 +411,20 @@ def update_embedding_cache(
         stats.retries,
         stats.checkpoints,
         stats.seconds,
+        complete=stats.remaining == 0,
     )
 
 
 def build_index_source(
     spark: Any, settings: Settings, rs: RetrievalSettings, model: str, strategies: Sequence[str]
 ) -> tuple[WriteResult, int]:
-    """MERGE RETRIEVAL chunks + cached vectors into the Vector Search source table."""
+    """MERGE RETRIEVAL chunks + cached vectors of ONE model into the Vector Search source."""
     n = names(settings, rs)
+    dimension = rs.embeddings.expected_dimension
+    if model != rs.embeddings.endpoint:
+        raise ReconciliationError(
+            f"index source model {model} != configured {rs.embeddings.endpoint}"
+        )
     spark.sql(
         f"CREATE TABLE IF NOT EXISTS {n['index_table']} ("
         "chunk_id STRING NOT NULL, project_id STRING NOT NULL, chunk_strategy STRING NOT NULL, "
@@ -372,14 +435,8 @@ def build_index_source(
         "with vectors from silver.chunk_embeddings. Text and provenance stay in the corpus.' "
         "TBLPROPERTIES (delta.enableChangeDataFeed = true)"
     )
-    in_list = ", ".join(f"'{s}'" for s in strategies)
-    source = (
-        f"SELECT c.chunk_id, c.project_id, c.chunk_strategy, c.document_type, c.document_id, "
-        f"c.isr_sequence, c.text_sha256, e.embedding_model, e.embedding "
-        f"FROM {n['chunks']} c JOIN {n['embeddings']} e "
-        f"ON c.text_sha256 = e.text_sha256 AND e.embedding_model = '{model}' "
-        f"WHERE c.chunk_role = 'RETRIEVAL' AND c.chunk_strategy IN ({in_list})"
-    )
+    in_list = _strategies(strategies)
+    source = index_source_sql(n["chunks"], n["embeddings"], model, dimension, strategies)
     expected = spark.sql(
         f"SELECT count(*) AS n FROM {n['chunks']} WHERE chunk_role = 'RETRIEVAL' "
         f"AND chunk_strategy IN ({in_list})"
@@ -387,7 +444,8 @@ def build_index_source(
     available = spark.sql(f"SELECT count(*) AS n FROM ({source})").collect()[0]["n"]
     if available != expected:
         raise ReconciliationError(
-            f"{expected - available} retrieval chunks have no cached embedding for {model}"
+            f"{expected - available} retrieval chunks have no cached {dimension}-dimension "
+            f"embedding for {model}"
         )
     before = _history(spark, n["catalog"], n["silver"], rs.retrieval.vector_search.index_table)
     changed = " OR ".join(
@@ -408,6 +466,11 @@ def build_index_source(
         "WHEN NOT MATCHED THEN INSERT * "
         "WHEN NOT MATCHED BY SOURCE THEN DELETE"
     )
+    foreign = spark.sql(foreign_model_rows_sql(n["index_table"], model, dimension)).collect()[0][
+        "n"
+    ]
+    if foreign:
+        raise ReconciliationError(f"{foreign} index-source rows are not {model}/{dimension}")
     entry = _history(spark, n["catalog"], n["silver"], rs.retrieval.vector_search.index_table)
     return merge_result(n["index_table"], expected, before.get("version"), entry), expected
 

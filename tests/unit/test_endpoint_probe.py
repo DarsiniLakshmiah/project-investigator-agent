@@ -90,15 +90,22 @@ def test_probe_needs_enough_sample_texts():
         run_probe(CONFIG, TEXTS[:3], Transport([]), sleep=lambda _s: None)
 
 
-def test_repository_configuration_keeps_gte_in_production_and_records_its_failure():
+def test_qwen_is_configured_and_gte_failure_history_is_kept():
     probe = load_probe_config(REPO_CONFIG_DIR)
     assert probe.endpoint == "databricks-qwen3-embedding-0-6b"
     assert probe.batch_size * 2 + 1 <= 9 and probe.pause_seconds >= 10
     candidates = yaml.safe_load(
         (REPO_CONFIG_DIR / "retrieval" / "embedding_candidates.yaml").read_text(encoding="utf-8")
     )
-    assert candidates["candidates"]["databricks-gte-large-en"]["status"] == "FAILED_RATE_LIMITED"
-    assert load_retrieval_settings(REPO_CONFIG_DIR).embeddings.endpoint == "databricks-gte-large-en"
+    gte = candidates["candidates"]["databricks-gte-large-en"]
+    assert gte["status"] == "FAILED_RATE_LIMITED" and len(gte["observations"]) >= 4
+    qwen = candidates["candidates"]["databricks-qwen3-embedding-0-6b"]
+    assert qwen["status"] == "PROBED_USABLE"
+    production = load_retrieval_settings(REPO_CONFIG_DIR).embeddings
+    assert (production.endpoint, production.expected_dimension) == (
+        "databricks-qwen3-embedding-0-6b",
+        1024,
+    )
     notebook = (REPO_ROOT / "notebooks" / "07a_embedding_endpoint_probe.py").read_text(
         encoding="utf-8"
     )

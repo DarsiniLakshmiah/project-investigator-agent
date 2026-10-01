@@ -13,9 +13,9 @@
 # MAGIC comments fix, a re-run of notebooks 05 and 06.
 # MAGIC
 # MAGIC Steps: 0 dependency health → 1 capability probe (stops if Vector Search or the
-# MAGIC embedding endpoint is missing) → 2 corpus → 3 embeddings, index source, Vector Search
-# MAGIC index → 4 staged experiments without reranker → 5 project isolation → 6 idempotency
-# MAGIC → 7 validation SQL.
+# MAGIC embedding endpoint is missing) → 2 corpus → 3a embeddings (pilot cap, then full)
+# MAGIC → 3b index source and Vector Search index → 4 staged experiments without reranker
+# MAGIC → 5 project isolation → 6 idempotency → 7 validation SQL.
 
 # COMMAND ----------
 
@@ -70,10 +70,26 @@ for group, counts in corpus.counts.items():
 
 # COMMAND ----------
 
-# Step 3: embeddings (cache: only new text is embedded), index source, Vector Search index.
+# Step 3a: embeddings into the cache (key: text sha256 + model). Resumable: a rerun embeds
+# only what is still missing for the configured model (configs/retrieval/embeddings.yaml).
+# PILOT_REQUESTS caps this run (sequential, paced); set it to None for the full build.
+PILOT_REQUESTS = 50  # 50 requests x 4 inputs = 200 texts; review before the full build
 strategies = sorted(rs.chunking.strategies)
-embedding_report = rp.update_embedding_cache(spark, settings, rs, provider, strategies, print)  # noqa: F821
+embedding_report = rp.update_embedding_cache(
+    spark, settings, rs, provider, strategies, print, max_requests=PILOT_REQUESTS  # noqa: F821
+)
 print(embedding_report)
+if not embedding_report.complete:
+    raise RuntimeError(
+        f"STOP (expected after a pilot): {embedding_report.embedded_now} new embeddings cached for "
+        f"{embedding_report.model}; review the pacing/429 log, then set PILOT_REQUESTS = None "
+        "and rerun Step 3a. The index is built only when the cache is complete (Step 3b)."
+    )
+
+# COMMAND ----------
+
+# Step 3b: index source (vectors of the configured model only) and the AI Search index,
+# created with the configured dimension. Runs only after Step 3a completed.
 index_write, index_rows = rp.build_index_source(spark, settings, rs, provider.model, strategies)  # noqa: F821
 print(index_write)
 vs_index = rp.vector_index(settings, rs)  # noqa: F821

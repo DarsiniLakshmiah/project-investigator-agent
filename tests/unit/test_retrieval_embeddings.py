@@ -22,15 +22,23 @@ DIM = RS.embeddings.expected_dimension
 
 
 def cfg(**changes):
-    base = {"max_inputs_per_request": 2, "max_chars_per_request": 1000, "max_retries": 3,
-            "backoff_base_seconds": 1, "backoff_max_seconds": 8,
-            "checkpoint_every_requests": 2, "min_request_interval_seconds": 0}  # fmt: skip
+    base = {
+        "max_inputs_per_request": 2,
+        "max_chars_per_request": 1000,
+        "max_retries": 3,
+        "backoff_base_seconds": 1,
+        "backoff_max_seconds": 8,
+        "checkpoint_every_requests": 2,
+        "min_request_interval_seconds": 0,
+    }
     return RS.embeddings.model_copy(update={**base, **changes})
 
 
 def ok(texts, dim=DIM):
-    data = [{"index": i, "embedding": [float(len(t))] * dim, "object": "embedding"}
-            for i, t in enumerate(texts)]  # fmt: skip
+    data = [
+        {"index": i, "embedding": [float(len(t))] * dim, "object": "embedding"}
+        for i, t in enumerate(texts)
+    ]
     return Response(200, {"data": data})
 
 
@@ -51,11 +59,17 @@ class Script:
         if callable(outcome):
             return outcome(texts)
         if isinstance(outcome, tuple):  # (status, headers)
-            return Response(outcome[0], {"error_code": "REQUEST_LIMIT_EXCEEDED",
-                                         "message": "Exceeded workspace QPS rate limit"},
-                            outcome[1])  # fmt: skip
-        return Response(outcome, {"error_code": f"E{outcome}"},
-                        {"Retry-After": "3"} if outcome == 429 else {})  # fmt: skip
+            return Response(
+                outcome[0],
+                {
+                    "error_code": "REQUEST_LIMIT_EXCEEDED",
+                    "message": "Exceeded workspace QPS rate limit",
+                },
+                outcome[1],
+            )
+        return Response(
+            outcome, {"error_code": f"E{outcome}"}, {"Retry-After": "3"} if outcome == 429 else {}
+        )
 
 
 def provider(transport, **changes):
@@ -173,8 +187,9 @@ def test_wrong_dimension_wrong_count_and_non_finite_values_are_rejected():
 def test_job_checkpoints_every_n_requests_and_logs_progress():
     cache, logs = Cache(), []
     p, _ = provider(Script())
-    stats = run_embedding_job(items(9), p, cache.sink, cached=4, checkpoint_every_requests=2,
-                              log=logs.append)  # fmt: skip
+    stats = run_embedding_job(
+        items(9), p, cache.sink, cached=4, checkpoint_every_requests=2, log=logs.append
+    )
     assert stats.embedded == 9 and stats.remaining == 0 and stats.batches == 5
     assert cache.writes == 3  # after requests 2 and 4, then the final one
     assert logs[0] == (
@@ -227,8 +242,9 @@ def test_cache_hits_are_skipped_and_rerun_is_idempotent():
     snapshot = dict(cache.rows)
     transport = Script()
     p2, _ = provider(transport)
-    stats = run_embedding_job(cache.missing(all_items), p2, cache.sink, cached=6,
-                              checkpoint_every_requests=2)  # fmt: skip
+    stats = run_embedding_job(
+        cache.missing(all_items), p2, cache.sink, cached=6, checkpoint_every_requests=2
+    )
     assert stats.embedded == 0 and transport.calls == [] and cache.rows == snapshot
     cache.sink([(all_items[0][0], [0.0] * DIM)])  # re-sending a cached key changes nothing
     assert cache.rows == snapshot
@@ -287,12 +303,37 @@ def test_transport_maps_timeouts_and_connection_errors_to_retryable():
             transport.post(["a"], 60)
 
 
-def test_configuration_values():
+def test_configuration_values_are_qwen_and_conservative():
     e = RS.embeddings
-    assert (e.endpoint, e.expected_dimension) == ("databricks-gte-large-en", 1024)
-    assert e.max_inputs_per_request == 16 and e.max_chars_per_request == 24000
+    assert (e.endpoint, e.expected_dimension) == ("databricks-qwen3-embedding-0-6b", 1024)
+    # bulk requests start at the probe-proven size (4 inputs), sequential and paced
+    assert e.max_inputs_per_request == 4 and e.max_chars_per_request == 6000
+    assert e.min_request_interval_seconds == 2 and e.max_request_interval_seconds == 30
     assert e.request_timeout_seconds == 60 and e.max_retries == 5
-    assert e.checkpoint_every_requests == 25
+    assert e.max_rate_limit_retries == 4 and e.rate_limit_max_total_wait_seconds == 1200
+    assert e.checkpoint_every_requests == 50
+
+
+def test_pilot_cap_stops_cleanly_and_a_rerun_continues():
+    cache, logs = Cache(), []
+    all_items = items(10)  # 5 requests of 2
+    p, _ = provider(Script())
+    stats = run_embedding_job(
+        all_items,
+        p,
+        cache.sink,
+        cached=0,
+        checkpoint_every_requests=10,
+        max_requests=2,
+        log=logs.append,
+    )
+    assert stats.paused and stats.embedded == 4 and stats.remaining == 6 and len(cache.rows) == 4
+    assert logs[-1].endswith("PAUSED (max_requests reached)")
+    p2, _ = provider(Script())
+    stats2 = run_embedding_job(
+        cache.missing(all_items), p2, cache.sink, cached=4, checkpoint_every_requests=10
+    )
+    assert not stats2.paused and stats2.embedded == 6 and len(cache.rows) == 10
 
 
 # -- rate limiting (HTTP 429) and pacing ---------------------------------------------------
@@ -314,12 +355,21 @@ class Clock:
 
 def paced(transport, **changes):
     clock, logs = Clock(), []
-    settings = cfg(**{"min_request_interval_seconds": 3, "max_request_interval_seconds": 30,
-                      "pace_recovery_factor": 0.9, "rate_limit_cooldown_seconds": 60,
-                      "rate_limit_cooldown_max_seconds": 300, "max_rate_limit_retries": 4,
-                      "rate_limit_max_total_wait_seconds": 1200, **changes})  # fmt: skip
-    prov = DatabricksServingEmbeddings(settings, transport, sleep=clock.sleep, rng=lambda: 1.0,
-                                       clock=clock, log=logs.append)  # fmt: skip
+    settings = cfg(
+        **{
+            "min_request_interval_seconds": 3,
+            "max_request_interval_seconds": 30,
+            "pace_recovery_factor": 0.9,
+            "rate_limit_cooldown_seconds": 60,
+            "rate_limit_cooldown_max_seconds": 300,
+            "max_rate_limit_retries": 4,
+            "rate_limit_max_total_wait_seconds": 1200,
+            **changes,
+        }
+    )
+    prov = DatabricksServingEmbeddings(
+        settings, transport, sleep=clock.sleep, rng=lambda: 1.0, clock=clock, log=logs.append
+    )
     return prov, clock, logs
 
 
@@ -330,8 +380,10 @@ def test_429_with_retry_after_waits_exactly_that_long_and_logs_it():
     prov, clock, logs = paced(Script([(429, {"Retry-After": "7"}), "ok"]))
     assert len(prov.embed(["a"])) == 1
     assert 7.0 in clock.sleeps and prov.rate_limited == 1 and prov.rate_limit_wait == 7.0
-    assert ("rate-limited: HTTP 429 code=REQUEST_LIMIT_EXCEEDED retry_after=7.0 attempt=1/4 "
-            "sleep=7.0s (Retry-After)") in logs[0]  # fmt: skip
+    assert (
+        "rate-limited: HTTP 429 code=REQUEST_LIMIT_EXCEEDED retry_after=7.0 attempt=1/4 "
+        "sleep=7.0s (Retry-After)"
+    ) in logs[0]
 
 
 def test_429_without_retry_after_uses_the_cooldown_then_succeeds():
@@ -367,8 +419,9 @@ def test_job_with_persistent_rate_limiting_checkpoints_and_stays_resumable():
     cache = Cache()
     prov, _, logs = paced(Script(["ok"] + [LIMIT] * 20))
     with pytest.raises(EmbeddingJobError) as failure:
-        run_embedding_job(items(6), prov, cache.sink, cached=0, checkpoint_every_requests=5,
-                          log=logs.append)  # fmt: skip
+        run_embedding_job(
+            items(6), prov, cache.sink, cached=0, checkpoint_every_requests=5, log=logs.append
+        )
     stats = failure.value.stats
     assert stats.embedded == 2 and stats.remaining == 4 and stats.rate_limited == 5
     assert len(cache.rows) == 2 and stats.rate_limit_wait == 720.0

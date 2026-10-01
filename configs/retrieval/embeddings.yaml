@@ -1,22 +1,24 @@
 # Embedding configuration (Phase 8). Retrieval depends only on
 # EmbeddingProvider.embed(texts); see src/worldbank_copilot/retrieval/embeddings.py.
 #
-# databricks-gte-large-en (Foundation Model API): 1024 dimensions, 8192-token window.
-# Documented limits: 4 MB payload and 597 s execution per request, 540,000 queries per
-# hour, 200 queries per second per workspace; no documented maximum number of inputs.
-# Notebook 07 probes the endpoint before anything is built.
+# Selected candidate: databricks-qwen3-embedding-0-6b (Databricks-hosted Foundation Model
+# API endpoint). Load probe on 2026-10-01 (notebook 07a): 1 input HTTP 200 in 1,826 ms;
+# 4 inputs HTTP 200 in 212 ms; after a 15 s pause 4 inputs HTTP 200 in 178 ms; every
+# vector 1024-dimensional and finite; no 429 and no Retry-After.
+# databricks-gte-large-en remains on record as a failed experiment (HTTP 429
+# REQUEST_LIMIT_EXCEEDED in this workspace): see embedding_candidates.yaml.
+#
+# The cache key is (text sha256, endpoint): vectors of different models never mix.
 provider: databricks_serving
-endpoint: databricks-gte-large-en
+endpoint: databricks-qwen3-embedding-0-6b
 expected_dimension: 1024
 
-# Bounded requests. 16 inputs and 24,000 characters (~6k tokens, ~100 KB of JSON) keep
-# each request small and fast, far below the 4 MB limit; the first build (64 long texts
-# per request through the SDK) did not complete within the SDK's 5-minute retry window.
-max_inputs_per_request: 16
-max_chars_per_request: 24000
+# Bounded requests. The probe proved 4 inputs per request, not 16: bulk requests start at
+# the proven size. 4 structure chunks are <= ~5,500 characters with their context headers.
+max_inputs_per_request: 4
+max_chars_per_request: 6000
 
-# One HTTP attempt. Single-text probe latency was ~1.2 s; 60 s leaves wide headroom for a
-# 16-text request without letting one stuck request block the build for long.
+# One HTTP attempt per request (no hidden SDK retry loop).
 request_timeout_seconds: 60
 
 # Transient failures only (timeouts, connection errors, 5xx): exponential backoff
@@ -25,26 +27,22 @@ max_retries: 5
 backoff_base_seconds: 2
 backoff_max_seconds: 60
 
-# Request pacing. Requests are sequential; at least 3 s between request starts
-# (<= 0.33 requests/s). The first Step 3 request was rejected with 429
-# REQUEST_LIMIT_EXCEEDED ("workspace QPS rate limit"), so this workspace's effective
-# quota is far below the documented pay-per-token figures (540,000 queries/hour, 200
-# QPS/workspace). Each 429 doubles the interval (up to 30 s); each success multiplies it
-# by 0.9 back towards 3 s. The pacing state is shared with the capability probe (same
-# provider object), so the probe request counts against the interval.
-min_request_interval_seconds: 3
+# Request pacing (sequential, no concurrency). The probe only showed one request every
+# 15 s, so sustained throughput is unproven: start at >= 2 s between requests
+# (<= 0.5 requests/s, ~2 texts/s). Each 429 doubles the interval (up to 30 s); each
+# success multiplies it by 0.9 back towards 2 s. Shared with the capability probe.
+min_request_interval_seconds: 2
 max_request_interval_seconds: 30
 pace_recovery_factor: 0.9
 
 # HTTP 429 (separate from transient retries). Retry-After is honoured in full; without
-# it, cool down 60 s, then 120, 240, 300 s (cap). At most 4 rate-limited retries per
-# request (60+120+240+300 = 12 min without Retry-After) and at most 20 minutes of
-# rate-limit waiting per run; then the job checkpoints and stops cleanly (rerun resumes).
+# it, cool down 60, 120, 240, 300 s. At most 4 rate-limited retries per request and 20
+# minutes of rate-limit waiting per run; then the job checkpoints and stops cleanly.
 rate_limit_cooldown_seconds: 60
 rate_limit_cooldown_max_seconds: 300
 max_rate_limit_retries: 4
 rate_limit_max_total_wait_seconds: 1200
 
-# Persist validated vectors to silver.chunk_embeddings every 25 requests (~400 texts),
-# and always before an error is raised. A rerun embeds only what is still missing.
-checkpoint_every_requests: 25
+# Persist validated vectors to silver.chunk_embeddings every 50 requests (~200 texts),
+# and always before an error or a pilot stop. A rerun embeds only what is still missing.
+checkpoint_every_requests: 50

@@ -49,6 +49,38 @@ def load_probe_config(config_dir: Path) -> ProbeConfig:
     return ProbeConfig.model_validate(data["probe"])
 
 
+# Result columns with fixed types. A successful probe has error_code, retry_after and
+# error NULL in every row, which Spark cannot infer ([CANNOT_DETERMINE_TYPE]).
+RESULT_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("endpoint", "string"),
+    ("step", "string"),
+    ("inputs", "bigint"),
+    ("status", "bigint"),
+    ("error_code", "string"),
+    ("retry_after", "double"),
+    ("latency_ms", "double"),
+    ("vectors", "bigint"),
+    ("dimensions", "array<bigint>"),
+    ("finite", "boolean"),
+    ("ok", "boolean"),
+    ("error", "string"),
+)
+
+
+def result_schema() -> Any:
+    """Explicit Spark schema for ``ProbeReport.rows()`` (all columns nullable)."""
+    from pyspark.sql import types as T
+
+    simple = {
+        "string": T.StringType(),
+        "bigint": T.LongType(),
+        "double": T.DoubleType(),
+        "boolean": T.BooleanType(),
+        "array<bigint>": T.ArrayType(T.LongType()),
+    }
+    return T.StructType([T.StructField(name, simple[kind], True) for name, kind in RESULT_COLUMNS])
+
+
 @dataclass
 class StepResult:
     step: str
@@ -95,23 +127,30 @@ class ProbeReport:
         return "FAILED"
 
     def rows(self) -> list[dict[str, Any]]:
-        return [
-            {
-                "endpoint": self.endpoint,
-                "step": s.step,
-                "inputs": s.inputs,
-                "status": s.status,
-                "error_code": s.error_code,
-                "retry_after": s.retry_after,
-                "latency_ms": s.latency_ms,
-                "vectors": s.vectors,
-                "dimensions": sorted(set(s.dimensions)),
-                "finite": s.finite,
-                "ok": s.ok,
-                "error": s.error,
-            }
-            for s in self.steps
-        ]
+        """One row per step, typed to match ``result_schema()``."""
+        out = []
+        for s in self.steps:
+            out.append(
+                {
+                    "endpoint": self.endpoint,
+                    "step": s.step,
+                    "inputs": int(s.inputs),
+                    "status": int(s.status) if s.status is not None else None,
+                    "error_code": s.error_code,
+                    "retry_after": float(s.retry_after) if s.retry_after is not None else None,
+                    "latency_ms": float(s.latency_ms),
+                    "vectors": int(s.vectors),
+                    "dimensions": [int(d) for d in sorted(set(s.dimensions))],
+                    "finite": bool(s.finite),
+                    "ok": bool(s.ok),
+                    "error": s.error,
+                }
+            )
+        return out
+
+    def records(self) -> list[tuple]:
+        """Rows as tuples in ``RESULT_COLUMNS`` order (for spark.createDataFrame)."""
+        return [tuple(row[name] for name, _ in RESULT_COLUMNS) for row in self.rows()]
 
     def format(self) -> str:
         lines = [f"endpoint {self.endpoint}: verdict {self.verdict}, dimension {self.dimension}"]

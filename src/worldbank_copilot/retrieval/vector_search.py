@@ -169,6 +169,16 @@ class VectorSearchIndex:
                     f"index {self.index_name} syncs {source}, expected {self.source_table}; "
                     "refusing to reuse it"
                 )
+            dims = {
+                c.get("embedding_dimension")
+                for c in spec.get("embedding_vector_columns", [])
+                if c.get("name") == VECTOR_COLUMN
+            }
+            if dims and dims != {self.dimension}:
+                raise LakehouseError(
+                    f"index {self.index_name} has embedding dimension {sorted(dims)}, the "
+                    f"configured embedding model has {self.dimension}; refusing to reuse it"
+                )
             self._index = index
             return "EXISTS"
         self._index = self.client.create_delta_sync_index(
