@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "6"
+# ///
 # MAGIC %md
 # MAGIC ## 07a_embedding_endpoint_probe: Load probe for a candidate embedding endpoint (Phase 8)
 # MAGIC Read-only experiment. It sends at most 3 requests (1 input, then two small batches with
@@ -64,6 +68,4 @@ print(f"{len(samples)} sample texts, {min(map(len, samples))}-{max(map(len, samp
 # Step 2: load probe (1 input -> batch -> pause -> batch). No retries, nothing persisted.
 report = run_probe(probe_config, samples, log=print)
 print(report.format())
-# Explicit schema: NULL-only columns (error_code, retry_after, error) are typed.
-display(spark.createDataFrame(report.records(), schema=result_schema()))  # noqa: F821
-print("VERDICT:", report.verdict, "| dimension:", report.dimension)
+
