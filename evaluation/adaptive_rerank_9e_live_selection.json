@@ -1,0 +1,10 @@
+{
+ "point": "P3(0.4)",
+ "policy_id": "P3",
+ "threshold": 0.4,
+ "rerank_rate": 0.4898,
+ "rule": "closest rerank rate to 0.5; ties: lower policy id, then lower threshold",
+ "label": "latency validation point - NOT a production winner",
+ "lock_sha256": "480d0a1ec02e6e54aeb7c4a86d1122c002e1b0607d76ad74a9571a7d231b591e",
+ "collection_artifact_sha256": "8b6763e349215899b686fff45f49eb44483f65490167b6649e88014599a63d70"
+}
