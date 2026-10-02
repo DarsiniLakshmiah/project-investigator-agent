@@ -1,0 +1,185 @@
+# Frozen wiring acceptance cases; no values, ranks, chunks, scores or latency gates.
+# Identity is pinned in phase9_contract_lock.json before any live execution.
+version: 1
+status: FROZEN
+run_id: 9f1
+cases:
+- case_id: C01
+  query: What is the current closing date?
+  active_project_id: P130544
+  expected_project_status: RESOLVED
+  expected_project_id: P130544
+  expected_router_route: STRUCTURED
+  expected_execution_mode: EXECUTE_STRUCTURED
+  expected_router_reason: INTENT_PROJECT_OVERVIEW
+  expected_execution_reason: INTENT_PROJECT_OVERVIEW
+  translated: false
+  structured_execution_allowed: true
+  retrieval_execution_allowed: false
+  investigation_plan_expected: false
+  citations_required: false
+  expected_tools:
+  - get_project_overview
+  allowed_provenance:
+  - FACT
+  - DOCUMENTED_FINDING
+  - SYSTEM_DERIVED_SIGNAL
+  - UNKNOWN
+- case_id: C02
+  query: What is the current closing date?
+  active_project_id: P506272
+  expected_project_status: RESOLVED
+  expected_project_id: P506272
+  expected_router_route: STRUCTURED
+  expected_execution_mode: EXECUTE_STRUCTURED
+  expected_router_reason: INTENT_PROJECT_OVERVIEW
+  expected_execution_reason: INTENT_PROJECT_OVERVIEW
+  translated: false
+  structured_execution_allowed: true
+  retrieval_execution_allowed: false
+  investigation_plan_expected: false
+  citations_required: false
+  expected_tools:
+  - get_project_overview
+  allowed_provenance:
+  - FACT
+  - DOCUMENTED_FINDING
+  - SYSTEM_DERIVED_SIGNAL
+  - UNKNOWN
+- case_id: C03
+  query: What does the restructuring paper say about the cancellation of part of the Additional Financing?
+  active_project_id: P130544
+  expected_project_status: RESOLVED
+  expected_project_id: P130544
+  expected_router_route: DOCUMENT
+  expected_execution_mode: EXECUTE_DOCUMENT
+  expected_router_reason: INTENT_DOCUMENT_CONTENT
+  expected_execution_reason: INTENT_DOCUMENT_CONTENT
+  translated: false
+  structured_execution_allowed: false
+  retrieval_execution_allowed: true
+  investigation_plan_expected: false
+  citations_required: true
+  expected_tools:
+  - search_project_documents
+  allowed_provenance:
+  - DOCUMENTED_FINDING
+  source_question_id: q04
+- case_id: C04
+  query: What did the latest ISR say about the Program's standing at mid-term?
+  active_project_id: P179039
+  expected_project_status: RESOLVED
+  expected_project_id: P179039
+  expected_router_route: DOCUMENT
+  expected_execution_mode: EXECUTE_DOCUMENT
+  expected_router_reason: INTENT_DOCUMENT_CONTENT
+  expected_execution_reason: INTENT_DOCUMENT_CONTENT
+  translated: false
+  structured_execution_allowed: false
+  retrieval_execution_allowed: true
+  investigation_plan_expected: false
+  citations_required: true
+  expected_tools:
+  - search_project_documents
+  allowed_provenance:
+  - DOCUMENTED_FINDING
+  source_question_id: q26
+- case_id: C05
+  query: What is the closing date stated in the loan agreement?
+  active_project_id: P506272
+  expected_project_status: RESOLVED
+  expected_project_id: P506272
+  expected_router_route: DOCUMENT
+  expected_execution_mode: EXECUTE_DOCUMENT
+  expected_router_reason: INTENT_DOCUMENT_CONTENT
+  expected_execution_reason: INTENT_DOCUMENT_CONTENT
+  translated: false
+  structured_execution_allowed: false
+  retrieval_execution_allowed: true
+  investigation_plan_expected: false
+  citations_required: true
+  expected_tools:
+  - search_project_documents
+  allowed_provenance:
+  - DOCUMENTED_FINDING
+  source_question_id: q46
+- case_id: C06
+  query: What changed and why?
+  active_project_id: P130544
+  expected_project_status: RESOLVED
+  expected_project_id: P130544
+  expected_router_route: INVESTIGATION
+  expected_execution_mode: PLAN_INVESTIGATION
+  expected_router_reason: INTENT_CHANGE_INVESTIGATION
+  expected_execution_reason: INTENT_CHANGE_INVESTIGATION
+  translated: false
+  structured_execution_allowed: false
+  retrieval_execution_allowed: false
+  investigation_plan_expected: true
+  citations_required: false
+  expected_tools: []
+  allowed_provenance: []
+- case_id: C07
+  query: What is the current closing date?
+  active_project_id: null
+  expected_project_status: MISSING
+  expected_project_id: null
+  expected_router_route: CLARIFY
+  expected_execution_mode: CLARIFY
+  expected_router_reason: PROJECT_REQUIRED
+  expected_execution_reason: PROJECT_REQUIRED
+  translated: false
+  structured_execution_allowed: false
+  retrieval_execution_allowed: false
+  investigation_plan_expected: false
+  citations_required: false
+  expected_tools: []
+  allowed_provenance: []
+- case_id: C08
+  query: Can you explain this situation?
+  active_project_id: P130544
+  expected_project_status: RESOLVED
+  expected_project_id: P130544
+  expected_router_route: SEMANTIC_CLASSIFICATION_REQUIRED
+  expected_execution_mode: CLARIFY
+  expected_router_reason: INTENT_NOT_RESOLVED_BY_RULES
+  expected_execution_reason: INTENT_NOT_RESOLVED
+  translated: true
+  structured_execution_allowed: false
+  retrieval_execution_allowed: false
+  investigation_plan_expected: false
+  citations_required: false
+  expected_tools: []
+  allowed_provenance: []
+- case_id: C09
+  query: Will the project fail?
+  active_project_id: P130544
+  expected_project_status: RESOLVED
+  expected_project_id: P130544
+  expected_router_route: REFUSE
+  expected_execution_mode: REFUSE
+  expected_router_reason: PREDICTION_NOT_SUPPORTED
+  expected_execution_reason: PREDICTION_NOT_SUPPORTED
+  translated: false
+  structured_execution_allowed: false
+  retrieval_execution_allowed: false
+  investigation_plan_expected: false
+  citations_required: false
+  expected_tools: []
+  allowed_provenance: []
+- case_id: C10
+  query: What is the closing date of P179039?
+  active_project_id: P130544
+  expected_project_status: CONFLICT
+  expected_project_id: null
+  expected_router_route: REFUSE
+  expected_execution_mode: REFUSE
+  expected_router_reason: CROSS_PROJECT
+  expected_execution_reason: CROSS_PROJECT
+  translated: false
+  structured_execution_allowed: false
+  retrieval_execution_allowed: false
+  investigation_plan_expected: false
+  citations_required: false
+  expected_tools: []
+  allowed_provenance: []

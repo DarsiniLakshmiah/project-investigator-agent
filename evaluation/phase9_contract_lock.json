@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "status": "FROZEN",
+  "run_id": "9f1",
+  "case_set_sha256_lf": "57a441746a79e74b643004b2b8a19a1ea4219bc2e5c71ce78b7c30d755909f5c",
+  "closure_manifest_sha256_lf": "93cbaf4cf17bb91f7fddfceb0965d6d38f568360bb9a12a3ceb7f4f0502c69b2",
+  "frozen_files_sha256_lf": {
+    "src/worldbank_copilot/routing/router.py": "0feddac1c99e9eb9f0c5c7cacf19b6baebf0e80aee1ef611c15602b34bbc762d",
+    "src/worldbank_copilot/routing/execution.py": "8f85808f417e0f542ba04462e1e3ad96efc2608705a7bf60f20efe9439e521bc",
+    "src/worldbank_copilot/retrieval/contract.py": "c4ea04d063f002c540d876db1b7c17f145833365d4471e7c98e2da02cbd143f2",
+    "src/worldbank_copilot/tools/evidence.py": "6ca8ae9ab301ed3fc6a32f0778014062359d28540c96c4856e230615905a6052",
+    "src/worldbank_copilot/common/frozen.py": "b4c9a6e3a10b95b7c75546b4db5a2ed0f84663e7aab6a335d7ff0601b85c5f12",
+    "src/worldbank_copilot/routing/models.py": "b11e08f5a35195f6829f405cb4a212881d24e4815298a773cf35528ebb16fada",
+    "src/worldbank_copilot/routing/service.py": "01bf8abd0194f1a8b44cfcd2f20276089216d4f22b7b53e5e53697274c777367",
+    "src/worldbank_copilot/tools/documents.py": "100b1e8544fb5adcb1fec1c66ae80e45af5444129d04a30d366ee60fdba48782",
+    "configs/routing/bounded_classifier.yaml": "97b4cd332f95f555acd363a2488415978b853b8e52727e81174c6c52498c2464",
+    "configs/routing/intents.yaml": "80bca8f6720918dfe1f27d9cffcabe647babeae70a11b2745e62fa21207bd409",
+    "configs/routing/project_aliases.yaml": "b241399d28b7489ccd968b2193b513a480bc59edee51d4111b26215fcce67738",
+    "configs/routing/requirements.yaml": "028434f47f8670eea6b2f4107ccba0d5b567bd5b95b33d1a143a99623e16b6b6",
+    "configs/routing/routing.yaml": "bab61fa795b19787d0824ffd32e96a70829e5956b103a4fc31441575c84c0cf2",
+    "configs/routing/semantic.yaml": "bc90ca8d2e597fd450fe9a9a883c5eeac763b2881c49a6ab81e6d7d2c0072510",
+    "configs/routing/semantic_semif.yaml": "521042942685fa4628700ece150832667ac6f15a56cf44905688c4be3e7ab1b3",
+    "configs/retrieval/adaptive_rerank.yaml": "8bd288d076955205873c1f68037a352e63bee96b2ffc2cbc85a2f9b79538e934",
+    "configs/retrieval/chunking.yaml": "322278a10e085ae4061e8a35454cba8bc8e7a1f589b8f944d62c2b3879d30fe0",
+    "configs/retrieval/embedding_candidates.yaml": "093c84db2dcf79295f38bea4b71d3c93a40c8228abd3210512f1f358992ee278",
+    "configs/retrieval/embeddings.yaml": "56c1081e19a48ff91837c3609c5941c47c03fe1573c65cbd3fbc22a369221637",
+    "configs/retrieval/evaluation.yaml": "ca774da23bdb7d5cdaaa5d6fbc084342b7f64624f631d6f23c3ac7562dabd002",
+    "configs/retrieval/query.yaml": "9d15d413051c2b05c9074cccb8ca4076a965430b9f94667141b54b2708eee63d",
+    "configs/retrieval/retrieval.yaml": "7a24757e14e8252aecc12c165d5b533a15b589d4e7d062a6a1c7503c396e59ae"
+  }
+}
