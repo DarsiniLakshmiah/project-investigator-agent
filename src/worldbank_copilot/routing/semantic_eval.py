@@ -435,23 +435,51 @@ def require_guards(results: list[dict[str, Any]]) -> None:
         raise DevelopmentGuardFailed(f"STOP: development guards failed: {failed}")
 
 
+_PROVIDER_COUNTERS = ("requests", "retries", "rate_limited", "rate_limit_wait")
+
+
 def probe_embedder(provider: Any, expected_dimension: int, text: str = "routing probe") -> dict:
-    """Availability, dimension and single-call latency of the embedding endpoint."""
+    """Availability, MEASURED dimension, latency and rate-limit counters of one real call.
+
+    ``provider`` must be the same provider instance Candidate B embeds through
+    (``ProviderEmbedder.provider``). The call bypasses the routing-question cache, so
+    availability is never inferred from configuration or from a cached vector. The
+    dimension is ``len()`` of the returned vector; ``expected_dimension`` comes from
+    ``EmbeddingConfig.expected_dimension`` (the validated Phase 8 value, 1024).
+    """
     import time
+
+    before = {c: getattr(provider, c, None) for c in _PROVIDER_COUNTERS}
+
+    def counters() -> dict[str, Any]:
+        out = {}
+        for c in _PROVIDER_COUNTERS:
+            now = getattr(provider, c, None)
+            out[c] = None if now is None or before[c] is None else now - before[c]
+        return out
 
     started = time.perf_counter()
     try:
         (vector,) = provider.embed([text])
     except Exception as exc:  # reported, then the notebook STOPs
-        error = f"{type(exc).__name__}: {exc}"
-        return {"model": provider.model, "available": False, "error": error}
+        return {
+            "model": provider.model,
+            "available": False,
+            "expected_dimension": expected_dimension,
+            "error": f"{type(exc).__name__}: {exc}",
+            "latency_ms": round((time.perf_counter() - started) * 1000, 1),
+            "provider_counters": counters(),
+        }
+    actual_dimension = len(vector)
     return {
         "model": provider.model,
         "available": True,
-        "dimension": len(vector),
-        "dimension_matches": len(vector) == expected_dimension,
+        "dimension": actual_dimension,
+        "expected_dimension": expected_dimension,
+        "dimension_matches": actual_dimension == expected_dimension,
         "latency_ms": round((time.perf_counter() - started) * 1000, 1),
         "error": None,
+        "provider_counters": counters(),
     }
 
 

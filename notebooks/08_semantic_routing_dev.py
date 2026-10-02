@@ -77,13 +77,22 @@ require_guards(guards)
 # COMMAND ----------
 
 # Step 2: Qwen endpoint probe (STOP if unavailable or not the validated capability).
+# One real, uncached call through the SAME provider instance Candidate B embeds with;
+# the dimension is measured from the returned vector (len), and compared with
+# EmbeddingConfig.expected_dimension (validated Phase 8 value: 1024).
+from pathlib import Path  # noqa: E402
+
 from worldbank_copilot.retrieval.config import load_retrieval_settings  # noqa: E402
 from worldbank_copilot.retrieval.embeddings import embedding_provider  # noqa: E402
+from worldbank_copilot.routing.semantic import ProviderEmbedder  # noqa: E402
 from worldbank_copilot.routing.semantic_eval import probe_embedder  # noqa: E402
 
 rs = load_retrieval_settings(settings.config_dir)  # noqa: F821
+cache_dir = Path(settings.artifact_volume_path) / "routing_question_embeddings"  # noqa: F821
+cache_dir.mkdir(parents=True, exist_ok=True)
 provider = embedding_provider(rs.embeddings)
-probe = probe_embedder(provider, rs.embeddings.dimension)
+qwen_embedder = ProviderEmbedder(provider, cache_path=cache_dir / f"{provider.model}.json")
+probe = probe_embedder(qwen_embedder.provider, rs.embeddings.expected_dimension)
 print(probe)
 if not probe["available"] or not probe["dimension_matches"]:
     raise RuntimeError(f"STOP: embedding endpoint differs from the validated capability: {probe}")
@@ -91,12 +100,9 @@ if not probe["available"] or not probe["dimension_matches"]:
 # COMMAND ----------
 
 # Step 3: similarity-threshold diagnostic on Qwen cosines (STOP if the grid is inert).
-from pathlib import Path  # noqa: E402
-
 from worldbank_copilot.routing.semantic import (  # noqa: E402
     KnnConfig,
     KnnSemanticClassifier,
-    ProviderEmbedder,
     route_map,
 )
 from worldbank_copilot.routing.semantic_eval import (  # noqa: E402
@@ -105,9 +111,6 @@ from worldbank_copilot.routing.semantic_eval import (  # noqa: E402
 )
 
 protocol = load_protocol(settings.config_dir)  # noqa: F821
-cache_dir = Path(settings.artifact_volume_path) / "routing_question_embeddings"  # noqa: F821
-cache_dir.mkdir(parents=True, exist_ok=True)
-qwen_embedder = ProviderEmbedder(provider, cache_path=cache_dir / f"{provider.model}.json")
 routes = route_map(routing.requirements)
 probe_clf = KnnSemanticClassifier(qwen_embedder, store_for(dataset), KnnConfig(), routes)
 diagnostic = similarity_diagnostic(probe_clf, protocol)

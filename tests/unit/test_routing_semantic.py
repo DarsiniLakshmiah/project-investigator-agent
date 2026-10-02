@@ -409,3 +409,83 @@ def test_similarity_diagnostic_detects_inert_thresholds():
         KnnSemanticClassifier(LexicalEmbedder(), store, KnnConfig(), ROUTES), protocol
     )
     assert lexical["similarity_thresholds_inert"] is False
+
+
+# -- notebook 08 probe regression (EmbeddingConfig has no `dimension`) ------------------------
+
+NOTEBOOK_08 = REPO_ROOT / "notebooks" / "08_semantic_routing_dev.py"
+
+
+def test_notebook_08_only_reads_existing_embedding_config_fields():
+    """Regression: notebook 08 read `rs.embeddings.dimension`, which does not exist."""
+    import ast
+
+    from worldbank_copilot.retrieval.config import EmbeddingConfig
+
+    source = "\n".join(
+        line
+        for line in NOTEBOOK_08.read_text(encoding="utf-8").splitlines()
+        if not line.lstrip().startswith("# MAGIC")
+    )
+    accessed = {
+        node.attr
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Attribute)
+        and node.value.attr == "embeddings"
+        and isinstance(node.value.value, ast.Name)
+        and node.value.value.id == "rs"
+    }
+    assert accessed, "notebook 08 no longer reads the embedding configuration"
+    assert accessed <= set(EmbeddingConfig.model_fields), accessed - set(
+        EmbeddingConfig.model_fields
+    )
+    assert "dimension" not in EmbeddingConfig.model_fields  # the field is expected_dimension
+
+
+def test_notebook_probe_path_measures_the_dimension_from_the_returned_vector(tmp_path):
+    """The exact notebook 08 probe path with the real configuration and a fake provider."""
+    from worldbank_copilot.retrieval.config import load_retrieval_settings
+    from worldbank_copilot.routing.semantic_eval import probe_embedder
+
+    rs = load_retrieval_settings(REPO_CONFIG_DIR)
+    assert rs.embeddings.expected_dimension == 1024  # validated Phase 8 value
+
+    class FakeQwen:
+        model = rs.embeddings.endpoint
+
+        def __init__(self, dimension, fail=None):
+            self.dimension_returned, self.fail = dimension, fail
+            self.requests = self.retries = self.rate_limited = 0
+            self.rate_limit_wait = 0.0
+            self.calls = []
+
+        def embed(self, texts):
+            self.calls.append(list(texts))
+            self.requests += 1
+            if self.fail:
+                self.rate_limited += 1
+                raise RuntimeError(self.fail)
+            return [[0.1] * self.dimension_returned for _ in texts]
+
+    ok = FakeQwen(1024)
+    embedder = ProviderEmbedder(ok, cache_path=tmp_path / "routing.json")
+    embedder.embed(["routing probe"])  # even if the probe text were cached ...
+    probe = probe_embedder(embedder.provider, rs.embeddings.expected_dimension)
+    assert ok.calls == [["routing probe"], ["routing probe"]]  # ... the probe calls for real
+    assert (probe["model"], probe["dimension"], probe["expected_dimension"]) == (
+        "databricks-qwen3-embedding-0-6b",
+        1024,
+        1024,
+    )
+    assert probe["available"] and probe["dimension_matches"] and probe["error"] is None
+    assert probe["provider_counters"]["requests"] == 1
+    assert probe["provider_counters"]["rate_limited"] == 0
+
+    wrong = probe_embedder(FakeQwen(768), rs.embeddings.expected_dimension)
+    assert wrong["dimension"] == 768 and not wrong["dimension_matches"]
+    limited = probe_embedder(
+        FakeQwen(1024, fail="HTTP 429 REQUEST_LIMIT_EXCEEDED"), rs.embeddings.expected_dimension
+    )
+    assert not limited["available"] and "429" in limited["error"]
+    assert limited["provider_counters"]["rate_limited"] == 1
