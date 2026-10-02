@@ -18,7 +18,7 @@ still open. Updated at the end of every phase.
 | 6 | Databricks platformization and governed Delta foundation | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 7 | Deterministic Gold intelligence layer | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings, AI Search index and notebook 07 Steps 4–7 and 07b staged experiments (incl. CrossEncoder) validated in Databricks (2026-10-01). Selected direction: adaptive reranking (trigger policy not yet implemented or evaluated)** |
-| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D first stop (development only) awaiting review**; 9E–9F not started |
+| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D in progress**: Candidate A provisional, B lexical and B2 Qwen rejected on DEV, C_SEMIF_OPENJEV BLOCKED_BY_EXECUTION_ENVIRONMENT, C_DATABRICKS_BOUNDED_CLASSIFIER capability probe awaiting a Databricks run; 9E–9F not started |
 | 10–13 | See §3 (roadmap from Claude.md §36) | Not started |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
@@ -1779,3 +1779,53 @@ Candidate B runs with the real Qwen endpoint, on DEVELOPMENT only. No TEST, no C
   6. MLflow: case ids and aggregates only, no question text, `test_evaluated=false`.
 
 **Pre-commit inspection:** no credentials, `.env`, Databricks config, caches, model binaries or oversized files among the staged files. The dev log contains no question text.
+
+#### Checkpoint 9D — Candidate C: SemIf blocked; Databricks bounded classifier capability (2026-10-02)
+
+**Candidate B2 (Qwen nearest-neighbour)** was rejected on DEV in Databricks:
+- best selective route precision ≈ 0.45;
+- unthresholded route accuracy ≈ 0.41;
+- rules only 24/29, rules + Qwen 25/29 (1/2 fallback cases).
+
+TEST was not evaluated.
+
+**C_SEMIF_OPENJEV — BLOCKED_BY_EXECUTION_ENVIRONMENT.**
+- The preregistered Serverless GPU environment cannot be attached in the available workspace.
+- This is NOT a model-quality rejection: P0, P1 and every semantic evaluation never ran.
+- Code, config, protocol lock (`evaluation/semif_protocol_lock.json`), notebook 08c and tests are preserved unchanged. Only the config `status` field changed, and the lock does not include it.
+
+**C_DATABRICKS_BOUNDED_CLASSIFIER** (`configs/routing/bounded_classifier.yaml`, `routing/bounded_classifier.py`, `routing/bounded_classifier_probe.py`, `notebooks/08d_bounded_classifier_capability.py`):
+- **Placement:** deterministic scope, authorisation, project, time and rules first; only unresolved semantic cases reach the classifier. It returns one reviewed non-refusal intent or ABSTAIN, and route = requirements[intent].
+- **Model:** a Foundation Model API chat endpoint, preferred `databricks-gpt-5-4-nano`, called from Serverless CPU with the notebook identity. It is never silently substituted; other small chat endpoints are only listed.
+- **Output contract:** a strict JSON schema `{"intent": enum}` (11 intents + ABSTAIN, no additional properties).
+  - abstain is derived by the harness.
+  - Confidence is not self-reported and stays 0.0 unless a derivation is later approved. Logprob support is only recorded.
+  - No chain-of-thought is requested and no reasoning text is kept.
+- **Fail closed:** HTTP errors, 429, missing or multiple choices, truncation, refusal, empty output, non-JSON, extra keys (`route`, `reasoning`), missing intent, out-of-enum, refusal intents and wrong case all become ABSTAIN, then CLARIFY `SEMANTIC_ABSTAIN` with nothing executed.
+- **Capability probe** (synthetic, fictional project SYN-RIVERBEND, one attempt per call, no retries), 33 calls:
+  1. a plain call;
+  2. 5 parameter-acceptance calls (reasoning_effort none/minimal/low, temperature 0, logprobs);
+  3. 7 strict-schema classifications, including one ambiguous and one prompt-injection case;
+  4. 2 unconstrained JSON-mode calls;
+  5. 19 malformed fixtures checked offline;
+  6. 10 warm-latency calls;
+  7. an 8-way concurrent burst.
+- **Capability gates (revised 2026-10-02):**
+  - the preferred endpoint is callable;
+  - the required request configuration is accepted. `required_parameters` is empty, so no optional parameter is required;
+  - strict structured output works;
+  - every strict-schema reply validates to exactly one allowed label;
+  - malformed and out-of-contract fixtures fail closed;
+  - no execution during classification (no `tools` / `functions` keys in any request);
+  - model output cannot change project, authorisation or scope (the decision is label-only, route = requirements[intent]);
+  - the operational network/API failure rate of the required non-burst calls (plain + strict-schema + warm) is ≤ 0.05.
+- **Diagnostic only, never gates:**
+  - optional parameters (reasoning_effort, temperature 0, logprobs), each recorded as SUPPORTED / UNSUPPORTED / ERROR with the response and error metadata. A parameter gates only if it is added to `required_parameters`;
+  - latency: individual, plain, structured, warm p50/p95/max and concurrent. It is judged later, in the DEV architecture trade-off;
+  - synthetic label agreement;
+  - the deliberate 8-way burst. Its 429s and Retry-After values are reported separately and never enter the failure rate.
+- **Contract hash:** `3690fc46…b59d`. The notebook verifies the frozen routing-dataset and ambiguity-probe hashes before any call. The SemIf protocol is unchanged.
+
+**Not run:** the Databricks capability probe (it awaits the user's run), DEV, C1, C2, ambiguity-probe predictions and TEST. No change to 9B.2, labels, the split or the Candidate A/B results. 9E and Phase 10 have not started.
+
+**Tests:** 1,224 unit passed. Ruff and the format check are clean.

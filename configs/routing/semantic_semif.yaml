@@ -9,7 +9,10 @@
 version: 1
 candidate: C_SEMIF_OPENJEV
 path: B-nb                      # notebook-only Serverless GPU; no serving endpoint
-status: P0_P1_PENDING
+status: BLOCKED_BY_EXECUTION_ENVIRONMENT   # 2026-10-02: the preregistered Serverless GPU
+# environment cannot be attached in the available workspace. NOT a model-quality rejection:
+# P0/P1 and every semantic evaluation never ran. Code, lock and artefacts are preserved
+# unchanged; superseded for Candidate C by C_DATABRICKS_BOUNDED_CLASSIFIER.
 implementation:
   repository: https://github.com/TheoLeeCJ/SemIf-OpenJev
   commit: 23cf1f39fc9534fe81437200959b6dfc7106e45a   # master, 2026-09-23
