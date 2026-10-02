@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from worldbank_copilot.common import load_settings  # noqa: E402
+from worldbank_copilot.common.frozen import assert_not_frozen  # noqa: E402
 from worldbank_copilot.routing.config import load_routing_config  # noqa: E402
 from worldbank_copilot.routing.evaluation import BaselineResult, load_dataset  # noqa: E402
 from worldbank_copilot.routing.semantic import LexicalEmbedder, route_map  # noqa: E402
@@ -37,8 +38,12 @@ from worldbank_copilot.routing.semantic_eval import (  # noqa: E402
 )
 from worldbank_copilot.routing.semantic_report import render as render_report  # noqa: E402
 
+DECISION = ROOT / "evaluation" / "semantic_config_9d.yaml"
+
 
 def main() -> None:
+    # Fail closed before any computation or write: the 9D decision is FROZEN (Phase 9F).
+    assert_not_frozen(DECISION)
     assert_split_allowed("dev")
     settings = load_settings("local", env={})
     routing = load_routing_config(settings.config_dir)
@@ -98,9 +103,7 @@ def main() -> None:
         "dataset_sha256": log["dataset_sha256"],
         "recorded": started,
     }
-    (ROOT / "evaluation" / "semantic_config_9d.yaml").write_text(
-        yaml.safe_dump(decision, sort_keys=False), encoding="utf-8"
-    )
+    DECISION.write_text(yaml.safe_dump(decision, sort_keys=False), encoding="utf-8")
     base_results = [
         BaselineResult(**r)
         for r in yaml.safe_load(

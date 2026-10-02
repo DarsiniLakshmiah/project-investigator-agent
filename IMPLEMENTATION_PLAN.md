@@ -17,8 +17,8 @@ still open. Updated at the end of every phase.
 | 5 | Structured document extraction (ISR snapshots, results, appraisal risks, events) | **Complete, approved** (2026-09-30) |
 | 6 | Databricks platformization and governed Delta foundation | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 7 | Deterministic Gold intelligence layer | **Complete, validated in Databricks, approved** (2026-09-30) |
-| 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings, AI Search index and notebook 07 Steps 4–7 and 07b staged experiments (incl. CrossEncoder) validated in Databricks (2026-10-01). Selected direction: adaptive reranking (trigger policy not yet implemented or evaluated)** |
-| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D CLOSED** (2026-10-02): Candidate A SELECTED - deterministic routing + targeted clarification; no semantic LLM fallback promoted (Candidate C GPT-OSS-20B DEV REJECTED on quality/repeatability; earlier Candidate C blocks were not quality rejections); **9E CLOSED** (2026-10-02): adaptive-rerank diagnostic VALID offline and live-validated; descriptive only, no adaptive policy promoted, `production` stays null; 9F not started |
+| 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings, AI Search index and notebook 07 Steps 4–7 and 07b staged experiments (incl. CrossEncoder) validated in Databricks (2026-10-01). Complete. Adaptive reranking evaluated diagnostically in Phase 9E; no adaptive policy promoted; independent validation required before any future promotion** |
+| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D CLOSED** (2026-10-02): Candidate A SELECTED - deterministic routing + targeted clarification; no semantic LLM fallback promoted (Candidate C GPT-OSS-20B DEV REJECTED on quality/repeatability; earlier Candidate C blocks were not quality rejections); **9E CLOSED** (2026-10-02): adaptive-rerank diagnostic VALID offline and live-validated; descriptive only, no adaptive policy promoted, `production` stays null; **9F-A approved, 9F-B implemented (Phase 10 execution contract; under review)**; 9F-C (bounded Databricks contract validation) not started |
 | 10–13 | See §3 (roadmap from Claude.md §36) | Not started |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
@@ -2126,3 +2126,23 @@ That's 15 points in total. (The approved design said 13 adaptive and 16 total; t
 - whether adaptive reranking should eventually be promoted.
 
 No thresholds were tuned, no other reranker was benchmarked, GPU was not enabled, and candidate depth was not changed.
+
+#### Checkpoint 9F-B — Phase 10 execution contract implemented (2026-10-02; under review, not committed)
+
+**Purpose:** freeze the routing + retrieval contract Phase 10 inherits. No experiment, no new measurement, no Databricks call, no agent code.
+
+**9F-A decisions (user, 2026-10-02):**
+- Retrieval baseline: `phase8_quality_baseline` — fixed / hybrid (BM25 + Qwen dense, RRF k 60) / candidate_k 50 / CrossEncoder `ms-marco-MiniLM-L-6-v2` (max_length 512) on every query (`AlwaysRerank`) / final_k 5. It is the PHASE 10 QUALITY BASELINE: not a production policy, not an adaptive winner, not a deployment recommendation.
+- Option A: `retrieval.yaml` `production` stays null; the baseline lives only in `configs/phase9_closure.yaml` and is constructed explicitly. The 9E lock keeps passing.
+- No adaptive policy promoted (P2–P6 diagnostic only; P3(0.4) only the 9E latency point).
+- P179039: NON-BLOCKING KNOWN LIMITATION (artifact-only diagnosis: q28/q29 query-vocabulary gap; q30/q36 lexical evidence pushed outside fused top-50 by RRF, dense does not recover it). Nothing tuned.
+
+**Implementation:**
+- `routing/execution.py` — the runtime execution mapping (9D Candidate A). The router output is recorded unchanged; `SEMANTIC_CLASSIFICATION_REQUIRED` → `CLARIFY / INTENT_NOT_RESOLVED`. Fails closed on an invoked semantic fallback, an unknown clarification reason, a CLARIFY/REFUSE that executed a call, or an INVESTIGATION without an unexecuted plan. `router.py` is unchanged.
+- `retrieval/contract.py` — `RetrievalProfile` (read from the manifest, checked against the retrieval configuration), `build_document_search`, `RetrievalRequest` (no tunable field; `require_citations` is always true), `RetrievalResult` (`OK` / `NO_EVIDENCE` / `RETRIEVAL_ERROR` / `SCOPE_REFUSED`), `DocumentRetrieval.retrieve` (runs the allowlisted `search_project_documents` tool through the `ToolExecutor`). Temporal scope and document-type hints are recorded, not applied.
+- `tools/evidence.py` — `EvidenceStatus`, the exhaustive tool-status mapping, and provenance checks (SYSTEM_DERIVED_SIGNAL only from `get_attention_signals` and the three `get_project_overview` signal counts; a violation is a TOOL_ERROR). INSUFFICIENT_EVIDENCE and CONFLICTING_EVIDENCE are Phase 10 synthesis states only.
+- `InvestigationPlan` gains `clarification_state` (always `NONE`: a plan exists only after every clarification check), `provenance_requirements` and `retrieval_profile`; `executed` stays `False`. `DocumentSearch` gains an optional `profile_id`.
+- `common/frozen.py` + `scripts/semantic_dev_9d.py` — the 9D debt is closed: the script refuses, before any computation or write, to overwrite a FROZEN decision.
+- `configs/phase9_closure.yaml` — the Phase 9 handoff manifest; `tests/unit/test_phase9_contract.py` checks it against the code, configuration and committed artifacts.
+
+**Remaining:** 9F-C — bounded Databricks end-to-end contract validation (integration only; protocol to be approved), then Phase 9 closure.

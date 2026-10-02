@@ -289,6 +289,16 @@ class PlannedToolCall(_Model):
     validation_error: str | None = None
 
 
+# Provenance rules every Phase 10 claim built from a plan must keep (configs/phase9_closure.yaml).
+PROVENANCE_REQUIREMENTS = (
+    "DOCUMENT_CLAIMS_REQUIRE_CITATION",
+    "AI_INTERPRETATION_NEVER_FACT",
+    "SYSTEM_DERIVED_SIGNAL_ONLY_FROM_PHASE7_RULES",
+    "UNKNOWN_REQUIRES_REASON",
+    "NO_EVIDENCE_IS_NOT_CORPUS_ABSENCE",
+)
+
+
 class InvestigationPlan(_Model):
     project_id: str
     question: str
@@ -298,6 +308,10 @@ class InvestigationPlan(_Model):
     structured_calls: tuple[PlannedToolCall, ...]
     document_retrievals: tuple[RetrievalSpec, ...]
     executed: Literal[False] = False
+    # A plan is only built after every clarification check passed (Phase 9F).
+    clarification_state: Literal["NONE"] = "NONE"
+    provenance_requirements: tuple[str, ...] = PROVENANCE_REQUIREMENTS
+    retrieval_profile: str | None = None  # configured document-retrieval profile, if any
     notes: tuple[str, ...] = (
         "Plan only: no tool or retrieval call was executed. Execution, evidence "
         "assessment and synthesis are Phase 10.",

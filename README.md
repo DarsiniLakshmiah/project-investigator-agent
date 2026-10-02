@@ -2,11 +2,10 @@
 
 Evidence-grounded decision support for World Bank project officers and analysts.
 
-> **Status:** Phases 1–4 of 17 are complete: repository foundation, configuration,
-> source-preserving **Bronze ingestion**, typed **Silver** structured tables (projects,
-> loans, financial summary, procurement) with provenance, and **Docling parsing** of the
-> 53 project PDFs into page-cited parsed documents with validated metadata. Document
-> extraction, Gold, retrieval, agents, API and UI do not exist yet. See
+> **Status:** Phases 1–8, Phase 9A–9E, and Phase 9F-A are complete. Phase 9F-B
+> is implemented / pending commit; Phase 9F-C has not yet run. Phase 10 is not started.
+> Adaptive reranking was evaluated diagnostically in 9E; no adaptive policy was promoted,
+> and independent validation is required before any future promotion. See
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the plan and current status.
 
 ## The problem
@@ -543,6 +542,53 @@ Phase 4 parsed documents (artifact Volume; nothing re-parsed)
 - a notebook-scoped install replaces a protected runtime package (`configs/environments/dependencies.yaml`).
 
 **Reranking is isolated.** The CrossEncoder experiment runs in `notebooks/07b_rerank_experiment.py` on serverless environment 6 **ML**, which already ships those exact versions. So the capability probe and production retrieval in notebook 07 never depend on torch.
+
+## Routing, tools and the Phase 10 contract (Phase 9)
+
+Phase 9 builds deterministic routing and typed tools, tests two model-based additions
+experimentally, and freezes the interface the Phase 10 agent layer inherits. It contains no
+agents and no answer synthesis. The handoff manifest is `configs/phase9_closure.yaml`; a test
+checks every value in it against the code, the configuration and the committed artifacts.
+
+```
+USER QUERY
+  -> input guardrails -> project resolution (scope + authorisation, before any call)
+  -> temporal resolution -> deterministic intent rules -> requirements
+  -> ROUTER (9B.2, frozen)                 records its output as-is
+  -> EXECUTION MAPPING (routing/execution.py, 9D Candidate A)
+       STRUCTURED     -> typed structured tools (ToolExecutor, allowlist, no SQL)
+       DOCUMENT       -> profile-owned retrieval (retrieval/contract.py)
+       INVESTIGATION  -> an unexecuted InvestigationPlan for Phase 10
+       CLARIFY        -> targeted clarification (nothing executes)
+       REFUSE         -> safe refusal (nothing executes)
+```
+
+**How the design was reached.**
+- **Foundations first.** The work did not start with agents. Governed Bronze/Silver/Gold data came first (Phases 1–7), then deterministic implementation signals (Phase 7), validated document retrieval (Phase 8), and typed tools with deterministic routing (Phase 9A–9C).
+- **Bounded LLM routing fallback (9D): not promoted.** A hosted model was tested for ambiguous routing. It passed the capability and operational checks but failed the preregistered semantic incremental-value / repeatability gate, so deterministic routing stays authoritative.
+- **Adaptive reranking (9E): not promoted.**
+  - Reranking helps some questions and hurts others, and a ground-truth Oracle shows that selective reranking has real headroom.
+  - Simple deterministic triggers looked promising on the Phase 8 questions, but those questions had already been used, so no adaptive policy was promoted without independent validation.
+  - 9E also separated ranking failures from candidate-generation failures: P179039's main retrieval weakness cannot be fixed by reranking.
+- **Freeze before handing over (9F).** Only after these interfaces and known limitations were frozen is the system handed to the agent layer.
+
+**Distinctions the contract keeps explicit:**
+- **Router vs execution mapping.** The router's recorded output never changes. When the rules cannot resolve the intent, it records `SEMANTIC_CLASSIFICATION_REQUIRED`, and the execution mapping turns that into `CLARIFY / INTENT_NOT_RESOLVED`. The semantic fallback is disabled.
+- **Phase 10 quality baseline vs production configuration.** Phase 10 retrieves with `phase8_quality_baseline`:
+  - fixed chunks, hybrid BM25 + Qwen dense with RRF k 60, candidate_k 50;
+  - the CrossEncoder on every query, final_k 5.
+
+  This is the strongest *validated* retrieval-quality configuration. It is not a production policy, and `configs/retrieval/retrieval.yaml` `production` stays null. Agents cannot tune any retrieval parameter.
+- **NO_EVIDENCE vs corpus absence.** `NO_EVIDENCE` means relevant evidence was not found in the retrieved candidates. It never means the documents do not contain it.
+- **DOCUMENTED_FINDING vs AI_INTERPRETATION.** A retrieved passage is a DOCUMENTED_FINDING: the document states it at the cited page, but its relevance is not verified. AI_INTERPRETATION comes only from future Phase 10 synthesis; tools and retrieval never produce it, and it is never relabelled as FACT.
+
+**Known limitations** (listed in the manifest):
+- P179039 candidate generation (4 of 11 answerable questions have no evidence in the fused top-50);
+- warm-cache latency figures (a cold query embedding adds about 1.5–2 s);
+- CPU CrossEncoder latency (about 5.6 s for a reranked query);
+- r033 and r060;
+- temporal and document-type hints are recorded but not applied as filters;
+- notebook-token authentication.
 
 ## Remaining documentation
 

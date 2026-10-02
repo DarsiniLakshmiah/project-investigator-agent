@@ -381,6 +381,7 @@ class RoutingService:
                     purpose="documentary evidence explaining the established change",
                 ),
             ),
+            retrieval_profile=getattr(self.documents, "profile_id", None),
         )
 
 

@@ -60,6 +60,7 @@ class DocumentSearch:
     config: DocumentSearchConfig
     policy: RerankPolicy
     cross_encoder: Reranker | None = None  # required if the policy can rerank
+    profile_id: str | None = None  # set by retrieval.contract.build_document_search (Phase 9F)
 
 
 class DocumentEvidence(BaseModel):

@@ -1,0 +1,178 @@
+# Phase 9 closure manifest (Phase 9F): the contract Phase 10 inherits.
+#
+# This file records and points to already-validated facts; it introduces no new
+# measurement. tests/unit/test_phase9_contract.py checks every mechanically checkable value
+# against the code, the configuration and the committed artifacts, so it cannot drift.
+#
+# It is the ONLY definition of the Phase 10 retrieval quality baseline. The baseline is NOT
+# the production configuration: configs/retrieval/retrieval.yaml `production` stays null.
+manifest_version: 1
+phase: "9F"
+status: PHASE_10_HANDOFF
+
+routing:
+  router_version: "9B.2"                       # configs/routing/routing.yaml
+  router_module: worldbank_copilot.routing.router  # unchanged by 9F
+  execution_mapping: worldbank_copilot.routing.execution
+  execution_policy: 9D_CANDIDATE_A
+  principle: >-
+    Deterministic resolution first (project, time, intent rules); execute when operationally
+    unambiguous; targeted CLARIFY only when an unresolved ambiguity materially changes
+    execution.
+  # Router output SEMANTIC_CLASSIFICATION_REQUIRED is kept as recorded router output; the
+  # runtime execution decision for it is CLARIFY / INTENT_NOT_RESOLVED.
+  semantic_required_execution: {mode: CLARIFY, reason_code: INTENT_NOT_RESOLVED}
+  semantic_fallback: disabled
+  clarification_reason_codes:
+    - PROJECT_REQUIRED
+    - AMBIGUOUS_PROJECT_REFERENCE
+    - AMBIGUOUS_TIME
+    - TIME_REQUIRED
+    - TEMPORAL_NOT_SUPPORTED
+    - INTENT_NOT_RESOLVED
+  evaluation_9c:
+    freeze_manifest: evaluation/routing_freeze_9c.json
+    dataset: evaluation/routing_cases.yaml
+    dataset_sha256_lf: 83c5f9123ecef96c74b7c047e8a7a3afc2760d3042c2ee9034fe92214336fab9
+    case_count: 80
+    test_evaluated: false
+  decision_9d:
+    frozen_config: evaluation/semantic_config_9d.yaml
+    frozen_config_sha256_lf: d6dca46ba5fba932edc344a8dc6e464f89bbe54e48ee41307871cb3ac3684472
+    status: FROZEN
+    selected_strategy: DETERMINISTIC ROUTING + TARGETED CLARIFICATION
+    semantic_fallback_promoted: false
+    candidate_c_dev: REJECTED
+    test_evaluated: false
+  known_limitations:
+    r033: rating questions with a date window CLARIFY (the rating tool has no date filter).
+    r060: relative periods ("last 12 months") CLARIFY (no governed as-of resolution in 9B.2).
+
+retrieval:
+  phase10_quality_baseline:
+    name: phase8_quality_baseline
+    version: "1"
+    role: >-
+      PHASE 10 QUALITY BASELINE - the strongest validated retrieval-quality configuration.
+      Not the production configuration, not an adaptive-reranking winner, not a deployment
+      recommendation.
+    chunk_strategy: fixed
+    chunk_strategy_version: 794a94700304        # ChunkingConfig.version("fixed")
+    method: hybrid                             # BM25 + Qwen dense, reciprocal rank fusion
+    bm25_k1: 1.5
+    bm25_b: 0.75
+    min_rerank_score: null
+    # SHA-256 of sorted JSON QueryConfig.model_dump(); pins governed query expansion.
+    query_config_sha256: 247a87e4670efd7a8621224294ed256c3717f90d7487751258bbf44f753fbcec
+    vector_search_endpoint: worldbank-gep-ai-search
+    vector_search_index: document_chunk_index_qwen3_v1
+    rrf_k: 60
+    candidate_k: 50
+    final_k: 5
+    rerank_policy: always                      # rerank_policy.AlwaysRerank
+    reranker_model: cross-encoder/ms-marco-MiniLM-L-6-v2
+    reranker_max_length: 512
+    reranker_batch_size: 32
+    embedding_endpoint: databricks-qwen3-embedding-0-6b
+    embedding_dimension: 1024
+    use_type_filters: false
+    temporal_filters_applied: false
+    production: false
+  hints_recorded_not_applied:
+    - temporal_scope
+    - document_type_hints
+  index:
+    endpoint: worldbank-gep-ai-search
+    index_name: document_chunk_index_qwen3_v1
+    index_rows: 12797
+    corpus_rows: 14327
+  production_config: {file: configs/retrieval/retrieval.yaml, production: null}
+  validated_metrics:                           # Phase 8 07b, reproduced exactly by 9E P1
+    source: evaluation/adaptive_rerank_9e.json points.P1
+    recall_at_5: 0.7955
+    recall_at_10: 0.8409
+    mrr: 0.6827
+    ndcg_at_5: 0.7169
+    answerable_questions: 44
+    composed_p50_ms: 5228.3                    # 9E composed, serverless CPU, warm cache
+    composed_p95_ms: 6126.6
+  no_evidence_meaning: >-
+    Relevant evidence was not found in the retrieved candidates. It does not establish that
+    the documents do not contain relevant evidence.
+
+adaptive_reranking:
+  status: DIAGNOSTIC_ONLY
+  promoted: false
+  diagnostic_points: [P2, P3, P4, P5, P6]
+  latency_validation_point: P3(0.4)            # rate rule only; NOT a production winner
+  future_promotion_requires: independent validation on questions not used in Phase 8
+  protocol_lock: evaluation/adaptive_rerank_9e_lock.json
+  protocol_lock_sha256: 480d0a1ec02e6e54aeb7c4a86d1122c002e1b0607d76ad74a9571a7d231b591e
+  policy_definitions_sha256: dafc0bf5c80acf2491099eb95991def149df51211c29eae7ccecafafd6eb1cff
+  collection_artifact_sha256: 8b6763e349215899b686fff45f49eb44483f65490167b6649e88014599a63d70
+  live_artifact_sha256: 61a62846325685718c24c80b133d9892ce6040b2ae5d1e7630f9c92852c2c9d6
+  committed_results_sha256_lf:
+    evaluation/adaptive_rerank_9e.json: 92e579ee5c9d0ad1b2318641d1ce21cf9221fa52087049b2e8e2e845ed67336b
+    evaluation/adaptive_rerank_9e_live_selection.json: 72a8df2b3de0ce451b6e47a046967e55354c774bb0d49a763f3a1d5c2a8507fc
+    evaluation/adaptive_rerank_9e_live.json: e50eb162cce49a8257f4973c163b5933b6b0bf06559c46b4e4e26a590336dd41
+
+tools:                                         # tools.registry.TOOL_SPECS (allowlist)
+  get_project_overview: "1"
+  get_project_timeline: "1"
+  get_rating_history: "1"
+  get_financial_status: "1"
+  get_results_progress: "1"
+  get_risk_register: "1"
+  get_attention_signals: "1"
+  search_project_documents: "1"
+
+limitations:
+  P179039_candidate_generation: >-
+    NON-BLOCKING KNOWN LIMITATION. 4 of 11 answerable P179039 questions have no relevant
+    evidence in fused top-50 (reranking cannot repair them). q28, q29: query-vocabulary /
+    paraphrase gap (absent from lexical and dense top-50). q30 (lexical ranks 33-36) and
+    q36 (lexical rank 32): lexical evidence pushed outside fused top-50 by RRF (fused
+    positions 59-65 and 52); dense does not recover it. All evidence chunks exist and are
+    indexed. Not tuned.
+  warm_cache_latency: >-
+    Composed and live latencies describe the warm-cache path; a first-seen query embedding
+    adds substantial cold-start latency (about 1.5-2.0 s in the 9E warm-up pass).
+  cpu_cross_encoder: >-
+    The CrossEncoder runs on CPU (cuda_available=false); reranking dominates latency
+    (about 5.6 s live p50 for a reranked query in 9E).
+  hints_not_applied: >-
+    Temporal scope and document-type hints are recorded with a retrieval request but are
+    not applied as retrieval filters (Phase 8 decision); only an ISR sequence named in the
+    question becomes a filter.
+  routing: [r033, r060]
+  notebook_token_auth: AI Search used a notebook token (development only); a service principal is required before production use.
+
+phase10_contract:
+  allowed_interfaces:
+    routing: worldbank_copilot.routing.service.RoutingService.handle
+    execution_mapping: worldbank_copilot.routing.execution.execution_decision
+    structured_tools: worldbank_copilot.tools.executor.ToolExecutor.run
+    document_retrieval: worldbank_copilot.retrieval.contract.DocumentRetrieval.retrieve
+    evidence_status: worldbank_copilot.tools.evidence.tool_evidence_status
+  forbidden_bypasses:
+    - Retriever, DenseSearcher, Vector Search clients or CrossEncoder used directly by agents
+    - caller-chosen candidate_k, final_k, RRF k, reranker, embedding model, strategy or thresholds
+    - arbitrary SQL or direct table reads
+    - tool calls outside the allowlist or outside the resolved, authorised project scope
+    - the Phase 9D semantic fallback
+    - any adaptive rerank policy (P2-P6)
+  provenance_requirements:
+    - DOCUMENT_CLAIMS_REQUIRE_CITATION
+    - AI_INTERPRETATION_NEVER_FACT
+    - SYSTEM_DERIVED_SIGNAL_ONLY_FROM_PHASE7_RULES
+    - UNKNOWN_REQUIRES_REASON
+    - NO_EVIDENCE_IS_NOT_CORPUS_ABSENCE
+  provenance_origins:
+    FACT: structured deterministic tool facts (loan statement, project workbook); FACT-only arithmetic
+    DOCUMENTED_FINDING: Phase 5 extracted document fields via tools, and retrieved passages (source provenance only; relevance_verified=false)
+    SYSTEM_DERIVED_SIGNAL: Phase 7 rule outputs - get_attention_signals items and the get_project_overview signal counts
+    AI_INTERPRETATION: Phase 10 synthesis only; never produced by tools or retrieval
+    UNKNOWN: a missing value or insufficient evidence, always with a reason
+  evidence_statuses:
+    produced_by_tools_and_retrieval: [OK, NO_EVIDENCE, CLARIFICATION_REQUIRED, TOOL_ERROR, RETRIEVAL_ERROR, SCOPE_REFUSED]
+    phase10_synthesis_only: [INSUFFICIENT_EVIDENCE, CONFLICTING_EVIDENCE]
