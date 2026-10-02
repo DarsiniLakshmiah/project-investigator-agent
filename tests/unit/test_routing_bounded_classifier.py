@@ -67,7 +67,7 @@ def chat(content, finish="stop", status=200, **extra):
 def test_candidate_identity_and_preferred_endpoint():
     assert BC.candidate == CANDIDATE == "C_DATABRICKS_BOUNDED_CLASSIFIER"
     assert BC.endpoint.preferred == "databricks-gpt-oss-20b"
-    assert BC.status == "CAPABILITY_PASSED" and BC.request.retries == 0
+    assert BC.status == "DEV_REJECTED" and BC.request.retries == 0
     assert BC.request.required_parameters == {"reasoning_effort": "low"}
 
 
@@ -90,6 +90,7 @@ def test_experiment_trail_is_complete_and_append_only():
         ("databricks-gpt-oss-20b", "PREREGISTERED"),
         ("databricks-gpt-oss-20b", "CAPABILITY_PASSED"),
         ("databricks-gpt-oss-20b", "TERMINOLOGY_NOTE"),
+        ("databricks-gpt-oss-20b", "REJECTED"),
     ]
     run2 = next(h for h in BC.experiment_history if h["status"] == "CAPABILITY_PASSED")
     assert "run2_paced_5s.json" in run2["evidence"]

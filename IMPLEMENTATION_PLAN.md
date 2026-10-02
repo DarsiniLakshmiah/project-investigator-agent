@@ -18,7 +18,7 @@ still open. Updated at the end of every phase.
 | 6 | Databricks platformization and governed Delta foundation | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 7 | Deterministic Gold intelligence layer | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings, AI Search index and notebook 07 Steps 4–7 and 07b staged experiments (incl. CrossEncoder) validated in Databricks (2026-10-01). Selected direction: adaptive reranking (trigger policy not yet implemented or evaluated)** |
-| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D in progress**: Candidate A provisional, B lexical and B2 Qwen rejected on DEV, C_SEMIF_OPENJEV BLOCKED_BY_EXECUTION_ENVIRONMENT, C_DATABRICKS_BOUNDED_CLASSIFIER: databricks-gpt-5-4-nano BLOCKED_BY_MODEL_AVAILABILITY, databricks-gpt-oss-20b run 1 CAPABILITY_BLOCKED_BY_RATE_LIMIT, run 2 (`run2-paced-5s`) CAPABILITY_PASSED; Candidate C DEV evaluation implemented and locked (`dev1`), awaiting the Databricks run; 9E–9F not started |
+| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D CLOSED** (2026-10-02): Candidate A SELECTED - deterministic routing + targeted clarification; no semantic LLM fallback promoted (Candidate C GPT-OSS-20B DEV REJECTED on quality/repeatability; earlier Candidate C blocks were not quality rejections); 9E–9F not started |
 | 10–13 | See §3 (roadmap from Claude.md §36) | Not started |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
@@ -1998,3 +1998,52 @@ A C1 case with an operational failure is NOT EVALUABLE for the quality gates, so
 - DEV: `dev_scheduled_calls` = 44, `c1_calls` = 12.
 
 **Tests:** see the implementation report.
+
+#### Checkpoint 9D — CLOSED (2026-10-02)
+
+**Official frozen evaluator** (`scripts/candidate_c_dev_9d.py`, unchanged; bundled JDK + `.venv-spark`). Input: the immutable artifact `candidate_c_dev_predictions__dev1.json`, sha256 `ae2bf51e…816e`.
+- Candidate A recompute: zero drift on all 29 DEV rows.
+- **Outcome: REJECTED.** INVALID, REJECTED_SAFETY and INCONCLUSIVE_OPERATIONAL have no findings. This is a quality and repeatability rejection.
+- Report: `evaluation/candidate_c_dev_9d.json` and `.md`.
+
+**C1:**
+- **r015:** predicted CHANGE_INVESTIGATION (expected EXPLANATION). Final hybrid route INVESTIGATION, a wrong executable route, where Candidate A gave a safe CLARIFY. Repeats: EXPLANATION, then CHANGE_INVESTIGATION × 4, so 4/5 and the stability gate fails.
+- **r048:** predicted DOCUMENT_CONTENT, final route DOCUMENT. Correct and 5/5 stable.
+
+**Hybrid:** 25/29, against Candidate A's 24/29 and the required 26/29. The r015 change is not a correction.
+
+**Operations:** schedule VALID; 44/44 HTTP 200; 0 operational and 0 contract failures; inference p50 0.3244 s, p95 1.5515 s (pacing excluded; the p95 ≤ 5 s gate passes); no Retry-After values.
+
+**C2 (diagnostic only):**
+- intent accuracy 12/22; intent-implied route accuracy 15/22; ABSTAIN rate 0;
+- versus the rules: 4 cases broken, 2 corrected, net −2;
+- systematic pattern: EXPLANATION→CHANGE_INVESTIGATION in 3 of 4 cases;
+- r014's main prediction was correct, but all 3 of its repeats differed from it.
+
+**Conclusion:** for the frozen 9D DEV set and the boundary left unresolved by 9B.2, this Candidate C configuration did not show enough incremental value or repeatability for promotion. It is not a general statement about the model or about LLM routing.
+
+**Decision** (`evaluation/semantic_config_9d.yaml`: FROZEN, `test_evaluated: false`):
+- Candidate A: SELECTED.
+- B1 lexical: REJECTED.
+- B2 Qwen similarity: REJECTED.
+- SemIf/OpenJev: BLOCKED_BY_EXECUTION_ENVIRONMENT.
+- GPT-5.4 nano: BLOCKED_BY_MODEL_AVAILABILITY.
+- GPT-OSS capability run 1: CAPABILITY_BLOCKED_BY_RATE_LIMIT.
+- GPT-OSS capability run 2: CAPABILITY_PASSED.
+- GPT-OSS DEV: REJECTED.
+
+The three blocked or rate-limited outcomes are **not** quality rejections.
+
+**Selected strategy: DETERMINISTIC ROUTING + TARGETED CLARIFICATION.** Context, project, temporal and deterministic intent resolution come first. CLARIFY is a safety fallback for execution-critical ambiguity, not the default path.
+
+**Ambiguity probe:** `NOT_RUN_CANDIDATE_C_DEV_REJECTED`. Candidate C was not eligible for it, so this is not a probe failure; the probe stays frozen.
+
+**TEST:** untouched. FROZEN does not authorise it; `assert_split_allowed("test")` also requires explicit authorisation.
+
+**Closure decisions (user, 2026-10-02):**
+- **No TEST evaluation of Candidate A.** TEST outputs were already observed during the 9C review, so a TEST run would be a confirmation measurement, not a blind holdout. `test_evaluated` stays false and TEST access is not authorised. Final Phase 9 validation prioritises real Databricks end-to-end behaviour (9F).
+- **Technical debt for 9F / final Phase 9 hardening:** `scripts/semantic_dev_9d.py` can overwrite the now-FROZEN `evaluation/semantic_config_9d.yaml`. Before Phase 9 closes, add a fail-closed guard so an accidental DEV rerun cannot overwrite a FROZEN decision artifact unless an explicit, intentional override or versioning mechanism exists. Notebook 08 refusing to run against the FROZEN decision is expected and stays.
+
+**Remaining Phase 9 work:**
+- 9E: adaptive-rerank diagnostic (design first);
+- 9F: Databricks end-to-end validation, frozen-file protection, Phase 9 closure.

@@ -525,6 +525,37 @@ def test_lock_and_notebook_never_touch_test_or_the_probe():
         assert "semantic_ambiguity_probe" not in text and "load_probe_set" not in text
 
 
-def test_reports_are_not_fabricated():
-    assert not (REPO_ROOT / "evaluation" / "candidate_c_dev_9d.json").exists()
-    assert not (REPO_ROOT / "evaluation" / "candidate_c_dev_9d.md").exists()
+def test_official_dev_report_is_the_frozen_rejected_verdict():
+    report = json.loads((REPO_ROOT / "evaluation" / "candidate_c_dev_9d.json").read_text("utf-8"))
+    assert report["outcome"] == "REJECTED" and report["test_evaluated"] is False
+    assert report["lock_sha256"] == lock_sha256(LOCK) and report["contract_sha256"] == CONTRACT
+    assert report["acceptance_rule_sha256"] == acceptance_rule_sha256()
+    for category in ("INVALID", "REJECTED_SAFETY", "INCONCLUSIVE_OPERATIONAL"):
+        assert report["findings"][category] == []  # a quality rejection, nothing else
+    assert report["hybrid"]["hybrid_route_correct"] == 25
+    assert report["hybrid"]["candidate_a_route_correct"] == 24
+    c1 = {r["case_id"]: r for r in report["c1"]}
+    assert c1["r015"]["predicted"] == "CHANGE_INVESTIGATION" and not c1["r015"]["repeat_stable"]
+    assert c1["r015"]["final_hybrid_route"] == "INVESTIGATION"
+    assert c1["r048"]["intent_correct"] and c1["r048"]["route_correct"]
+    assert c1["r048"]["repeat_stable"]
+    assert report["counts"]["operational_failures"] == 0 and report["counts"]["calls_made"] == 44
+    text = json.dumps(report) + (REPO_ROOT / "evaluation" / "candidate_c_dev_9d.md").read_text(
+        "utf-8"
+    )
+    assert not any(f'"{tid}"' in text or f" {tid} " in text for tid in TEST_IDS)
+    assert not any(ctx.question in text for ctx in CONTEXTS.values())
+
+
+def test_candidate_c_closure_is_recorded_and_the_probe_was_not_run():
+    assert BC.status == "DEV_REJECTED"
+    assert BC.dev_evaluation["status"] == "REJECTED"
+    assert BC.dev_evaluation["ambiguity_probe_status"] == "NOT_RUN_CANDIDATE_C_DEV_REJECTED"
+    dev1 = BC.experiment_history[-1]
+    assert (dev1["run"], dev1["status"]) == ("dev1", "REJECTED")
+    assert "QUALITY/REPEATABILITY rejection" in dev1["interpretation"]
+    assert "ae2bf51ea2c88dced4a72021d4101826606c4d0565de4b20d881b7899cea816e" in dev1["evidence"]
+
+
+def test_no_prediction_artifact_is_inside_the_repository():
+    assert not list(REPO_ROOT.rglob("candidate_c_dev_predictions*.json"))

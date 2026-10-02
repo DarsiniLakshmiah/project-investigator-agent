@@ -1,18 +1,51 @@
-status: PROVISIONAL
-selected_candidate: A (rules-only, semantic fallback disabled)
+status: FROZEN
+selected_candidate: A (deterministic 9B.2 rules-only routing; semantic fallback disabled)
+selected_strategy: DETERMINISTIC ROUTING + TARGETED CLARIFICATION
+strategy_note: Conversation context, project resolution, temporal resolution and deterministic
+  intent rules resolve ambiguity first. When they cannot safely resolve an execution-critical
+  ambiguity, the router returns a targeted CLARIFY - a safety fallback, not the default path,
+  and not a claim that every vague question needs clarification. No semantic LLM fallback is
+  promoted.
 config: null
-reason: no B-lexical configuration met the pre-registered development rule (route
-  precision >= 0.9 at coverage >= 0.3); abstention -> CLARIFY is preferred to a wrong
-  route
+reason: No semantic-fallback candidate met its preregistered DEV requirements. Candidate C
+  (GPT-OSS-20B bounded classifier) was REJECTED on quality and repeatability (official frozen
+  evaluator, dev1) - for this frozen DEV set and the boundary left unresolved by 9B.2 it did
+  not demonstrate sufficient incremental value; this does not generalise beyond the experiment.
 candidates:
-  A: rules-only 9B.2 (baseline, always available)
-  B-lexical: evaluated on DEVELOPMENT - REJECTED
-  B-qwen: PENDING - run notebooks/08_semantic_routing_dev.py (DEVELOPMENT only) in
-    Databricks against the validated Qwen endpoint
-  C: PROPOSED, not implemented - awaiting approval and an endpoint probe
-freeze_rule: becomes FROZEN only after the B-qwen development run is reviewed; TEST
-  stays blocked until then (assert_split_allowed)
-selected_on: dev (leave-one-family-out)
+  A: SELECTED - rules-only 9B.2 (DEV 24/29 exact route)
+  B1-lexical: REJECTED - nearest-neighbour, lexical embedder (DEV, no configuration met route
+    precision >= 0.9 at coverage >= 0.3)
+  B2-qwen-similarity: REJECTED - nearest-neighbour, Qwen embeddings (DEV in Databricks; best
+    selective route precision ~0.45)
+  C-semif-openjev: BLOCKED_BY_EXECUTION_ENVIRONMENT - not a quality rejection (Serverless GPU
+    could not be attached; P0/P1 never ran)
+  C-gpt-5-4-nano: BLOCKED_BY_MODEL_AVAILABILITY - not a quality rejection (endpoint not
+    available in the workspace; HTTP 404)
+  C-gpt-oss-20b-capability-run1: CAPABILITY_BLOCKED_BY_RATE_LIMIT - not a quality rejection
+  C-gpt-oss-20b-capability-run2: CAPABILITY_PASSED (run2-paced-5s)
+  C-gpt-oss-20b-dev: REJECTED - quality/repeatability rejection (dev1)
+candidate_c_dev:
+  run_id: dev1
+  outcome: REJECTED
+  hybrid_route_correct: 25/29 (Candidate A 24/29; required 26/29)
+  findings: r015 intent CHANGE_INVESTIGATION != EXPLANATION; r015 final route INVESTIGATION
+    (wrong executable route) != DOCUMENT; r015 repeats 4/5; hybrid 25/29; r015 change not a
+    correction. r048 correct (DOCUMENT_CONTENT -> DOCUMENT), 5/5 stable.
+  operations: 44/44 HTTP 200, 0 operational / 0 contract failures, inference p50 0.3244 s /
+    p95 1.5515 s (pacing excluded), schedule VALID
+  prediction_artifact: candidate_c_dev_predictions__dev1.json (Databricks Volume, not committed)
+  prediction_artifact_sha256: ae2bf51ea2c88dced4a72021d4101826606c4d0565de4b20d881b7899cea816e
+  protocol_lock_sha256: 15d848642942dfd6aa200911c8d1fdfb7075739805acd357bdffe4b1df13267a
+  acceptance_rule_sha256: 09fe85287f056799ad3740899464b3ac21fc17837946e675dd32817fa0fd0d16
+  contract_sha256: c64561c25e0e417328b3a525c8b225a6b2f9e465b7c9d177a9128d08f013fe8b
+  official_report: evaluation/candidate_c_dev_9d.json
+ambiguity_probe_status: NOT_RUN_CANDIDATE_C_DEV_REJECTED (not a probe failure; the probe stays
+  frozen and untouched)
+freeze_rule: FROZEN on 2026-10-02 after every DEV run (B1, B2, C) was reviewed. FROZEN does not
+  authorise TEST - assert_split_allowed('test') also requires explicit authorisation; no TEST
+  evaluation has been run.
+selected_on: dev
 test_evaluated: false
 dataset_sha256: 83c5f9123ecef96c74b7c047e8a7a3afc2760d3042c2ee9034fe92214336fab9
 recorded: '2026-10-01T23:32:37.694751+00:00'
+frozen_on: '2026-10-02'

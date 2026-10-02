@@ -11,8 +11,9 @@
 # synthetic requests. No DEV, C1, C2, probe or TEST predictions.
 version: 1
 candidate: C_DATABRICKS_BOUNDED_CLASSIFIER
-status: CAPABILITY_PASSED   # databricks-gpt-oss-20b run2-paced-5s; capability only - NOT evidence
-# that Candidate C improves routing quality (that is the DEV evaluation's question)
+status: DEV_REJECTED   # databricks-gpt-oss-20b dev1: quality/repeatability rejection (official
+# frozen evaluator). Capability run 2 PASSED; earlier blocks were NOT quality rejections.
+# Not promoted: Phase 9D selects deterministic routing + targeted clarification (Candidate A).
 # Experiment history (append-only; never overwritten or reinterpreted).
 experiment_history:
   - endpoint: databricks-gpt-5-4-nano
@@ -83,6 +84,24 @@ experiment_history:
       17 (7 strict + 10 warm). The immutable run-2 artifact's `required_calls` = 17 means
       classification_required_calls. Run 2 operational failure rate = 0/18 scheduled gated
       calls; all 17 classification-required calls succeeded
+  - endpoint: databricks-gpt-oss-20b
+    notebook: notebooks/08e_candidate_c_dev.py
+    run: dev1
+    date: 2026-10-02
+    status: REJECTED
+    evidence: official frozen evaluator (scripts/candidate_c_dev_9d.py, unchanged) on the
+      immutable artifact candidate_c_dev_predictions__dev1.json (sha256
+      ae2bf51ea2c88dced4a72021d4101826606c4d0565de4b20d881b7899cea816e; lock
+      15d848642942dfd6aa200911c8d1fdfb7075739805acd357bdffe4b1df13267a). C1 r015 predicted
+      CHANGE_INVESTIGATION (expected EXPLANATION) -> final route INVESTIGATION, a wrong
+      executable route; r015 repeats EXPLANATION, CHANGE_INVESTIGATION x4 (4/5, unstable);
+      C1 r048 DOCUMENT_CONTENT -> DOCUMENT, correct, 5/5 stable. Hybrid 25/29 vs Candidate A
+      24/29 (required 26/29). Schedule VALID; 44/44 HTTP 200; 0 operational and 0 contract
+      failures; inference p50 0.3244 s / p95 1.5515 s (pacing excluded); no Retry-After.
+      Candidate A harness drift 0. Report evaluation/candidate_c_dev_9d.json
+    interpretation: QUALITY/REPEATABILITY rejection for the frozen 9D DEV set and the boundary
+      left unresolved by 9B.2 - not operational, not integrity, not safety, not availability.
+      Not a general statement about the model or about LLM routing
 endpoint:
   preferred: databricks-gpt-oss-20b    # never silently substituted; alternatives are only listed
   # read-only discovery: pay-per-token chat endpoints whose names match these markers are
@@ -183,7 +202,10 @@ capability:
 # model-facing contract (contract hash unchanged). TEST is never evaluated here.
 dev_evaluation:
   run_id: dev1
-  status: IMPLEMENTED_NOT_RUN
+  status: REJECTED                   # official frozen evaluator, 2026-10-02
+  # Candidate C did not pass DEV, so it is NOT eligible for the frozen ambiguity-probe stage.
+  # This is not a probe failure; the probe stays frozen and untouched.
+  ambiguity_probe_status: NOT_RUN_CANDIDATE_C_DEV_REJECTED
   # Assertion targets only - the mechanical derivations are authoritative and must equal them.
   expected_c1: [r015, r048]          # frozen 9B.2 router -> SEMANTIC_CLASSIFICATION_REQUIRED
   expected_c2_size: 22               # RESOLVED project + non-refusal intent + executable route

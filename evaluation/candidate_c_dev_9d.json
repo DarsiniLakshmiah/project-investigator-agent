@@ -1,0 +1,898 @@
+{
+ "candidate": "C_DATABRICKS_BOUNDED_CLASSIFIER",
+ "run_id": "dev1",
+ "outcome": "REJECTED",
+ "findings": {
+  "INVALID": [],
+  "REJECTED_SAFETY": [],
+  "INCONCLUSIVE_OPERATIONAL": [],
+  "REJECTED": [
+   "r015: C1 intent CHANGE_INVESTIGATION != EXPLANATION",
+   "r015: C1 final route INVESTIGATION != DOCUMENT",
+   "r015: wrong executable route INVESTIGATION",
+   "r015: C1 repeats ['EXPLANATION', 'CHANGE_INVESTIGATION', 'CHANGE_INVESTIGATION', 'CHANGE_INVESTIGATION', 'CHANGE_INVESTIGATION'] vs main CHANGE_INVESTIGATION",
+   "hybrid 25/29 != required 26/29",
+   "hybrid changes that are not corrections: [('r015', 'changed_still_wrong'), ('r048', 'correction')]"
+  ]
+ },
+ "lock_sha256": "15d848642942dfd6aa200911c8d1fdfb7075739805acd357bdffe4b1df13267a",
+ "acceptance_rule_sha256": "09fe85287f056799ad3740899464b3ac21fc17837946e675dd32817fa0fd0d16",
+ "contract_sha256": "c64561c25e0e417328b3a525c8b225a6b2f9e465b7c9d177a9128d08f013fe8b",
+ "split_evaluated": "dev",
+ "test_evaluated": false,
+ "counts": {
+  "dev_scheduled_calls": 44,
+  "c1_calls": 12,
+  "calls_made": 44,
+  "operational_failures": 0,
+  "contract_failures": 0,
+  "operational_failure_rate": 0.0
+ },
+ "latency": {
+  "inference_p50_s": 0.3244,
+  "inference_p95_s": 1.5515,
+  "note": "inference only; the 5 s gap is request pacing, not inference time"
+ },
+ "c1": [
+  {
+   "case_id": "r015",
+   "expected_intent": "EXPLANATION",
+   "expected_route": "DOCUMENT",
+   "router_reason": "INTENT_NOT_RESOLVED_BY_RULES",
+   "project_id": "P130544",
+   "temporal_kind": "YEAR",
+   "predicted": "CHANGE_INVESTIGATION",
+   "final_hybrid_route": "INVESTIGATION",
+   "abstain": false,
+   "intent_correct": false,
+   "route_correct": false,
+   "wrong_executable_route": true,
+   "latency_s": 0.4514,
+   "status": 200,
+   "failure_kind": "NONE",
+   "repeat_labels": [
+    "EXPLANATION",
+    "CHANGE_INVESTIGATION",
+    "CHANGE_INVESTIGATION",
+    "CHANGE_INVESTIGATION",
+    "CHANGE_INVESTIGATION"
+   ],
+   "repeat_stable": false,
+   "evaluable": true
+  },
+  {
+   "case_id": "r048",
+   "expected_intent": "DOCUMENT_CONTENT",
+   "expected_route": "DOCUMENT",
+   "router_reason": "INTENT_NOT_RESOLVED_BY_RULES",
+   "project_id": "P130544",
+   "temporal_kind": "NONE",
+   "predicted": "DOCUMENT_CONTENT",
+   "final_hybrid_route": "DOCUMENT",
+   "abstain": false,
+   "intent_correct": true,
+   "route_correct": true,
+   "wrong_executable_route": false,
+   "latency_s": 1.6743,
+   "status": 200,
+   "failure_kind": "NONE",
+   "repeat_labels": [
+    "DOCUMENT_CONTENT",
+    "DOCUMENT_CONTENT",
+    "DOCUMENT_CONTENT",
+    "DOCUMENT_CONTENT",
+    "DOCUMENT_CONTENT"
+   ],
+   "repeat_stable": true,
+   "evaluable": true
+  }
+ ],
+ "hybrid": {
+  "candidate_a_route_correct": 24,
+  "hybrid_route_correct": 25,
+  "hybrid_intent_correct": 27,
+  "n": 29,
+  "delta": 1,
+  "changes": [
+   {
+    "case_id": "r015",
+    "effect": "changed_still_wrong"
+   },
+   {
+    "case_id": "r048",
+    "effect": "correction"
+   }
+  ],
+  "rows": [
+   {
+    "case_id": "r002",
+    "expected_route": "STRUCTURED",
+    "candidate_a": "STRUCTURED",
+    "hybrid": "STRUCTURED",
+    "hybrid_intent": "RESULTS_PROGRESS",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r006",
+    "expected_route": "STRUCTURED",
+    "candidate_a": "STRUCTURED",
+    "hybrid": "STRUCTURED",
+    "hybrid_intent": "RATING_HISTORY",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r012",
+    "expected_route": "STRUCTURED",
+    "candidate_a": "STRUCTURED",
+    "hybrid": "STRUCTURED",
+    "hybrid_intent": "FINANCIAL_STATUS",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r014",
+    "expected_route": "DOCUMENT",
+    "candidate_a": "DOCUMENT",
+    "hybrid": "DOCUMENT",
+    "hybrid_intent": "DOCUMENT_CONTENT",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r015",
+    "expected_route": "DOCUMENT",
+    "candidate_a": "CLARIFY",
+    "hybrid": "INVESTIGATION",
+    "hybrid_intent": "CHANGE_INVESTIGATION",
+    "effect": "changed_still_wrong"
+   },
+   {
+    "case_id": "r016",
+    "expected_route": "DOCUMENT",
+    "candidate_a": "DOCUMENT",
+    "hybrid": "DOCUMENT",
+    "hybrid_intent": "DOCUMENT_CONTENT",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r017",
+    "expected_route": "DOCUMENT",
+    "candidate_a": "DOCUMENT",
+    "hybrid": "DOCUMENT",
+    "hybrid_intent": "EXPLANATION",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r020",
+    "expected_route": "DOCUMENT",
+    "candidate_a": "DOCUMENT",
+    "hybrid": "DOCUMENT",
+    "hybrid_intent": "DOCUMENT_CONTENT",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r025",
+    "expected_route": "DOCUMENT",
+    "candidate_a": "DOCUMENT",
+    "hybrid": "DOCUMENT",
+    "hybrid_intent": "DOCUMENT_CONTENT",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r029",
+    "expected_route": "STRUCTURED",
+    "candidate_a": "STRUCTURED",
+    "hybrid": "STRUCTURED",
+    "hybrid_intent": "PROJECT_OVERVIEW",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r030",
+    "expected_route": "STRUCTURED",
+    "candidate_a": "STRUCTURED",
+    "hybrid": "STRUCTURED",
+    "hybrid_intent": "PROJECT_OVERVIEW",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r034",
+    "expected_route": "STRUCTURED",
+    "candidate_a": "STRUCTURED",
+    "hybrid": "STRUCTURED",
+    "hybrid_intent": "RATING_HISTORY",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r037",
+    "expected_route": "STRUCTURED",
+    "candidate_a": "STRUCTURED",
+    "hybrid": "STRUCTURED",
+    "hybrid_intent": "ATTENTION",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r042",
+    "expected_route": "STRUCTURED",
+    "candidate_a": "STRUCTURED",
+    "hybrid": "STRUCTURED",
+    "hybrid_intent": "TIMELINE_EVENTS",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r044",
+    "expected_route": "STRUCTURED",
+    "candidate_a": "DOCUMENT",
+    "hybrid": "DOCUMENT",
+    "hybrid_intent": "DOCUMENT_CONTENT",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r045",
+    "expected_route": "STRUCTURED",
+    "candidate_a": "STRUCTURED",
+    "hybrid": "STRUCTURED",
+    "hybrid_intent": "RISKS",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r048",
+    "expected_route": "DOCUMENT",
+    "candidate_a": "CLARIFY",
+    "hybrid": "DOCUMENT",
+    "hybrid_intent": "DOCUMENT_CONTENT",
+    "effect": "correction"
+   },
+   {
+    "case_id": "r050",
+    "expected_route": "DOCUMENT",
+    "candidate_a": "DOCUMENT",
+    "hybrid": "DOCUMENT",
+    "hybrid_intent": "EXPLANATION",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r052",
+    "expected_route": "INVESTIGATION",
+    "candidate_a": "INVESTIGATION",
+    "hybrid": "INVESTIGATION",
+    "hybrid_intent": "CHANGE_INVESTIGATION",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r055",
+    "expected_route": "INVESTIGATION",
+    "candidate_a": "CLARIFY",
+    "hybrid": "CLARIFY",
+    "hybrid_intent": "CHANGE_INVESTIGATION",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r056",
+    "expected_route": "INVESTIGATION",
+    "candidate_a": "INVESTIGATION",
+    "hybrid": "INVESTIGATION",
+    "hybrid_intent": "CHANGE_INVESTIGATION",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r059",
+    "expected_route": "CLARIFY",
+    "candidate_a": "CLARIFY",
+    "hybrid": "CLARIFY",
+    "hybrid_intent": null,
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r060",
+    "expected_route": "STRUCTURED",
+    "candidate_a": "CLARIFY",
+    "hybrid": "CLARIFY",
+    "hybrid_intent": "FINANCIAL_STATUS",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r063",
+    "expected_route": "REFUSE",
+    "candidate_a": "REFUSE",
+    "hybrid": "REFUSE",
+    "hybrid_intent": "PREDICTION_REQUEST",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r065",
+    "expected_route": "REFUSE",
+    "candidate_a": "REFUSE",
+    "hybrid": "REFUSE",
+    "hybrid_intent": "OUT_OF_DOMAIN",
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r070",
+    "expected_route": "REFUSE",
+    "candidate_a": "REFUSE",
+    "hybrid": "REFUSE",
+    "hybrid_intent": null,
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r076",
+    "expected_route": "REFUSE",
+    "candidate_a": "REFUSE",
+    "hybrid": "REFUSE",
+    "hybrid_intent": null,
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r078",
+    "expected_route": "REFUSE",
+    "candidate_a": "REFUSE",
+    "hybrid": "REFUSE",
+    "hybrid_intent": null,
+    "effect": "unchanged"
+   },
+   {
+    "case_id": "r080",
+    "expected_route": "REFUSE",
+    "candidate_a": "REFUSE",
+    "hybrid": "REFUSE",
+    "hybrid_intent": null,
+    "effect": "unchanged"
+   }
+  ]
+ },
+ "c2": {
+  "role": "SHADOW DIAGNOSTIC ONLY - not the production distribution, never a gate",
+  "n": 22,
+  "intent_accuracy": 0.5455,
+  "route_accuracy": 0.6818,
+  "abstain_rate": 0.0,
+  "non_abstain_precision": 0.5455,
+  "coverage": 1.0,
+  "matrix_route": {
+   "both_correct": 13,
+   "deterministic_only": 4,
+   "gpt_only": 2,
+   "both_wrong": 3
+  },
+  "deterministic_errors_corrected": 2,
+  "deterministic_correct_broken": 4,
+  "net_route_change_if_replaced": -2,
+  "confusions": [
+   {
+    "expected": "EXPLANATION",
+    "predicted": "CHANGE_INVESTIGATION",
+    "count": 3
+   },
+   {
+    "expected": "RATING_HISTORY",
+    "predicted": "CURRENT_RATINGS",
+    "count": 1
+   },
+   {
+    "expected": "DOCUMENT_CONTENT",
+    "predicted": "TIMELINE_EVENTS",
+    "count": 1
+   },
+   {
+    "expected": "PROJECT_OVERVIEW",
+    "predicted": "TIMELINE_EVENTS",
+    "count": 1
+   },
+   {
+    "expected": "RISKS",
+    "predicted": "DOCUMENT_CONTENT",
+    "count": 1
+   },
+   {
+    "expected": "RISKS",
+    "predicted": "CURRENT_RATINGS",
+    "count": 1
+   },
+   {
+    "expected": "CHANGE_INVESTIGATION",
+    "predicted": "ATTENTION",
+    "count": 1
+   },
+   {
+    "expected": "FINANCIAL_STATUS",
+    "predicted": "CHANGE_INVESTIGATION",
+    "count": 1
+   }
+  ],
+  "patterns_for_review": [
+   {
+    "expected": "EXPLANATION",
+    "predicted": "CHANGE_INVESTIGATION",
+    "count": 3
+   }
+  ],
+  "human_review_required": true,
+  "rows": [
+   {
+    "case_id": "r002",
+    "expected_intent": "RESULTS_PROGRESS",
+    "expected_route": "STRUCTURED",
+    "deterministic_intent": "RESULTS_PROGRESS",
+    "deterministic_route": "STRUCTURED",
+    "gpt_intent": "RESULTS_PROGRESS",
+    "gpt_route": "STRUCTURED",
+    "gpt_intent_correct": true,
+    "gpt_route_correct": true,
+    "agrees_with_deterministic_intent": true,
+    "deterministic_correct": true,
+    "effect_if_replaced": "preserve",
+    "abstain": false,
+    "latency_s": 0.37,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r006",
+    "expected_intent": "RATING_HISTORY",
+    "expected_route": "STRUCTURED",
+    "deterministic_intent": "RATING_HISTORY",
+    "deterministic_route": "STRUCTURED",
+    "gpt_intent": "CURRENT_RATINGS",
+    "gpt_route": "STRUCTURED",
+    "gpt_intent_correct": false,
+    "gpt_route_correct": true,
+    "agrees_with_deterministic_intent": false,
+    "deterministic_correct": true,
+    "effect_if_replaced": "preserve",
+    "abstain": false,
+    "latency_s": 1.5515,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r012",
+    "expected_intent": "FINANCIAL_STATUS",
+    "expected_route": "STRUCTURED",
+    "deterministic_intent": "FINANCIAL_STATUS",
+    "deterministic_route": "STRUCTURED",
+    "gpt_intent": "FINANCIAL_STATUS",
+    "gpt_route": "STRUCTURED",
+    "gpt_intent_correct": true,
+    "gpt_route_correct": true,
+    "agrees_with_deterministic_intent": true,
+    "deterministic_correct": true,
+    "effect_if_replaced": "preserve",
+    "abstain": false,
+    "latency_s": 0.4528,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r014",
+    "expected_intent": "DOCUMENT_CONTENT",
+    "expected_route": "DOCUMENT",
+    "deterministic_intent": "DOCUMENT_CONTENT",
+    "deterministic_route": "DOCUMENT",
+    "gpt_intent": "DOCUMENT_CONTENT",
+    "gpt_route": "DOCUMENT",
+    "gpt_intent_correct": true,
+    "gpt_route_correct": true,
+    "agrees_with_deterministic_intent": true,
+    "deterministic_correct": true,
+    "effect_if_replaced": "preserve",
+    "abstain": false,
+    "latency_s": 0.4742,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r015",
+    "expected_intent": "EXPLANATION",
+    "expected_route": "DOCUMENT",
+    "deterministic_intent": null,
+    "deterministic_route": "CLARIFY",
+    "gpt_intent": "CHANGE_INVESTIGATION",
+    "gpt_route": "INVESTIGATION",
+    "gpt_intent_correct": false,
+    "gpt_route_correct": false,
+    "agrees_with_deterministic_intent": false,
+    "deterministic_correct": false,
+    "effect_if_replaced": "both_wrong",
+    "abstain": false,
+    "latency_s": 0.4514,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r016",
+    "expected_intent": "DOCUMENT_CONTENT",
+    "expected_route": "DOCUMENT",
+    "deterministic_intent": "DOCUMENT_CONTENT",
+    "deterministic_route": "DOCUMENT",
+    "gpt_intent": "DOCUMENT_CONTENT",
+    "gpt_route": "DOCUMENT",
+    "gpt_intent_correct": true,
+    "gpt_route_correct": true,
+    "agrees_with_deterministic_intent": true,
+    "deterministic_correct": true,
+    "effect_if_replaced": "preserve",
+    "abstain": false,
+    "latency_s": 0.1951,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r017",
+    "expected_intent": "EXPLANATION",
+    "expected_route": "DOCUMENT",
+    "deterministic_intent": "EXPLANATION",
+    "deterministic_route": "DOCUMENT",
+    "gpt_intent": "CHANGE_INVESTIGATION",
+    "gpt_route": "INVESTIGATION",
+    "gpt_intent_correct": false,
+    "gpt_route_correct": false,
+    "agrees_with_deterministic_intent": false,
+    "deterministic_correct": true,
+    "effect_if_replaced": "regress",
+    "abstain": false,
+    "latency_s": 0.2537,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r020",
+    "expected_intent": "DOCUMENT_CONTENT",
+    "expected_route": "DOCUMENT",
+    "deterministic_intent": "DOCUMENT_CONTENT",
+    "deterministic_route": "DOCUMENT",
+    "gpt_intent": "TIMELINE_EVENTS",
+    "gpt_route": "STRUCTURED",
+    "gpt_intent_correct": false,
+    "gpt_route_correct": false,
+    "agrees_with_deterministic_intent": false,
+    "deterministic_correct": true,
+    "effect_if_replaced": "regress",
+    "abstain": false,
+    "latency_s": 1.7736,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r025",
+    "expected_intent": "DOCUMENT_CONTENT",
+    "expected_route": "DOCUMENT",
+    "deterministic_intent": "DOCUMENT_CONTENT",
+    "deterministic_route": "DOCUMENT",
+    "gpt_intent": "DOCUMENT_CONTENT",
+    "gpt_route": "DOCUMENT",
+    "gpt_intent_correct": true,
+    "gpt_route_correct": true,
+    "agrees_with_deterministic_intent": true,
+    "deterministic_correct": true,
+    "effect_if_replaced": "preserve",
+    "abstain": false,
+    "latency_s": 0.3321,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r029",
+    "expected_intent": "PROJECT_OVERVIEW",
+    "expected_route": "STRUCTURED",
+    "deterministic_intent": "PROJECT_OVERVIEW",
+    "deterministic_route": "STRUCTURED",
+    "gpt_intent": "TIMELINE_EVENTS",
+    "gpt_route": "STRUCTURED",
+    "gpt_intent_correct": false,
+    "gpt_route_correct": true,
+    "agrees_with_deterministic_intent": false,
+    "deterministic_correct": true,
+    "effect_if_replaced": "preserve",
+    "abstain": false,
+    "latency_s": 0.4575,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r030",
+    "expected_intent": "PROJECT_OVERVIEW",
+    "expected_route": "STRUCTURED",
+    "deterministic_intent": "PROJECT_OVERVIEW",
+    "deterministic_route": "STRUCTURED",
+    "gpt_intent": "PROJECT_OVERVIEW",
+    "gpt_route": "STRUCTURED",
+    "gpt_intent_correct": true,
+    "gpt_route_correct": true,
+    "agrees_with_deterministic_intent": true,
+    "deterministic_correct": true,
+    "effect_if_replaced": "preserve",
+    "abstain": false,
+    "latency_s": 0.2304,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r034",
+    "expected_intent": "RATING_HISTORY",
+    "expected_route": "STRUCTURED",
+    "deterministic_intent": "RATING_HISTORY",
+    "deterministic_route": "STRUCTURED",
+    "gpt_intent": "RATING_HISTORY",
+    "gpt_route": "STRUCTURED",
+    "gpt_intent_correct": true,
+    "gpt_route_correct": true,
+    "agrees_with_deterministic_intent": true,
+    "deterministic_correct": true,
+    "effect_if_replaced": "preserve",
+    "abstain": false,
+    "latency_s": 1.1319,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r037",
+    "expected_intent": "ATTENTION",
+    "expected_route": "STRUCTURED",
+    "deterministic_intent": "ATTENTION",
+    "deterministic_route": "STRUCTURED",
+    "gpt_intent": "ATTENTION",
+    "gpt_route": "STRUCTURED",
+    "gpt_intent_correct": true,
+    "gpt_route_correct": true,
+    "agrees_with_deterministic_intent": true,
+    "deterministic_correct": true,
+    "effect_if_replaced": "preserve",
+    "abstain": false,
+    "latency_s": 0.2949,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r042",
+    "expected_intent": "TIMELINE_EVENTS",
+    "expected_route": "STRUCTURED",
+    "deterministic_intent": "TIMELINE_EVENTS",
+    "deterministic_route": "STRUCTURED",
+    "gpt_intent": "TIMELINE_EVENTS",
+    "gpt_route": "STRUCTURED",
+    "gpt_intent_correct": true,
+    "gpt_route_correct": true,
+    "agrees_with_deterministic_intent": true,
+    "deterministic_correct": true,
+    "effect_if_replaced": "preserve",
+    "abstain": false,
+    "latency_s": 0.3662,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r044",
+    "expected_intent": "RISKS",
+    "expected_route": "STRUCTURED",
+    "deterministic_intent": "DOCUMENT_CONTENT",
+    "deterministic_route": "DOCUMENT",
+    "gpt_intent": "DOCUMENT_CONTENT",
+    "gpt_route": "DOCUMENT",
+    "gpt_intent_correct": false,
+    "gpt_route_correct": false,
+    "agrees_with_deterministic_intent": true,
+    "deterministic_correct": false,
+    "effect_if_replaced": "both_wrong",
+    "abstain": false,
+    "latency_s": 0.3802,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r045",
+    "expected_intent": "RISKS",
+    "expected_route": "STRUCTURED",
+    "deterministic_intent": "RISKS",
+    "deterministic_route": "STRUCTURED",
+    "gpt_intent": "CURRENT_RATINGS",
+    "gpt_route": "STRUCTURED",
+    "gpt_intent_correct": false,
+    "gpt_route_correct": true,
+    "agrees_with_deterministic_intent": false,
+    "deterministic_correct": true,
+    "effect_if_replaced": "preserve",
+    "abstain": false,
+    "latency_s": 0.324,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r048",
+    "expected_intent": "DOCUMENT_CONTENT",
+    "expected_route": "DOCUMENT",
+    "deterministic_intent": null,
+    "deterministic_route": "CLARIFY",
+    "gpt_intent": "DOCUMENT_CONTENT",
+    "gpt_route": "DOCUMENT",
+    "gpt_intent_correct": true,
+    "gpt_route_correct": true,
+    "agrees_with_deterministic_intent": false,
+    "deterministic_correct": false,
+    "effect_if_replaced": "improve",
+    "abstain": false,
+    "latency_s": 1.6743,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r050",
+    "expected_intent": "EXPLANATION",
+    "expected_route": "DOCUMENT",
+    "deterministic_intent": "EXPLANATION",
+    "deterministic_route": "DOCUMENT",
+    "gpt_intent": "CHANGE_INVESTIGATION",
+    "gpt_route": "INVESTIGATION",
+    "gpt_intent_correct": false,
+    "gpt_route_correct": false,
+    "agrees_with_deterministic_intent": false,
+    "deterministic_correct": true,
+    "effect_if_replaced": "regress",
+    "abstain": false,
+    "latency_s": 0.2697,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r052",
+    "expected_intent": "CHANGE_INVESTIGATION",
+    "expected_route": "INVESTIGATION",
+    "deterministic_intent": "CHANGE_INVESTIGATION",
+    "deterministic_route": "INVESTIGATION",
+    "gpt_intent": "CHANGE_INVESTIGATION",
+    "gpt_route": "INVESTIGATION",
+    "gpt_intent_correct": true,
+    "gpt_route_correct": true,
+    "agrees_with_deterministic_intent": true,
+    "deterministic_correct": true,
+    "effect_if_replaced": "preserve",
+    "abstain": false,
+    "latency_s": 0.3484,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r055",
+    "expected_intent": "CHANGE_INVESTIGATION",
+    "expected_route": "INVESTIGATION",
+    "deterministic_intent": "CHANGE_INVESTIGATION",
+    "deterministic_route": "CLARIFY",
+    "gpt_intent": "CHANGE_INVESTIGATION",
+    "gpt_route": "INVESTIGATION",
+    "gpt_intent_correct": true,
+    "gpt_route_correct": true,
+    "agrees_with_deterministic_intent": true,
+    "deterministic_correct": false,
+    "effect_if_replaced": "improve",
+    "abstain": false,
+    "latency_s": 1.0322,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r056",
+    "expected_intent": "CHANGE_INVESTIGATION",
+    "expected_route": "INVESTIGATION",
+    "deterministic_intent": "CHANGE_INVESTIGATION",
+    "deterministic_route": "INVESTIGATION",
+    "gpt_intent": "ATTENTION",
+    "gpt_route": "STRUCTURED",
+    "gpt_intent_correct": false,
+    "gpt_route_correct": false,
+    "agrees_with_deterministic_intent": false,
+    "deterministic_correct": true,
+    "effect_if_replaced": "regress",
+    "abstain": false,
+    "latency_s": 0.2,
+    "status": 200,
+    "failure_kind": "NONE"
+   },
+   {
+    "case_id": "r060",
+    "expected_intent": "FINANCIAL_STATUS",
+    "expected_route": "STRUCTURED",
+    "deterministic_intent": "FINANCIAL_STATUS",
+    "deterministic_route": "CLARIFY",
+    "gpt_intent": "CHANGE_INVESTIGATION",
+    "gpt_route": "INVESTIGATION",
+    "gpt_intent_correct": false,
+    "gpt_route_correct": false,
+    "agrees_with_deterministic_intent": false,
+    "deterministic_correct": false,
+    "effect_if_replaced": "both_wrong",
+    "abstain": false,
+    "latency_s": 0.3332,
+    "status": 200,
+    "failure_kind": "NONE"
+   }
+  ]
+ },
+ "repeatability": [
+  {
+   "case_id": "r002",
+   "population": "C2",
+   "main": "RESULTS_PROGRESS",
+   "repeats": [
+    "RESULTS_PROGRESS",
+    "RESULTS_PROGRESS",
+    "RESULTS_PROGRESS"
+   ],
+   "modal_label": "RESULTS_PROGRESS",
+   "modal_share": 1.0,
+   "label_changes": 0,
+   "all_equal_main": true
+  },
+  {
+   "case_id": "r006",
+   "population": "C2",
+   "main": "CURRENT_RATINGS",
+   "repeats": [
+    "CURRENT_RATINGS",
+    "CURRENT_RATINGS",
+    "CURRENT_RATINGS"
+   ],
+   "modal_label": "CURRENT_RATINGS",
+   "modal_share": 1.0,
+   "label_changes": 0,
+   "all_equal_main": true
+  },
+  {
+   "case_id": "r014",
+   "population": "C2",
+   "main": "DOCUMENT_CONTENT",
+   "repeats": [
+    "RESULTS_PROGRESS",
+    "RESULTS_PROGRESS",
+    "RESULTS_PROGRESS"
+   ],
+   "modal_label": "RESULTS_PROGRESS",
+   "modal_share": 1.0,
+   "label_changes": 0,
+   "all_equal_main": false
+  },
+  {
+   "case_id": "r015",
+   "population": "C1",
+   "main": "CHANGE_INVESTIGATION",
+   "repeats": [
+    "EXPLANATION",
+    "CHANGE_INVESTIGATION",
+    "CHANGE_INVESTIGATION",
+    "CHANGE_INVESTIGATION",
+    "CHANGE_INVESTIGATION"
+   ],
+   "modal_label": "CHANGE_INVESTIGATION",
+   "modal_share": 0.8,
+   "label_changes": 1,
+   "all_equal_main": false
+  },
+  {
+   "case_id": "r048",
+   "population": "C1",
+   "main": "DOCUMENT_CONTENT",
+   "repeats": [
+    "DOCUMENT_CONTENT",
+    "DOCUMENT_CONTENT",
+    "DOCUMENT_CONTENT",
+    "DOCUMENT_CONTENT",
+    "DOCUMENT_CONTENT"
+   ],
+   "modal_label": "DOCUMENT_CONTENT",
+   "modal_share": 1.0,
+   "label_changes": 0,
+   "all_equal_main": true
+  },
+  {
+   "case_id": "r052",
+   "population": "C2",
+   "main": "CHANGE_INVESTIGATION",
+   "repeats": [
+    "CHANGE_INVESTIGATION",
+    "CHANGE_INVESTIGATION",
+    "EXPLANATION"
+   ],
+   "modal_label": "CHANGE_INVESTIGATION",
+   "modal_share": 0.6667,
+   "label_changes": 1,
+   "all_equal_main": false
+  }
+ ],
+ "retry_after": []
+}

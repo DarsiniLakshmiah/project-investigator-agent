@@ -3,6 +3,7 @@
 import json
 
 import pytest
+import yaml
 from tests.conftest import REPO_CONFIG_DIR, REPO_ROOT
 from tests.support.routing_fixtures import ALL, CONFIG, harness
 from tests.support.tool_fixtures import IPF, PFORR
@@ -295,7 +296,32 @@ def test_development_artefacts_record_that_test_was_not_evaluated():
         assert all(x["split"] == "dev" for x in run["experiments"])
         assert {p["example_id"] for p in run["base_lofo"]} <= dev
     decision = (REPO_ROOT / "evaluation" / "semantic_config_9d.yaml").read_text(encoding="utf-8")
-    assert "test_evaluated: false" in decision and "status: PROVISIONAL" in decision
+    assert "test_evaluated: false" in decision and "status: FROZEN" in decision
+
+
+def test_phase_9d_decision_is_frozen_with_candidate_a_and_the_full_trail():
+    decision = yaml.safe_load(
+        (REPO_ROOT / "evaluation" / "semantic_config_9d.yaml").read_text(encoding="utf-8")
+    )
+    assert decision["status"] == "FROZEN" and decision["test_evaluated"] is False
+    assert decision["selected_candidate"].startswith("A ")
+    assert decision["selected_strategy"] == "DETERMINISTIC ROUTING + TARGETED CLARIFICATION"
+    assert decision["config"] is None  # no semantic fallback promoted
+    status = {k: v.split(" ")[0] for k, v in decision["candidates"].items()}
+    assert status == {
+        "A": "SELECTED",
+        "B1-lexical": "REJECTED",
+        "B2-qwen-similarity": "REJECTED",
+        "C-semif-openjev": "BLOCKED_BY_EXECUTION_ENVIRONMENT",
+        "C-gpt-5-4-nano": "BLOCKED_BY_MODEL_AVAILABILITY",
+        "C-gpt-oss-20b-capability-run1": "CAPABILITY_BLOCKED_BY_RATE_LIMIT",
+        "C-gpt-oss-20b-capability-run2": "CAPABILITY_PASSED",
+        "C-gpt-oss-20b-dev": "REJECTED",
+    }
+    for blocked in ("C-semif-openjev", "C-gpt-5-4-nano", "C-gpt-oss-20b-capability-run1"):
+        assert "not a quality rejection" in decision["candidates"][blocked]
+    assert decision["ambiguity_probe_status"].startswith("NOT_RUN_CANDIDATE_C_DEV_REJECTED")
+    assert "does not authorise TEST" in decision["freeze_rule"]
 
 
 # -- Databricks development guards ----------------------------------------------------------
