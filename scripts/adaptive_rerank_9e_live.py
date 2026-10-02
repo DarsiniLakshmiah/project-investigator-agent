@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from worldbank_copilot.retrieval import evaluation as ev  # noqa: E402
 from worldbank_copilot.retrieval.adaptive_eval import (  # noqa: E402
     compare_live,
+    file_sha256,
     lock_sha256,
     render_live_markdown,
 )
@@ -40,7 +41,8 @@ def main(argv: list[str]) -> int:
         print("STOP: the live report already exists - never overwritten")
         return 1
     config = load_adaptive_config(ROOT / "configs")
-    sha = lock_sha256(json.loads(LOCK.read_text(encoding="utf-8")))
+    lock = json.loads(LOCK.read_text(encoding="utf-8"))
+    sha = lock_sha256(lock)
     collection = json.loads(Path(argv[0]).read_text(encoding="utf-8"))
     live = json.loads(Path(argv[1]).read_text(encoding="utf-8"))
     selection = json.loads(SELECTION.read_text(encoding="utf-8"))
@@ -48,6 +50,13 @@ def main(argv: list[str]) -> int:
         sha
     } or live["selection"] != selection:
         print("STOP: artifacts or selection belong to a different lock / selection")
+        return 1
+    if live.get("policy_definitions_sha256") != lock["policy_definitions_sha256"]:
+        print("STOP: live run used different policy definitions")
+        return 1
+    expected = selection["collection_artifact_sha256"]
+    if file_sha256(Path(argv[0])) != expected or live.get("collection_artifact_sha256") != expected:
+        print("STOP: collection artifact is not the one the live selection was derived from")
         return 1
     report = compare_live(config, collection, live, ev.load_questions(ROOT / config.questions_file))
     OUT_JSON.write_text(json.dumps(report, indent=1, ensure_ascii=False) + "\n", "utf-8")

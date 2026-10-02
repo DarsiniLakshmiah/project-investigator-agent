@@ -753,6 +753,103 @@ def pareto(
 # -- live confirmation (07d) ----------------------------------------------------------------
 
 
+def file_sha256(path: Path) -> str | None:
+    """Raw-byte SHA-256 of a file (the collection artifact as written), or None if absent."""
+    path = Path(path)
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+
+
+def read_json_artifact(path: Path) -> dict[str, Any]:
+    """A committed JSON artifact, or {} when it is missing or unreadable, so the preflight
+    reports it as a named failure instead of an unhandled exception."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def runtime_index_failures(runtime_name: str | None, index_name: str) -> list[str]:
+    """The index the runtime actually opened (its own description) must be the configured one."""
+    if not runtime_name:
+        return ["INDEX_NAME_UNAVAILABLE: the index does not report its name"]
+    if runtime_name != index_name:
+        return [f"INDEX_NAME_MISMATCH: {runtime_name} != {index_name}"]
+    return []
+
+
+def live_preflight_failures(
+    *,
+    lock: dict[str, Any],
+    recomputed_lock: dict[str, Any],
+    frontier: dict[str, Any],
+    selection: dict[str, Any],
+    collection_sha256: str | None,
+    authorized: dict[str, str],
+) -> list[str]:
+    """Every 07d pre-run integrity check; any failure STOPs before the first live query.
+
+    `authorized` holds the values the live run was approved for: `lock_sha256`,
+    `policy_definitions_sha256`, `collection_artifact_sha256` and `point`. The selection must
+    be the committed one, derived by the frozen rule from the committed frontier.
+    """
+    failures = []
+    if not frontier:
+        failures.append("FRONTIER_UNAVAILABLE: committed frontier missing or unreadable")
+    if not selection:
+        failures.append("SELECTION_UNAVAILABLE: committed live selection missing or unreadable")
+    sha = lock_sha256(lock)
+    if recomputed_lock != lock:
+        failures.append("LOCK_MISMATCH: recomputed protocol lock differs from the committed lock")
+    if sha != authorized["lock_sha256"]:
+        failures.append(f"LOCK_NOT_AUTHORIZED: {sha} != {authorized['lock_sha256']}")
+    policy_sha = _sha(lock.get("policy_definitions"))
+    if {policy_sha, lock.get("policy_definitions_sha256")} != {
+        authorized["policy_definitions_sha256"]
+    }:
+        failures.append(f"POLICY_DEFINITIONS_MISMATCH: {policy_sha}")
+    if lock.get("production_null") is not True:
+        failures.append("PRODUCTION_NOT_NULL: production retrieval config is set")
+    if collection_sha256 is None:
+        failures.append("COLLECTION_ARTIFACT_UNAVAILABLE: collection artifact not found")
+    elif collection_sha256 != authorized["collection_artifact_sha256"]:
+        failures.append(f"COLLECTION_ARTIFACT_MISMATCH: {collection_sha256}")
+    if (
+        frontier.get("status") != "VALID"
+        or frontier.get("lock_sha256") != sha
+        or frontier.get("collection_artifact_sha256") != authorized["collection_artifact_sha256"]
+    ):
+        failures.append("FRONTIER_MISMATCH: committed frontier is not VALID for this lock/artifact")
+    if (
+        selection.get("lock_sha256") != sha
+        or selection.get("collection_artifact_sha256") != authorized["collection_artifact_sha256"]
+    ):
+        failures.append("SELECTION_MISMATCH: live selection belongs to another lock/artifact")
+    chosen = {
+        k: v for k, v in selection.items() if k not in ("lock_sha256", "collection_artifact_sha256")
+    }
+    committed = frontier.get("live_validation_point")
+    if chosen != committed:
+        failures.append("SELECTION_NOT_FROM_FRONTIER: selection differs from the frontier's point")
+    rates = {n: p for n, p in (frontier.get("points") or {}).items() if n != "P0"}
+    try:
+        reproduced = select_live_point(rates) if rates else None
+    except (KeyError, TypeError, ValueError):  # malformed frontier points
+        reproduced = None
+    if reproduced is None or reproduced != committed:
+        failures.append("SELECTION_RULE_MISMATCH: frozen rule does not reproduce the selection")
+    point = selection.get("point")
+    if point != authorized["point"] or point not in lock.get("preregistered_points", []):
+        failures.append(f"POINT_NOT_AUTHORIZED: {point} != {authorized['point']}")
+    elif selection.get("policy_id") != point.split("(")[0] or (
+        point != AdaptivePolicy(selection["policy_id"], selection.get("threshold")).name
+    ):
+        failures.append(f"POINT_DEFINITION_MISMATCH: {point}")
+    if selection.get("label") != LIVE_LABEL:
+        failures.append("SELECTION_LABEL_MISMATCH: must be a latency validation point")
+    return failures
+
+
 def run_live(
     retriever: Any,
     recorder: Any,
@@ -830,28 +927,49 @@ def compare_live(
     out: dict[str, Any] = {"selection": sel, "points": {}, "label": LIVE_LABEL}
     for label in ("P0@50", sel["point"]):
         is_p0 = label == "P0@50"
-        composed, live_ms, mismatches = [], [], []
+        composed, live_ms, mismatches, per_question = [], [], [], []
+        decision_mismatches = top5_mismatches = 0
+        rows = [x for x in live["rows"] if x["point"] == label]
         for q in questions:
             r = recs[q.id]
             expect_rerank = False if is_p0 else adaptive.trigger(TriggerFeatures(**r["features"]))
-            composed.append(_composed_ms(r, expect_rerank, "P0@50" if is_p0 else "adaptive"))
-            timed = [
-                x
-                for x in live["rows"]
-                if x["point"] == label and x["question_id"] == q.id and x["pass"] > 1
-            ]
-            live_ms.append(statistics.fmean(x["live_ms"] for x in timed))
+            c_ms = _composed_ms(r, expect_rerank, "P0@50" if is_p0 else "adaptive")
+            composed.append(c_ms)
+            mine = [x for x in rows if x["question_id"] == q.id]
+            timed = [x for x in mine if x["pass"] > 1]
+            l_ms = statistics.fmean(x["live_ms"] for x in timed)
+            live_ms.append(l_ms)
             order = (
                 r["lists"]["reranked_k50"]
                 if expect_rerank
                 else [i for i, _ in r["lists"]["fused_k50"]]
             )
-            for x in timed:
+            for x in mine:  # every pass, warm-up included
                 if x["rerank"] != expect_rerank:
-                    mismatches.append(f"{q.id}: live decision {x['rerank']} != offline")
-                if x["top5"] and x["top5"] != order[:final_k]:
-                    mismatches.append(f"{q.id}: live top-5 differs from the simulated top-5")
+                    decision_mismatches += 1
+                    mismatches.append(
+                        f"{q.id} pass {x['pass']}: live decision {x['rerank']} != offline"
+                    )
+                if x["top5"] != order[:final_k]:
+                    top5_mismatches += 1
+                    mismatches.append(
+                        f"{q.id} pass {x['pass']}: live top-5 differs from the simulated top-5"
+                    )
+            per_question.append(
+                {
+                    "question_id": q.id,
+                    "rerank": expect_rerank,
+                    "composed_ms": round(c_ms, 1),
+                    "live_ms": round(l_ms, 1),
+                    "difference_ms": round(l_ms - c_ms, 1),
+                }
+            )
         c50, c95, l50, l95 = _p50(composed), _p95(composed), _p50(live_ms), _p95(live_ms)
+        timed_rows = [x for x in rows if x["pass"] > 1]
+        by_decision = {
+            name: [p["live_ms"] for p in per_question if p["rerank"] is flag]
+            for name, flag in (("reranked", True), ("not_reranked", False))
+        }
         out["points"][label] = {
             "composed_p50_ms": c50,
             "composed_p95_ms": c95,
@@ -860,6 +978,29 @@ def compare_live(
             "difference_p50_ms": round(l50 - c50, 1),
             "difference_p95_ms": round(l95 - c95, 1),
             "relative_difference_p50": round((l50 - c50) / c50, 4) if c50 else None,
+            "relative_difference_p95": round((l95 - c95) / c95, 4) if c95 else None,
+            "observed_rerank_rate": round(
+                sum(x["rerank"] for x in timed_rows) / len(timed_rows), 4
+            ),
+            "agreement": {
+                "rows_checked": len(rows),
+                "decision_mismatches": decision_mismatches,
+                "top5_mismatches": top5_mismatches,
+            },
+            "live_by_decision": {
+                name: {"n": len(v), "p50_ms": _p50(v), "p95_ms": _p95(v), "mean_ms": _mean(v)}
+                for name, v in by_decision.items()
+            },
+            "passes": {
+                str(n): {
+                    "kind": "warm-up" if n == 1 else "timed",
+                    "p50_ms": _p50([x["live_ms"] for x in rows if x["pass"] == n]),
+                    "p95_ms": _p95([x["live_ms"] for x in rows if x["pass"] == n]),
+                    "max_ms": max(x["live_ms"] for x in rows if x["pass"] == n),
+                }
+                for n in sorted({x["pass"] for x in rows})
+            },
+            "per_question": per_question,
             "mismatches": mismatches,
         }
     return out
@@ -1034,4 +1175,31 @@ def render_live_markdown(report: dict[str, Any]) -> str:
             f"| {p['live_p95_ms']} | {p['difference_p50_ms']} | {p['difference_p95_ms']} "
             f"| {len(p['mismatches'])} |"
         )
+    for name, p in report["points"].items():
+        a = p["agreement"]
+        lines += [
+            "",
+            f"## {name}",
+            "",
+            f"- relative difference: p50 {p['relative_difference_p50']}, "
+            f"p95 {p['relative_difference_p95']}",
+            f"- observed rerank rate (timed passes): {p['observed_rerank_rate']}",
+            f"- agreement over {a['rows_checked']} rows: {a['decision_mismatches']} decision, "
+            f"{a['top5_mismatches']} top-5 mismatches",
+        ]
+        for kind, d in p["live_by_decision"].items():
+            lines.append(f"- live {kind}: n={d['n']} p50 {d['p50_ms']} p95 {d['p95_ms']}")
+        for n, s in p["passes"].items():
+            lines.append(f"- pass {n} ({s['kind']}): p50 {s['p50_ms']} p95 {s['p95_ms']}")
+        lines += [
+            "",
+            "| question | rerank | composed ms | live ms | diff ms |",
+            "|---|---|---|---|---|",
+        ]
+        lines += [
+            f"| {q['question_id']} | {q['rerank']} | {q['composed_ms']} | {q['live_ms']} "
+            f"| {q['difference_ms']} |"
+            for q in p["per_question"]
+        ]
+        lines += [f"- MISMATCH {m}" for m in p["mismatches"]]
     return "\n".join(lines) + "\n"

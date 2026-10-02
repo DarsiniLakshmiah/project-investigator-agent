@@ -5,6 +5,7 @@ no Databricks, no AI Search, no real CrossEncoder, no real 9E results."""
 
 import ast
 import copy
+import hashlib
 import itertools
 import json
 import math
@@ -707,7 +708,7 @@ def test_live_selection_uses_rerank_rate_only():
     assert ae.select_live_point(rates)["point"] == "P3(0.3)"  # then the lower threshold
 
 
-def test_live_path_matches_offline_decisions_without_a_second_dense_query():
+def live_run():
     config = calibrated_config()
     collection = collect(config)
     recorder = RecordingDense(ScopedDense(ROWS))
@@ -729,11 +730,48 @@ def test_live_path_matches_offline_decisions_without_a_second_dense_query():
         clock=ticking_clock(),
         log=lambda _: None,
     )
+    return config, collection, live
+
+
+def test_live_path_matches_offline_decisions_without_a_second_dense_query():
+    config, collection, live = live_run()
     assert all(r["dense_calls"] == 1 for r in live["rows"])
     report = ae.compare_live(config, collection, live, QUESTIONS)
     assert all(not p["mismatches"] for p in report["points"].values()), report
     assert set(report["points"]) == {"P0@50", "P3(0.5)"}
     assert {"composed_p50_ms", "live_p50_ms", "difference_p50_ms"} <= set(report["points"]["P0@50"])
+    p3 = report["points"]["P3(0.5)"]
+    n = len(QUESTIONS)
+    assert p3["agreement"] == {
+        "rows_checked": 3 * n,
+        "decision_mismatches": 0,
+        "top5_mismatches": 0,
+    }
+    reranked = sum(q["rerank"] for q in p3["per_question"])
+    assert p3["observed_rerank_rate"] == round(reranked / n, 4)
+    assert p3["live_by_decision"]["reranked"]["n"] == reranked
+    assert p3["live_by_decision"]["not_reranked"]["n"] == n - reranked
+    assert report["points"]["P0@50"]["observed_rerank_rate"] == 0
+    assert [s["kind"] for s in p3["passes"].values()] == ["warm-up", "timed", "timed"]
+    assert {"relative_difference_p95", "per_question"} <= set(p3)
+    for q in p3["per_question"]:
+        assert math.isclose(q["difference_ms"], q["live_ms"] - q["composed_ms"], abs_tol=0.11)
+
+
+def test_live_comparison_reports_every_mismatch_including_warm_up_and_empty_top5():
+    config, collection, live = live_run()
+    live = copy.deepcopy(live)
+    rows = [r for r in live["rows"] if r["point"] == "P3(0.5)"]
+    warm = next(r for r in rows if r["pass"] == 1)
+    warm["rerank"] = not warm["rerank"]
+    timed = next(r for r in rows if r["pass"] == 2)
+    timed["top5"] = []
+    report = ae.compare_live(config, collection, live, QUESTIONS)
+    agreement = report["points"]["P3(0.5)"]["agreement"]
+    assert agreement["decision_mismatches"] == 1 and agreement["top5_mismatches"] == 1
+    assert any("pass 1: live decision" in m for m in report["points"]["P3(0.5)"]["mismatches"])
+    assert any("pass 2: live top-5" in m for m in report["points"]["P3(0.5)"]["mismatches"])
+    assert "MISMATCH" in ae.render_live_markdown(report)
 
 
 # -- protocol lock, production boundary, notebooks --------------------------------------------
@@ -805,12 +843,179 @@ def test_collect_notebook_checks_lock_and_artifact_before_any_query():
     )  # the real production path, in order
 
 
-def test_no_9e_results_exist_yet():
-    for name in (
-        "adaptive_rerank_9e.json",
-        "adaptive_rerank_9e.md",
-        "adaptive_rerank_9e_live.json",
-        "adaptive_rerank_9e_live_selection.json",
-    ):
+def test_frontier_is_recorded_and_no_live_result_exists_yet():
+    for name in ("adaptive_rerank_9e.json", "adaptive_rerank_9e.md"):
+        assert (REPO_ROOT / "evaluation" / name).exists()
+    selection = json.loads((REPO_ROOT / "evaluation" / SELECTION_FILE).read_text("utf-8"))
+    assert selection["point"] == "P3(0.4)" and selection["label"] == ae.LIVE_LABEL
+    for name in ("adaptive_rerank_9e_live.json", "adaptive_rerank_9e_live.md"):
         assert not (REPO_ROOT / "evaluation" / name).exists()
     assert math.isclose(CFG.drift["references"]["P1"]["mrr"], 0.6827)
+
+
+# -- 07d pre-run integrity (fail closed before any live query) --------------------------------
+
+SELECTION_FILE = "adaptive_rerank_9e_live_selection.json"
+AUTHORIZED = {
+    "lock_sha256": "480d0a1ec02e6e54aeb7c4a86d1122c002e1b0607d76ad74a9571a7d231b591e",
+    "policy_definitions_sha256": "dafc0bf5c80acf2491099eb95991def149df51211c29eae7ccecafafd6eb1cff",
+    "collection_artifact_sha256": "8b6763e349215899b686fff45f49eb44483f65490167b6649e88014599a63d70",  # noqa: E501
+    "point": "P3(0.4)",
+}
+
+
+def committed_preflight(**override):
+    lock = json.loads(LOCK_PATH.read_text("utf-8"))
+    kw = {
+        "lock": lock,
+        "recomputed_lock": ae.build_lock(
+            CFG, REPO_ROOT, ae.load_retrieval_production(REPO_CONFIG_DIR)
+        ),
+        "frontier": json.loads(
+            (REPO_ROOT / "evaluation" / "adaptive_rerank_9e.json").read_text("utf-8")
+        ),
+        "selection": json.loads((REPO_ROOT / "evaluation" / SELECTION_FILE).read_text("utf-8")),
+        "collection_sha256": AUTHORIZED["collection_artifact_sha256"],
+        "authorized": dict(AUTHORIZED),
+    }
+    kw.update(override)
+    return kw
+
+
+def codes(failures):
+    return {f.split(":")[0] for f in failures}
+
+
+def test_preflight_passes_on_the_committed_artifacts():
+    assert ae.live_preflight_failures(**committed_preflight()) == []
+
+
+def test_preflight_fails_closed_on_missing_or_wrong_collection_artifact():
+    assert codes(ae.live_preflight_failures(**committed_preflight(collection_sha256=None))) == {
+        "COLLECTION_ARTIFACT_UNAVAILABLE"
+    }
+    assert codes(ae.live_preflight_failures(**committed_preflight(collection_sha256="0" * 64))) == {
+        "COLLECTION_ARTIFACT_MISMATCH"
+    }
+
+
+@pytest.mark.parametrize("point", ["P2", "P5(0.3)", "P5(0.5)", "P5(0.7)"])
+def test_preflight_rejects_any_other_authorized_point(point):
+    kw = committed_preflight()
+    kw["authorized"]["point"] = point
+    assert codes(ae.live_preflight_failures(**kw)) == {"POINT_NOT_AUTHORIZED"}
+
+
+def test_preflight_rejects_a_swapped_selection():
+    kw = committed_preflight()
+    kw["selection"] |= {"point": "P5(0.7)", "policy_id": "P5", "threshold": 0.7}
+    assert {"SELECTION_NOT_FROM_FRONTIER", "POINT_NOT_AUTHORIZED"} <= codes(
+        ae.live_preflight_failures(**kw)
+    )
+
+
+def test_preflight_rejects_a_frontier_whose_rule_does_not_reproduce_the_selection():
+    kw = committed_preflight()
+    kw["frontier"]["points"]["P2"]["rerank_rate"] = 0.5  # rule would now pick P2
+    assert codes(ae.live_preflight_failures(**kw)) == {"SELECTION_RULE_MISMATCH"}
+
+
+def test_preflight_rejects_lock_policy_production_and_label_tampering():
+    kw = committed_preflight()
+    kw["lock"] = copy.deepcopy(kw["lock"])
+    kw["lock"]["policy_definitions"]["features"]["overlap_depth"] = 20
+    kw["lock"]["production_null"] = False
+    found = codes(ae.live_preflight_failures(**kw))
+    assert {
+        "LOCK_MISMATCH",
+        "LOCK_NOT_AUTHORIZED",
+        "POLICY_DEFINITIONS_MISMATCH",
+        "PRODUCTION_NOT_NULL",
+    } <= found
+    kw = committed_preflight()
+    kw["selection"]["label"] = "production winner"
+    assert "SELECTION_LABEL_MISMATCH" in codes(ae.live_preflight_failures(**kw))
+    kw = committed_preflight()
+    kw["frontier"]["status"] = "INVALID_DRIFT"
+    assert codes(ae.live_preflight_failures(**kw)) == {"FRONTIER_MISMATCH"}
+
+
+def test_file_sha256_hashes_raw_bytes(tmp_path):
+    path = tmp_path / "collection.json"
+    raw = b'{"a": 1}\r\n'  # raw bytes as written, no newline normalisation
+    path.write_bytes(raw)
+    assert ae.file_sha256(path) == hashlib.sha256(raw).hexdigest()
+    assert ae.file_sha256(tmp_path / "missing.json") is None
+
+
+def test_read_json_artifact_returns_empty_for_missing_invalid_or_non_object(tmp_path):
+    assert ae.read_json_artifact(tmp_path / "missing.json") == {}
+    (tmp_path / "bad.json").write_text("{not json", "utf-8")
+    assert ae.read_json_artifact(tmp_path / "bad.json") == {}
+    (tmp_path / "list.json").write_text("[1, 2]", "utf-8")
+    assert ae.read_json_artifact(tmp_path / "list.json") == {}
+    (tmp_path / "ok.json").write_text('{"point": "P3(0.4)"}', "utf-8")
+    assert ae.read_json_artifact(tmp_path / "ok.json") == {"point": "P3(0.4)"}
+
+
+def test_preflight_names_missing_frontier_and_selection_without_raising():
+    found = codes(ae.live_preflight_failures(**committed_preflight(frontier={}, selection={})))
+    assert {"FRONTIER_UNAVAILABLE", "SELECTION_UNAVAILABLE", "POINT_NOT_AUTHORIZED"} <= found
+
+
+def test_preflight_names_a_malformed_frontier_without_raising():
+    kw = committed_preflight()
+    del kw["frontier"]["points"]["P2"]["rerank_rate"]
+    assert codes(ae.live_preflight_failures(**kw)) == {"SELECTION_RULE_MISMATCH"}
+
+
+def test_preflight_rejects_a_selection_whose_definition_differs_from_its_name():
+    kw = committed_preflight()
+    kw["selection"]["threshold"] = 0.5  # name says P3(0.4)
+    assert "POINT_DEFINITION_MISMATCH" in codes(ae.live_preflight_failures(**kw))
+
+
+def test_preflight_rejects_a_production_config_that_is_no_longer_null():
+    production = ae.load_retrieval_production(REPO_CONFIG_DIR) | {"reranker": "cross_encoder"}
+    kw = committed_preflight(recomputed_lock=ae.build_lock(CFG, REPO_ROOT, production))
+    assert codes(ae.live_preflight_failures(**kw)) == {"LOCK_MISMATCH"}
+
+
+def test_runtime_index_name_fails_closed():
+    assert ae.runtime_index_failures(INDEX, INDEX) == []
+    assert ae.runtime_index_failures(None, INDEX)[0].startswith("INDEX_NAME_UNAVAILABLE")
+    assert ae.runtime_index_failures("", INDEX)[0].startswith("INDEX_NAME_UNAVAILABLE")
+    assert ae.runtime_index_failures("cat.silver.other", INDEX)[0].startswith("INDEX_NAME_MISMATCH")
+
+
+@pytest.mark.parametrize(
+    ("kw", "message"),
+    [
+        ({"corpus": 14326}, "corpus rows"),
+        ({"questions": QUESTIONS[:-1]}, "question set differs"),
+    ],
+)
+def test_corpus_and_question_counts_fail_closed(kw, message):
+    failures = identity(**kw)
+    assert len(failures) == 1 and message in failures[0]
+
+
+def test_live_notebook_checks_everything_before_any_query():
+    text = (REPO_ROOT / "notebooks" / "07d_adaptive_rerank_live.py").read_text("utf-8")
+    authorized = text[text.index("AUTHORIZED = {") : text.index("}", text.index("AUTHORIZED = {"))]
+    for key, value in AUTHORIZED.items():
+        assert f'"{key}": "{value}"' in authorized
+    preflight = text.index("failures = live_preflight_failures(")
+    stop1 = text.index('raise RuntimeError(f"STOP: live pre-run integrity failed')
+    identity = text.index("failures = identity_failures(")
+    stop2 = text.index('raise RuntimeError(f"STOP: frozen-data identity failed')
+    assert text.index("check_environment(") < preflight < stop1 < text.index("open_vector_index(")
+    assert text.index("open_vector_index(") < identity < stop2 < text.index("live = run_live(")
+    assert "endpoint=runtime_endpoint" in text and "file_sha256(collection_path)" in text
+    assert identity < text.index("runtime_index_failures(runtime_index_name") < stop2
+    assert 'read_json_artifact(repo / "evaluation" / "adaptive_rerank_9e.json")' in text
+    assert 'live["policy_definitions_sha256"] = lock["policy_definitions_sha256"]' in text
+    assert '"cuda_available": torch.cuda.is_available()' in text
+    before = "\n".join(ln for ln in text[:stop2].splitlines() if not ln.startswith("# MAGIC"))
+    for query in (".search(", "first_stage(", "= run_live(", ".retrieve(", ".candidates("):
+        assert query not in before, query
