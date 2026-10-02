@@ -18,7 +18,7 @@ still open. Updated at the end of every phase.
 | 6 | Databricks platformization and governed Delta foundation | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 7 | Deterministic Gold intelligence layer | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings, AI Search index and notebook 07 Steps 4–7 and 07b staged experiments (incl. CrossEncoder) validated in Databricks (2026-10-01). Complete. Adaptive reranking evaluated diagnostically in Phase 9E; no adaptive policy promoted; independent validation required before any future promotion** |
-| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D CLOSED** (2026-10-02): Candidate A SELECTED - deterministic routing + targeted clarification; no semantic LLM fallback promoted (Candidate C GPT-OSS-20B DEV REJECTED on quality/repeatability; earlier Candidate C blocks were not quality rejections); **9E CLOSED** (2026-10-02): adaptive-rerank diagnostic VALID offline and live-validated; descriptive only, no adaptive policy promoted, `production` stays null; **9F-A approved, 9F-B implemented (Phase 10 execution contract; under review)**; 9F-C (bounded Databricks contract validation) not started |
+| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D CLOSED** (2026-10-02): Candidate A SELECTED - deterministic routing + targeted clarification; no semantic LLM fallback promoted (Candidate C GPT-OSS-20B DEV REJECTED on quality/repeatability; earlier Candidate C blocks were not quality rejections); **9E CLOSED** (2026-10-02): adaptive-rerank diagnostic VALID offline and live-validated; descriptive only, no adaptive policy promoted, `production` stays null; **9F-A approved, 9F-B approved and committed** (frozen Phase 10 execution contract); **9F-C PASSED real Databricks acceptance** (`9f3`, 10/10 cases, preflight/overall PASS, finalized artifact and receipt verified); **Phase 9 COMPLETE; Phase 10 NOT STARTED** |
 | 10–13 | See §3 (roadmap from Claude.md §36) | Not started |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
@@ -1454,7 +1454,7 @@ Weakest categories: finance (R@10 0.60, 5 questions), ratings (0.67, 3), and pro
 - **Notebook-token authentication:** AI Search used a notebook token ("development only"). A service principal is required before production use.
 - **Latency:** the always-rerank latency was measured on serverless CPU only.
 
-### Phase 9 — Structured tools + intelligent routing (in progress)
+### Phase 9 — Structured tools + intelligent routing (COMPLETE)
 
 **Approved decisions (user, 2026-10-01)**
 1. **Retriever split:** approved as an integration refactor only. `retrieve()` stays as a backward-compatible wrapper. A golden regression test must pass before Phase 9 uses the split.
@@ -2127,7 +2127,7 @@ That's 15 points in total. (The approved design said 13 adaptive and 16 total; t
 
 No thresholds were tuned, no other reranker was benchmarked, GPU was not enabled, and candidate depth was not changed.
 
-#### Checkpoint 9F-B — Phase 10 execution contract implemented (2026-10-02; under review, not committed)
+#### Checkpoint 9F-B — Phase 10 execution contract implemented (2026-10-02; approved and committed)
 
 **Purpose:** freeze the routing + retrieval contract Phase 10 inherits. No experiment, no new measurement, no Databricks call, no agent code.
 
@@ -2145,4 +2145,49 @@ No thresholds were tuned, no other reranker was benchmarked, GPU was not enabled
 - `common/frozen.py` + `scripts/semantic_dev_9d.py` — the 9D debt is closed: the script refuses, before any computation or write, to overwrite a FROZEN decision.
 - `configs/phase9_closure.yaml` — the Phase 9 handoff manifest; `tests/unit/test_phase9_contract.py` checks it against the code, configuration and committed artifacts.
 
-**Remaining:** 9F-C — bounded Databricks end-to-end contract validation (integration only; protocol to be approved), then Phase 9 closure.
+**Closure:** 9F-C bounded Databricks contract acceptance subsequently PASSED; see the closure checkpoint below.
+
+
+#### Checkpoint 9F-C closure - real Databricks acceptance PASSED; Phase 9 COMPLETE
+
+**Authoritative acceptance:** user-reported real Databricks run `9f3`, reviewed source revision
+`41b156ec409a4ad7ebba67fc5c4bfb4189c1b81a`. Total 10, passed 10, failed 0, not_run 0;
+preflight PASS and overall PASS. No acceptance run was repeated for this documentation update.
+
+**Final persistence:** checkpoint sequence 12, finalized true. Files under
+`/Volumes/worldbank_copilot/silver/pipeline_artifacts/phase9_contract/`:
+
+- Final artifact: `phase9_contract_validation__9f3.json`, 16,394 bytes;
+  SHA-256 `443772482a2c0c4cac35958c4b905a7f2533b7795bb42cec5459964997ca29d3`.
+- Verified completion receipt: `phase9_contract_validation__9f3.json.complete.json`.
+
+**Revision provenance:** declared SHA is the reviewed revision above;
+`commit_sha_source=USER_DECLARED_REVIEWED_REVISION`, `runtime_git_head=null`,
+`runtime_git_status=AMBIGUOUS`, diagnostic `GIT_ENVIRONMENT_OVERRIDE`. Acceptance passed
+through the independent frozen-content and runtime-integrity checks; runtime Git verification
+is not claimed. Case-set SHA remains
+`57a441746a79e74b643004b2b8a19a1ea4219bc2e5c71ce78b7c30d755909f5c`; Phase 9E lock remains
+`480d0a1ec02e6e54aeb7c4a86d1122c002e1b0607d76ad74a9571a7d231b591e`.
+
+**Accepted contract behavior:** C01-C02 executed the scoped structured overview tool;
+C03-C05 executed document retrieval with `phase8_quality_baseline@1` and passed citation
+validation; C06 produced an unexecuted investigation plan; C07-C10 clarified or refused as
+preregistered with zero downstream execution. C08 preserved the router output and translated
+`SEMANTIC_CLASSIFICATION_REQUIRED` to `CLARIFY / INTENT_NOT_RESOLVED`, with zero semantic
+model calls. No agent calls occurred in any case.
+
+**Prior attempts remain preserved engineering/audit history:**
+
+- `9f1`: PRECHECK_FAILURE / DECLARED_COMMIT_SHA_DIFFERS_FROM_ACCESSIBLE_GIT_HEAD; zero cases.
+- `9f2`: ARTIFACT_CHECKPOINT_FAILURE / DATABRICKS_VOLUME_IO_ERROR; preflight reached PASS,
+  then persistence failed before C01; zero cases. Its existing artifact is not repaired or overwritten.
+- `9f3`: accepted PASS, 10/10 cases, finalized artifact and verified completion receipt.
+
+**Phase 9 is COMPLETE. Phase 10 is NOT STARTED.** Deterministic Candidate A remains the
+production routing policy; Candidate C was not promoted, and unresolved semantic intent safely
+clarifies. `phase8_quality_baseline@1` remains the Phase 10 document retrieval baseline.
+Adaptive reranking was evaluated diagnostically but not promoted; production adaptive selection
+remains null/unselected and any future promotion requires independent validation. P179039's
+candidate-generation weakness remains a known limitation. Investigation is plan-only and no
+agents execute in Phase 9. Phase 10 may add agent execution on these frozen contracts, but must
+not rewrite Phase 9 results or bypass its routing, retrieval, scope and provenance boundaries.

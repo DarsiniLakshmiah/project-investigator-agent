@@ -2,8 +2,9 @@
 
 Evidence-grounded decision support for World Bank project officers and analysts.
 
-> **Status:** Phases 1–8, Phase 9A–9E, and Phase 9F-A are complete. Phase 9F-B
-> is implemented / pending commit; Phase 9F-C has not yet run. Phase 10 is not started.
+> **Status:** Phases 1-9 are COMPLETE. Phase 9F-C passed real Databricks acceptance
+> in run `9f3`: 10/10 cases, preflight PASS, overall PASS, final artifact and completion
+> receipt verified. Phase 10 is NOT STARTED.
 > Adaptive reranking was evaluated diagnostically in 9E; no adaptive policy was promoted,
 > and independent validation is required before any future promotion. See
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the plan and current status.
@@ -550,6 +551,12 @@ experimentally, and freezes the interface the Phase 10 agent layer inherits. It 
 agents and no answer synthesis. The handoff manifest is `configs/phase9_closure.yaml`; a test
 checks every value in it against the code, the configuration and the committed artifacts.
 
+Phase 9 is COMPLETE after the accepted `9f3` Databricks run. The earlier `9f1` Git
+identity precheck failure and `9f2` Volume checkpoint failure remain preserved as audit
+history; both executed zero contract cases. See the 9F-C closure checkpoint in
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the accepted artifact identities.
+Phase 10 may build agent execution on the frozen contracts; it must not rewrite Phase 9 results.
+
 ```
 USER QUERY
   -> input guardrails -> project resolution (scope + authorisation, before any call)
@@ -565,7 +572,7 @@ USER QUERY
 
 **How the design was reached.**
 - **Foundations first.** The work did not start with agents. Governed Bronze/Silver/Gold data came first (Phases 1–7), then deterministic implementation signals (Phase 7), validated document retrieval (Phase 8), and typed tools with deterministic routing (Phase 9A–9C).
-- **Bounded LLM routing fallback (9D): not promoted.** A hosted model was tested for ambiguous routing. It passed the capability and operational checks but failed the preregistered semantic incremental-value / repeatability gate, so deterministic routing stays authoritative.
+- **Hosted bounded classifier (9D Candidate C): not promoted.** A hosted model was tested for ambiguous routing. It passed the capability and operational checks but failed the preregistered semantic incremental-value / repeatability gate, so deterministic routing stays authoritative.
 - **Adaptive reranking (9E): not promoted.**
   - Reranking helps some questions and hurts others, and a ground-truth Oracle shows that selective reranking has real headroom.
   - Simple deterministic triggers looked promising on the Phase 8 questions, but those questions had already been used, so no adaptive policy was promoted without independent validation.
@@ -574,7 +581,7 @@ USER QUERY
 
 **Distinctions the contract keeps explicit:**
 - **Router vs execution mapping.** The router's recorded output never changes. When the rules cannot resolve the intent, it records `SEMANTIC_CLASSIFICATION_REQUIRED`, and the execution mapping turns that into `CLARIFY / INTENT_NOT_RESOLVED`. The semantic fallback is disabled.
-- **Phase 10 quality baseline vs production configuration.** Phase 10 retrieves with `phase8_quality_baseline`:
+- **Phase 10 quality baseline vs production configuration.** Phase 10 retrieves with `phase8_quality_baseline@1`:
   - fixed chunks, hybrid BM25 + Qwen dense with RRF k 60, candidate_k 50;
   - the CrossEncoder on every query, final_k 5.
 
