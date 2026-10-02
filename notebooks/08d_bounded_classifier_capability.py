@@ -15,9 +15,12 @@
 # MAGIC 1. frozen-artefact guard (hashes only); 2. notebook-identity authentication;
 # MAGIC 3. read-only discovery: is the configured preferred endpoint (currently
 # MAGIC    `databricks-gpt-oss-20b`, `reasoning_effort: low`) present and ready (never substituted);
-# MAGIC 4. the pre-registered probe sequence (plain call, parameter acceptance, strict-schema
-# MAGIC    classification, unconstrained JSON mode, malformed fixtures, warm latency, burst) -
-# MAGIC    one attempt per call, no retries; 5. result JSON to the artifact Volume. Then STOP.
+# MAGIC 4. the pre-registered FIXED schedule (`capability.schedule`, run `run2-paced-5s`):
+# MAGIC    60 s quiet -> 18 gated calls (plain, 7 strict-schema, 10 warm) -> 6 diagnostic calls
+# MAGIC    (4 parameter probes, 2 JSON-mode) with a 5.0 s end->start gap between EVERY ordinary
+# MAGIC    call -> 60 s quiet -> 8-call diagnostic burst. One attempt per call: no retries, no
+# MAGIC    backoff, no schedule change on 429. A schedule the pacer cannot honour = INVALID run
+# MAGIC    (capability not evaluated); 5. run-specific result JSON to the Volume. Then STOP.
 # MAGIC
 # MAGIC Gates: endpoint callable, required request configuration accepted, strict structured
 # MAGIC output, every reply = one allowed label, fixtures fail closed, no tools in any request,
@@ -108,20 +111,27 @@ from worldbank_copilot.routing.config import load_routing_config  # noqa: E402
 from worldbank_copilot.routing.semantic import route_map  # noqa: E402
 
 require_state("availability", "auth", "frozen", step="Steps 1-3")  # noqa: F821
+out_dir = Path(settings.artifact_volume_path) / "bounded_classifier_capability"  # noqa: F821
+out_dir.mkdir(parents=True, exist_ok=True)
+# endpoint- and run-specific; checked BEFORE any call so earlier artifacts (nano run, GPT-OSS
+# run 1) are never overwritten and no quota is spent on a run that could not be recorded
+artifact = out_dir / artifact_name(bc.endpoint.preferred, bc.capability["run_id"])
+if artifact.exists():
+    raise RuntimeError(f"STOP: {artifact.name} already exists - results are never overwritten")
+print("schedule:", bc.capability["schedule"], "| artifact:", artifact.name)
+
 route_of = route_map(load_routing_config(settings.config_dir).requirements)  # noqa: F821
 report = run_capability_probe(
     bc, DatabricksChatTransport(bc.endpoint.preferred, w.config), route_of
 )
 report |= {"availability": availability, "authentication": auth, "frozen_hashes": frozen}
-
-out_dir = Path(settings.artifact_volume_path) / "bounded_classifier_capability"  # noqa: F821
-out_dir.mkdir(parents=True, exist_ok=True)
-artifact = out_dir / artifact_name(bc.endpoint.preferred)  # endpoint-specific
-if artifact.exists():  # earlier endpoint results (e.g. the nano run) are never overwritten
-    raise RuntimeError(f"STOP: {artifact.name} already exists - results are never overwritten")
 artifact.write_text(json.dumps(report, indent=1), encoding="utf-8")
 print(json.dumps({k: v for k, v in report.items() if k != "records"}, indent=1))
 print(f"\nwritten: {artifact}")
+if report["experiment_status"] != "VALID":
+    raise RuntimeError(
+        f"STOP: schedule INVALID - model capability not evaluated: {report['schedule']['failures']}"
+    )
 print(
     ("CAPABILITY GATES PASSED" if report["passed"] else "CAPABILITY GATES FAILED")
     + ". STOP - report before any DEV, C1, C2, probe or TEST prediction."

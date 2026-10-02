@@ -11,7 +11,7 @@
 # synthetic requests. No DEV, C1, C2, probe or TEST predictions.
 version: 1
 candidate: C_DATABRICKS_BOUNDED_CLASSIFIER
-status: CAPABILITY_PENDING      # for the current preferred endpoint (databricks-gpt-oss-20b)
+status: CAPABILITY_PENDING   # databricks-gpt-oss-20b run 2 (paced); run 1 = RATE_LIMIT, see history
 # Experiment history (append-only; never overwritten or reinterpreted).
 experiment_history:
   - endpoint: databricks-gpt-5-4-nano
@@ -28,6 +28,31 @@ experiment_history:
     evidence: design checkpoint approved - smallest adequate of the discovered endpoints
       (MoE, 3.6B active parameters), the endpoint Databricks' structured-output docs
       demonstrate; always reasons, so reasoning_effort is pinned to low
+  - endpoint: databricks-gpt-oss-20b
+    notebook: notebooks/08d_bounded_classifier_capability.py
+    run: run 1 (unpaced; contract c64561c25e0e417328b3a525c8b225a6b2f9e465b7c9d177a9128d08f013fe8b)
+    date: 2026-10-02
+    status: CAPABILITY_BLOCKED_BY_RATE_LIMIT
+    evidence: listed, READY; notebook identity resolved; model gpt-oss-20b-080525;
+      reasoning_effort=low accepted; strict structured output worked; every successful
+      strict-schema reply validated to exactly one allowed label; malformed fixtures failed
+      closed; no tool fields sent; output could not alter project/auth/scope; operational
+      failure rate 0.3889 (> 0.05 gate), dominated by HTTP 429 REQUEST_LIMIT_EXCEEDED;
+      burst (concurrency 8) 1 x 200 + 7 x 429; successful latency structured p50 0.3615 s /
+      p95 0.3860 s, warm p50 0.3857 s / p95 0.3916 s; synthetic sanity 6/6 answered cases
+      as expected, 1 case unanswered (network 429, not a misclassification); frozen hashes
+      unchanged; artifact capability_result_databricks_gpt_oss_20b.json (immutable)
+    interpretation: NOT a model-quality rejection - request rate exceeded the workspace limit
+  - endpoint: databricks-gpt-oss-20b
+    notebook: notebooks/08d_bounded_classifier_capability.py
+    run: run2-paced-5s
+    date: 2026-10-02
+    status: PREREGISTERED
+    evidence: only experimental variable = request scheduling (capability.schedule); same
+      endpoint, reasoning_effort=low, prompt, schema, synthetic cases, max_tokens, timeout,
+      retries=0, gates and contract c64561c25e0e417328b3a525c8b225a6b2f9e465b7c9d177a9128d08f013fe8b.
+      5 s is a preregistered conservative pacing experiment, NOT a server-derived threshold
+      (run 1 exposed no verifiable Retry-After value)
 endpoint:
   preferred: databricks-gpt-oss-20b    # never silently substituted; alternatives are only listed
   # read-only discovery: pay-per-token chat endpoints whose names match these markers are
@@ -74,6 +99,17 @@ instructions: >-
   Do not explain. Return only the JSON object required by the response schema.
 # --- capability probe (synthetic only: fictional project, no World Bank, dataset or probe text)
 capability:
+  run_id: run2-paced-5s      # artifact capability_result_databricks_gpt_oss_20b__run2_paced_5s.json
+  # FIXED request schedule - the only experimental variable of run 2. Not part of the
+  # model-facing contract. No jitter, no retries, no backoff, no change in response to 429
+  # (Retry-After header / body values are recorded separately, never acted on).
+  # Order: initial quiet -> 18 gated calls (plain, 7 strict-schema, 10 warm) -> 6 diagnostic
+  # calls (4 parameter probes, 2 JSON-mode) -> pre-burst quiet -> diagnostic burst.
+  schedule:
+    initial_quiet_seconds: 60
+    ordinary_call_gap_seconds: 5.0   # previous ordinary call END -> next call START
+    gap_tolerance_seconds: 0.000001  # floating-point rounding of monotonic offsets only
+    pre_burst_quiet_seconds: 60
   synthetic_project: SYN-RIVERBEND
   synthetic_cases:          # sanity expectations are recorded, never used as a gate
     - {id: syn-c01, expect: FINANCIAL_STATUS, request: "How much of the Riverbend water loan has been committed and paid out so far?"}

@@ -71,6 +71,16 @@ def test_candidate_identity_and_preferred_endpoint():
     assert BC.request.required_parameters == {"reasoning_effort": "low"}
 
 
+def test_gpt_oss_run1_is_preserved_as_rate_limit_block_not_rejection():
+    runs = [h for h in BC.experiment_history if h.get("run", "").startswith("run 1")]
+    assert len(runs) == 1 and runs[0]["status"] == "CAPABILITY_BLOCKED_BY_RATE_LIMIT"
+    assert runs[0]["interpretation"].startswith("NOT a model-quality rejection")
+    assert "0.3889" in runs[0]["evidence"] and "not a misclassification" in runs[0]["evidence"]
+    run2 = [h for h in BC.experiment_history if h.get("run") == CAP["run_id"]]
+    assert len(run2) == 1 and run2[0]["status"] == "PREREGISTERED"
+    assert "NOT a server-derived threshold" in run2[0]["evidence"]
+
+
 def test_nano_availability_failure_is_preserved_not_reinterpreted():
     nano = [h for h in BC.experiment_history if h["endpoint"] == "databricks-gpt-5-4-nano"]
     assert len(nano) == 1
@@ -219,6 +229,26 @@ def test_probe_inputs_are_synthetic_and_independent_of_frozen_sets():
 # -- capability probe against a fake endpoint -------------------------------------------------
 
 
+class FakeClock:
+    """Monotonic test clock: sleep() and endpoint latency advance it; nothing really waits."""
+
+    def __init__(self):
+        self.t, self.lock, self.sleeps = 1000.0, threading.Lock(), []
+
+    def __call__(self):
+        with self.lock:
+            return self.t
+
+    def sleep(self, seconds):
+        with self.lock:
+            self.sleeps.append(seconds)
+            self.t += seconds
+
+    def advance(self, seconds):
+        with self.lock:
+            self.t += seconds
+
+
 class FakeEndpoint:
     """Answers like a well-behaved strict-schema endpoint; configurable faults."""
 
@@ -230,7 +260,11 @@ class FakeEndpoint:
         failing_calls=(),
         latency=0.4,
         reasoning=False,
+        retry_after_header="2",
+        retry_after_body=None,
     ):
+        self.clock = None  # set by probe(); each response advances it by its latency
+        self.retry_after = (retry_after_header, retry_after_body)
         self.bodies, self.reject_params = [], set(reject_params)
         self.error_if, self.failing_calls = error_if, set(failing_calls)
         self.rate_limit_after, self.latency = rate_limit_after, latency
@@ -250,6 +284,12 @@ class FakeEndpoint:
         return ChatResponse(200, body, {}, latency)
 
     def post(self, body, timeout):
+        resp = self.respond(body)
+        if self.clock is not None:
+            self.clock.advance(resp.latency_s)
+        return resp
+
+    def respond(self, body):
         with self.lock:
             self.bodies.append(body)
             n = len(self.bodies)
@@ -262,9 +302,11 @@ class FakeEndpoint:
         if n in self.failing_calls:
             return ChatResponse(0, None, {}, 30.0, "ReadTimeout")
         if self.rate_limit_after is not None and n > self.rate_limit_after:
-            return ChatResponse(
-                429, {"error_code": "REQUEST_LIMIT_EXCEEDED"}, {"Retry-After": "2"}, 0.05
-            )
+            header, body_value = self.retry_after
+            error = {"error_code": "REQUEST_LIMIT_EXCEEDED"}
+            if body_value is not None:
+                error["retry_after"] = body_value
+            return ChatResponse(429, error, {"Retry-After": header} if header else {}, 0.05)
         if "response_format" not in body:
             return self.reply("READY")
         request = json.loads(body["messages"][1]["content"])["request"]
@@ -278,8 +320,19 @@ SENTINEL = "SENTINEL-REASONING-7f3a: the user probably means the loan"
 SENTINEL_ANSWER = "SENTINEL-ANSWER-91c2"
 
 
-def probe(fake, config=BC):
-    return run_capability_probe(config, fake, ROUTES, log=lambda _: None)
+def probe(fake, config=BC, sleep=None):
+    clock = FakeClock()
+    fake.clock = clock
+    report = run_capability_probe(
+        config, fake, ROUTES, log=lambda _: None, clock=clock, sleep=sleep or clock.sleep
+    )
+    probe.clock = clock
+    return report
+
+
+SCHEDULE = CAP["schedule"]
+N_GATED = 1 + len(CAP["synthetic_cases"]) + CAP["warm_latency_repeats"]  # 18
+N_DIAGNOSTIC = len(CAP["parameter_probes"]) + len(CAP["json_object_case_ids"])  # 6
 
 
 REQUIRED_GATES = {
@@ -292,7 +345,7 @@ REQUIRED_GATES = {
     "scope_unchangeable_by_model_output",
     "operational_failure_rate",
 }
-FIRST_STRUCTURED_CALL = 1 + len(CAP["parameter_probes"]) + 1
+FIRST_STRUCTURED_CALL = 2  # plain is call 1; gated calls come first
 
 
 def test_capability_gates_are_exactly_the_approved_set():
@@ -325,8 +378,9 @@ def test_capability_probe_passes_against_a_conforming_endpoint():
 def test_every_real_classification_request_carries_reasoning_effort_low():
     fake = FakeEndpoint()
     probe(fake)
-    plain, params = fake.bodies[0], fake.bodies[1 : 1 + len(CAP["parameter_probes"])]
-    classification = fake.bodies[1 + len(CAP["parameter_probes"]) :]
+    plain, n_params = fake.bodies[0], len(CAP["parameter_probes"])
+    params = fake.bodies[N_GATED : N_GATED + n_params]
+    classification = fake.bodies[1:N_GATED] + fake.bodies[N_GATED + n_params :]
     assert "reasoning_effort" not in plain  # capability ping, not a classification
     assert classification and all(b["reasoning_effort"] == "low" for b in classification)
     by_id = dict(zip([p["id"] for p in CAP["parameter_probes"]], params, strict=True))
@@ -373,6 +427,121 @@ def test_capability_artifact_name_is_endpoint_specific():
     assert artifact_name("databricks-gpt-5-4-nano") != artifact_name("databricks-gpt-oss-20b")
     assert artifact_name(BC.endpoint.preferred) != "capability_result.json"  # nano run's file
     assert artifact_name("../x/../y") == "capability_result_x_y.json"  # no path traversal
+
+
+def test_run2_artifact_is_run_specific_and_never_the_run1_name():
+    run2 = artifact_name(BC.endpoint.preferred, CAP["run_id"])
+    assert run2 == "capability_result_databricks_gpt_oss_20b__run2_paced_5s.json"
+    assert run2 != artifact_name(BC.endpoint.preferred)  # immutable run-1 artifact
+
+
+# -- paced schedule (run 2) ---------------------------------------------------------------------
+
+
+def test_schedule_is_preregistered_and_outside_the_model_contract():
+    assert SCHEDULE == {
+        "initial_quiet_seconds": 60,
+        "ordinary_call_gap_seconds": 5.0,
+        "gap_tolerance_seconds": 0.000001,
+        "pre_burst_quiet_seconds": 60,
+    }
+    assert contract_sha256(BC) == (
+        "c64561c25e0e417328b3a525c8b225a6b2f9e465b7c9d177a9128d08f013fe8b"
+    )
+    faster = BC.model_copy(
+        update={"capability": CAP | {"schedule": SCHEDULE | {"ordinary_call_gap_seconds": 1}}}
+    )
+    assert contract_sha256(faster) == contract_sha256(BC)
+    assert BC.request.retries == 0 and BC.request.timeout_seconds == 30
+    assert BC.request.max_tokens == 1024
+
+
+def test_exact_order_quiet_periods_and_end_to_start_gaps():
+    fake = FakeEndpoint()
+    report = probe(fake)
+    assert report["experiment_status"] == "VALID" and report["passed"]
+    records = report["records"]
+    ordinary, burst = records[: N_GATED + N_DIAGNOSTIC], records[N_GATED + N_DIAGNOSTIC :]
+    steps = [r["step"].split(":")[0] for r in ordinary]
+    assert steps == (
+        ["plain"]
+        + ["structured"] * len(CAP["synthetic_cases"])
+        + ["warm"] * CAP["warm_latency_repeats"]
+        + ["param"] * len(CAP["parameter_probes"])
+        + ["json_object"] * len(CAP["json_object_case_ids"])
+    )
+    assert [r["sequence"] for r in ordinary] == list(range(1, N_GATED + N_DIAGNOSTIC + 1))
+    assert ordinary[0]["started_s"] == 60.0 and ordinary[0]["gap_before_s"] is None
+    for prev, cur in zip(ordinary, ordinary[1:], strict=False):
+        assert cur["gap_before_s"] == 5.0  # every transition, incl. gated -> diagnostic
+        assert round(cur["started_s"] - prev["ended_s"], 6) == 5.0  # END -> START
+        assert round(cur["started_s"] - prev["started_s"], 6) == 5.0 + 0.4  # latency on top
+    assert len(burst) == CAP["burst_concurrency"] and all(r["step"] == "burst" for r in burst)
+    assert min(r["started_s"] for r in burst) - ordinary[-1]["ended_s"] >= 60.0
+    observed = report["schedule"]["observed"]
+    assert observed["min_gap_s"] == 5.0 and observed["initial_quiet_s"] == 60.0
+    assert observed["pre_burst_quiet_s"] == 60.0
+    assert max(observed["gated_sequences"]) == N_GATED
+    assert min(observed["diagnostic_sequences"]) == N_GATED + 1
+    assert not report["schedule"]["failures"]
+
+
+def test_429_changes_nothing_no_retry_no_backoff_and_retry_after_kept_separately():
+    fake = FakeEndpoint(rate_limit_after=5, retry_after_header="30", retry_after_body=12)
+    report = probe(fake)
+    assert len(fake.bodies) == TOTAL_CALLS  # one attempt per call, no retries
+    ordinary = report["records"][: N_GATED + N_DIAGNOSTIC]
+    assert all(r["gap_before_s"] == 5.0 for r in ordinary[1:])  # schedule unchanged by 429
+    assert sorted(set(probe.clock.sleeps)) == [5.0, 60.0]  # fixed sleeps only: no backoff
+    limited = [r for r in report["records"] if r["status"] == 429]
+    assert limited and all(
+        r["retry_after_header"] == "30" and r["retry_after_body"] == 12 for r in limited
+    )
+    over = report["schedule"]["retry_after_over_gap"]
+    assert over["header"] == over["body"] == [r["sequence"] for r in limited]
+    assert report["experiment_status"] == "VALID"  # a valid run that fails the reliability gate
+    assert not report["checks"]["operational_failure_rate"] and not report["passed"]
+
+
+def test_retry_after_header_and_body_are_never_combined():
+    fake = FakeEndpoint(
+        rate_limit_after=TOTAL_CALLS - 1, retry_after_header=None, retry_after_body=7
+    )
+    report = probe(fake)
+    last = report["records"][-1]
+    assert last["status"] == 429
+    assert last["retry_after_header"] is None and last["retry_after_body"] == 7
+    assert report["diagnostics"]["burst"]["retry_after_header"] == [None]
+    assert report["diagnostics"]["burst"]["retry_after_body"] == [7]
+
+
+def test_unhonoured_pre_burst_quiet_is_invalid_and_the_burst_is_not_sent():
+    clock, fake, quiet_sleeps = FakeClock(), FakeEndpoint(), []
+
+    def sleep(seconds):  # honours 5 s gaps and the first 60 s quiet, skips the second
+        if seconds >= SCHEDULE["pre_burst_quiet_seconds"] - 1:
+            quiet_sleeps.append(seconds)
+            if len(quiet_sleeps) > 1:
+                return
+        clock.sleep(seconds)
+
+    fake.clock = clock
+    report = run_capability_probe(BC, fake, ROUTES, log=lambda _: None, clock=clock, sleep=sleep)
+    assert report["experiment_status"] == "INVALID" and report["passed"] is None
+    assert len(fake.bodies) == N_GATED + N_DIAGNOSTIC  # burst never sent
+    assert any("pre-burst" in f for f in report["schedule"]["failures"])
+
+
+def test_pacer_that_cannot_honour_the_gap_makes_the_run_invalid_before_sending():
+    fake = FakeEndpoint()
+    report = probe(fake, sleep=lambda seconds: None)  # broken pacer: time never advances
+    assert report["experiment_status"] == "INVALID" and report["passed"] is None
+    assert "checks" not in report and "metrics" not in report  # capability NOT evaluated
+    assert report["schedule"]["failures"]
+    # stopped before the 2nd call: no quota spent on an invalid schedule, no burst
+    assert fake.bodies == []  # initial quiet not honoured -> not even the first call
+    assert all(r["step"] != "burst" for r in report["records"])
+    assert report["contract_sha256"] == contract_sha256(BC)
 
 
 def test_unsupported_structured_output_fails_the_capability_gates():
@@ -426,7 +595,7 @@ def test_burst_429s_are_reported_separately_and_never_enter_the_failure_rate():
     assert len(fake.bodies) == TOTAL_CALLS  # 429s are not retried
     burst = report["diagnostics"]["burst"]
     assert burst["rate_limited"] == CAP["burst_concurrency"]
-    assert burst["retry_after"][0] == {"Retry-After": "2"}
+    assert burst["retry_after_header"][0] == "2" and burst["retry_after_body"][0] is None
     assert report["metrics"]["operational_failure_rate"] == 0.0 and report["passed"]
 
 
@@ -517,3 +686,6 @@ def test_notebook_is_thin_cpu_capability_only():
     ):
         assert forbidden not in text, forbidden
     assert "STOP - report before any DEV" in text
+    assert 'artifact_name(bc.endpoint.preferred, bc.capability["run_id"])' in text
+    assert text.index("artifact.exists()") < text.index("run_capability_probe(\n")
+    assert 'report["experiment_status"] != "VALID"' in text

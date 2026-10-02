@@ -18,7 +18,7 @@ still open. Updated at the end of every phase.
 | 6 | Databricks platformization and governed Delta foundation | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 7 | Deterministic Gold intelligence layer | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings, AI Search index and notebook 07 Steps 4–7 and 07b staged experiments (incl. CrossEncoder) validated in Databricks (2026-10-01). Selected direction: adaptive reranking (trigger policy not yet implemented or evaluated)** |
-| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D in progress**: Candidate A provisional, B lexical and B2 Qwen rejected on DEV, C_SEMIF_OPENJEV BLOCKED_BY_EXECUTION_ENVIRONMENT, C_DATABRICKS_BOUNDED_CLASSIFIER: databricks-gpt-5-4-nano BLOCKED_BY_MODEL_AVAILABILITY, databricks-gpt-oss-20b selected and capability probe pending; 9E–9F not started |
+| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D in progress**: Candidate A provisional, B lexical and B2 Qwen rejected on DEV, C_SEMIF_OPENJEV BLOCKED_BY_EXECUTION_ENVIRONMENT, C_DATABRICKS_BOUNDED_CLASSIFIER: databricks-gpt-5-4-nano BLOCKED_BY_MODEL_AVAILABILITY, databricks-gpt-oss-20b run 1 CAPABILITY_BLOCKED_BY_RATE_LIMIT, paced run 2 (`run2-paced-5s`) implemented and awaiting a Databricks run; 9E–9F not started |
 | 10–13 | See §3 (roadmap from Claude.md §36) | Not started |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
@@ -1872,3 +1872,63 @@ The `reasoning_effort: none` diagnostic was removed: Databricks treats it as uns
 **Contract hash:** `c64561c2…fe8b`. The gates are unchanged, and no model call has been made.
 
 **Tests:** 1,230 unit passed. Ruff and the format check are clean.
+
+#### Checkpoint 9D — databricks-gpt-oss-20b run 1: CAPABILITY_BLOCKED_BY_RATE_LIMIT (2026-10-02)
+
+Real 08d run, unpaced, contract `c64561c2…fe8b`. This is **NOT a model-quality rejection**.
+
+**Everything that bears on model capability passed:**
+- the endpoint was listed and READY; notebook identity resolved; model `gpt-oss-20b-080525`;
+- `reasoning_effort=low` was accepted;
+- strict structured output worked, and every successful reply validated to exactly one allowed label;
+- the malformed fixtures failed closed;
+- no tool fields were sent, and the output could not alter project, authorisation or scope.
+
+**The reliability gate failed:**
+- operational failure rate 0.3889 against the 0.05 gate, dominated by HTTP 429 REQUEST_LIMIT_EXCEEDED;
+- the diagnostic 8-way burst returned 1 × 200 and 7 × 429.
+
+**Latency of successful calls:**
+- structured: p50 0.3615 s, p95 0.3860 s;
+- warm: p50 0.3857 s, p95 0.3916 s.
+
+Synthetic sanity: 6 of the 6 answered cases were as expected. One case got no answer because of a 429; that is not a misclassification.
+
+The frozen hashes were unchanged, and no DEV, C1, C2, ambiguity-probe or TEST evaluation took place. The artifact `capability_result_databricks_gpt_oss_20b.json` is immutable.
+
+**Next:** a paced rerun whose only experimental variable is request scheduling. Its design is under review.
+
+#### Checkpoint 9D — databricks-gpt-oss-20b run 2: paced rerun implemented (approved 2026-10-02)
+
+**Only experimental variable:** request scheduling (`capability.schedule`, `run_id: run2-paced-5s`). The 5 s gap is a preregistered conservative pacing experiment, not a server-derived threshold: run 1 exposed no verifiable Retry-After value.
+
+**Schedule:**
+1. 60 s initial quiet period.
+2. 18 gated calls: plain, 7 strict-schema, 10 warm.
+3. 6 diagnostic calls: 4 parameter probes, 2 JSON-mode.
+4. 60 s pre-burst quiet period.
+5. 8-call diagnostic burst.
+
+A fixed **5.0 s gap**, measured from the previous ordinary call's END to the next call's START on a monotonic clock, applies between every ordinary call, including the gated-to-diagnostic transition. No jitter, retries or backoff, and nothing changes in response to a 429.
+
+**Pacer:** it checks the initial quiet period, each gap and the pre-burst quiet period *before* sending. If one can't be honoured, the run stops before the call, is marked **INVALID**, and model capability is not evaluated. The tolerance is 1 µs, for floating-point rounding only.
+
+**Instrumentation per call:**
+- sequence number;
+- monotonic start and end offsets;
+- the actual end-to-start gap;
+- HTTP status;
+- `retry_after_header` and `retry_after_body`, recorded raw and separately. They are never combined and never acted on; values above 5 s are only listed.
+
+The burst stays excluded from operational reliability.
+
+**Unchanged:**
+- endpoint, `reasoning_effort=low`, prompt, schema, synthetic cases;
+- `max_tokens` 1024, 30 s timeout, `retries: 0`;
+- all gates, including the ≤ 0.05 failure rate (zero failures allowed over 18 gated calls).
+
+Contract hash unchanged: `c64561c2…fe8b`. The schedule is outside the model-facing contract.
+
+**Artifact:** `capability_result_databricks_gpt_oss_20b__run2_paced_5s.json`. The notebook checks that it doesn't exist *before* any call, so the run-1 artifact stays immutable.
+
+**Tests:** 1,238 unit passed. Ruff and the format check are clean. No Databricks call was made.

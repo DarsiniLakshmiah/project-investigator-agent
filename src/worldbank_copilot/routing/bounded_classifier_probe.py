@@ -1,13 +1,20 @@
 """Capability probe for C_DATABRICKS_BOUNDED_CLASSIFIER (synthetic requests only).
 
-Pre-registered sequence, one attempt per call, no retries:
+Pre-registered, FIXED schedule (configs/routing/bounded_classifier.yaml capability.schedule);
+one attempt per call, no retries, no backoff, no schedule change in response to 429:
 
-1. plain chat call (endpoint callable with notebook identity);
-2. single calls recording which optional parameters the endpoint accepts;
-3. strict-schema classification of every synthetic case (structured-output behaviour);
-4. unconstrained JSON mode on selected cases (what the fail-closed parser must reject);
-5. malformed / out-of-enum fixtures through the parser (no network);
-6. warm latency repeats; 7. a small concurrent burst (rate-limit behaviour).
+1. initial quiet period;
+2. GATED ordinary calls: plain chat call, strict-schema classification of every synthetic
+   case, warm repeats;
+3. DIAGNOSTIC ordinary calls: optional-parameter probes, unconstrained JSON mode;
+   (malformed / out-of-enum fixtures go through the parser offline - no network);
+4. pre-burst quiet period; 5. a small concurrent DIAGNOSTIC burst (rate-limit behaviour).
+
+Every ordinary call starts no earlier than `ordinary_call_gap_seconds` after the previous
+ordinary call ENDED (monotonic clock). The pacer checks this before sending; if it cannot be
+honoured the run stops before the call and is marked INVALID - model capability is then not
+evaluated. Each call records sequence, start/end offsets, the actual gap and, separately,
+the raw Retry-After header and the raw retry_after body field.
 
 Gates: endpoint callable, required configuration accepted, strict structured output
 works, every reply validates to one allowed label, fixtures fail closed, no tools in
@@ -34,6 +41,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from typing import Any, Protocol
 
+from worldbank_copilot.retrieval.embeddings import parse_retry_after
 from worldbank_copilot.routing.bounded_classifier import (
     BoundedClassifierConfig,
     ClassifierOutput,
@@ -152,6 +160,14 @@ class CallRecord:
     content_part_types: list[str] = field(default_factory=list)
     answer_text_chars: int | None = None
     answer_text_sha256: str | None = None
+    # Schedule instrumentation (monotonic seconds relative to run start).
+    sequence: int | None = None
+    started_s: float | None = None
+    ended_s: float | None = None
+    gap_before_s: float | None = None  # end of previous ordinary call -> this start
+    # Raw, separately: never combined, never acted on (no retry, no backoff).
+    retry_after_header: str | None = None
+    retry_after_body: Any = None
 
 
 def _content_shape(choice: dict[str, Any]) -> tuple[list[str], int | None, str | None]:
@@ -166,9 +182,42 @@ def _content_shape(choice: dict[str, Any]) -> tuple[list[str], int | None, str |
     return types, len(text), hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def artifact_name(endpoint: str) -> str:
-    """Endpoint-specific capability artifact, so earlier endpoint results are never overwritten."""
-    return f"capability_result_{re.sub(r'[^A-Za-z0-9]+', '_', endpoint).strip('_')}.json"
+def _sanitize(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "_", value).strip("_")
+
+
+def artifact_name(endpoint: str, run_id: str | None = None) -> str:
+    """Endpoint- and run-specific capability artifact; earlier results are never overwritten.
+
+    Without run_id this is the run-1 name (kept for the immutable run-1 artifact)."""
+    suffix = f"__{_sanitize(run_id)}" if run_id else ""
+    return f"capability_result_{_sanitize(endpoint)}{suffix}.json"
+
+
+def retry_after_header(headers: dict[str, str]) -> str | None:
+    return next((v for k, v in headers.items() if k.lower() == "retry-after"), None)
+
+
+def retry_after_body(body: Any) -> Any:
+    if not isinstance(body, dict):
+        return None
+    if "retry_after" in body:
+        return body["retry_after"]
+    err = body.get("error")
+    return err.get("retry_after") if isinstance(err, dict) else None
+
+
+def _seconds(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return parse_retry_after({"Retry-After": value})
+    return None
 
 
 def _kept_headers(headers: dict[str, str]) -> dict[str, str]:
@@ -292,47 +341,120 @@ def parameter_status(record: CallRecord) -> str:
     return "ERROR"
 
 
+GATED_STEPS = ("plain", "structured", "warm")
+DIAGNOSTIC_STEPS = ("param", "json_object")
+PACER_MAX_WAITS = 1000  # a pacer that still cannot reach the target is a bug -> INVALID
+
+
+class ScheduleViolation(RuntimeError):
+    """The pacing implementation could not honour the pre-registered schedule."""
+
+
+@dataclass
+class _Pacer:
+    gap_s: float
+    tolerance_s: float
+    clock: Callable[[], float]
+    sleep: Callable[[float], None]
+    t0: float = 0.0
+    previous_end: float | None = None
+
+    def wait_until(self, target: float) -> float:
+        for _ in range(PACER_MAX_WAITS):
+            now = self.clock()
+            if now >= target:
+                return now
+            self.sleep(target - now)
+        return self.clock()
+
+    def before_ordinary_call(self, sequence: int) -> tuple[float, float | None]:
+        """Waits for the fixed end->start gap; returns (start, gap). Raises before sending
+        if the gap cannot be honoured."""
+        if self.previous_end is None:
+            return self.clock(), None
+        start = self.wait_until(self.previous_end + self.gap_s)
+        gap = start - self.previous_end
+        if gap < self.gap_s - self.tolerance_s:
+            raise ScheduleViolation(f"call {sequence}: gap {gap:.6f}s < {self.gap_s}s")
+        return start, gap
+
+
 def run_capability_probe(
     config: BoundedClassifierConfig,
     transport: ChatTransport,
     route_of: dict[Intent, str],
     *,
     log: Callable[[str], None] = print,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
-    cap = config.capability
+    cap, schedule = config.capability, config.capability["schedule"]
     project, timeout = cap["synthetic_project"], config.request.timeout_seconds
     cases = {c["id"]: c for c in cap["synthetic_cases"]}
     sender = _RecordingTransport(transport)
+    pacer = _Pacer(
+        schedule["ordinary_call_gap_seconds"], schedule["gap_tolerance_seconds"], clock, sleep
+    )
 
     def request(case_id: str, **kwargs: Any) -> dict[str, Any]:
         return build_request(config, cases[case_id]["request"], project, "NONE", **kwargs)
 
-    records: list[CallRecord] = []
-
-    log("1/7 plain call")
     plain_body = {
         "messages": [{"role": "user", "content": PLAIN_PROMPT}],
         "max_tokens": config.request.max_tokens,
     }
-    records.append(plain_record(sender.post(plain_body, timeout)))
+    first_case, warm_id = cap["synthetic_cases"][0]["id"], cap["warm_latency_case_id"]
+    # (step, case_id, body, record builder) in the exact pre-registered order
+    ordinary: list[tuple[str, str, dict[str, Any]]] = [("plain", "plain", plain_body)]
+    ordinary += [("structured", c, request(c)) for c in cases]
+    ordinary += [
+        ("warm", f"{warm_id}#{i + 1}", request(warm_id)) for i in range(cap["warm_latency_repeats"])
+    ]
+    ordinary += [
+        (f"param:{p['id']}", first_case, request(first_case, extra_params=p["params"]))
+        for p in cap["parameter_probes"]
+    ]
+    ordinary += [
+        ("json_object", c, request(c, structured=False)) for c in cap["json_object_case_ids"]
+    ]
 
-    log("2/7 optional-parameter diagnostics")
-    first_case = cap["synthetic_cases"][0]["id"]
-    for probe in cap["parameter_probes"]:
-        resp = sender.post(request(first_case, extra_params=probe["params"]), timeout)
-        records.append(classify_record(f"param:{probe['id']}", first_case, resp, config))
+    records: list[CallRecord] = []
+    pacer.t0 = clock()
 
-    log("3/7 strict-schema classification")
-    for case_id in cases:
-        resp = sender.post(request(case_id), timeout)
-        records.append(classify_record("structured", case_id, resp, config))
+    def rel(value: float) -> float:
+        return round(value - pacer.t0, 6)
 
-    log("4/7 unconstrained JSON mode")
-    for case_id in cap["json_object_case_ids"]:
-        resp = sender.post(request(case_id, structured=False), timeout)
-        records.append(classify_record("json_object", case_id, resp, config))
+    def instrument(record: CallRecord, resp: ChatResponse, seq: int, start: float, end: float):
+        record.sequence, record.started_s, record.ended_s = seq, rel(start), rel(end)
+        record.retry_after_header = retry_after_header(resp.headers)
+        record.retry_after_body = retry_after_body(resp.body)
+        return record
 
-    log("5/7 malformed fixtures (offline)")
+    violation = None
+    try:
+        log(f"quiet {schedule['initial_quiet_seconds']}s before the first call")
+        quiet = pacer.wait_until(pacer.t0 + schedule["initial_quiet_seconds"]) - pacer.t0
+        if quiet < schedule["initial_quiet_seconds"] - pacer.tolerance_s:
+            raise ScheduleViolation(f"initial quiet {quiet:.6f}s not honoured")
+        for seq, (step, case_id, body) in enumerate(ordinary, start=1):
+            if seq in (1, 1 + len(cases) + 1 + cap["warm_latency_repeats"]):
+                log("gated calls" if seq == 1 else "diagnostic calls")
+            start, gap = pacer.before_ordinary_call(seq)
+            resp = sender.post(body, timeout)
+            end = clock()
+            pacer.previous_end = end
+            record = (
+                plain_record(resp)
+                if step == "plain"
+                else classify_record(step, case_id, resp, config)
+            )
+            instrument(record, resp, seq, start, end)
+            record.gap_before_s = None if gap is None else round(gap, 6)
+            records.append(record)
+    except ScheduleViolation as exc:
+        violation = str(exc)
+
+    log("malformed fixtures (offline)")
     fixtures = []
     for name, status, body in malformed_fixtures():
         try:
@@ -341,22 +463,105 @@ def run_capability_probe(
         except InvalidClassifierOutput as exc:
             fixtures.append({"fixture": name, "rejected": True, "reason": exc.reason.value})
 
-    log("6/7 warm latency")
-    warm_id = cap["warm_latency_case_id"]
-    for i in range(cap["warm_latency_repeats"]):
-        resp = sender.post(request(warm_id), timeout)
-        records.append(classify_record("warm", f"{warm_id}#{i + 1}", resp, config))
+    burst_started = None
+    if violation is None:
+        log(f"quiet {schedule['pre_burst_quiet_seconds']}s, then diagnostic burst")
+        burst_started = pacer.wait_until(pacer.previous_end + schedule["pre_burst_quiet_seconds"])
+        if burst_started - pacer.previous_end < (
+            schedule["pre_burst_quiet_seconds"] - pacer.tolerance_s
+        ):
+            violation = "pre-burst quiet period not honoured; burst not sent"
+    if violation is None:
+        burst_id, burst_body = cap["burst_case_id"], request(cap["burst_case_id"])
 
-    log("7/7 concurrent burst (diagnostic)")
-    burst_id, burst_body = cap["burst_case_id"], request(cap["burst_case_id"])
-    with ThreadPoolExecutor(max_workers=cap["burst_concurrency"]) as pool:
-        responses = list(
-            pool.map(lambda _: sender.post(burst_body, timeout), range(cap["burst_concurrency"]))
-        )
-    records += [
-        classify_record("burst", f"{burst_id}#{i + 1}", r, config) for i, r in enumerate(responses)
-    ]
-    return summarise(config, records, fixtures, sender.bodies, route_of)
+        def burst_call(_: int) -> tuple[ChatResponse, float, float]:
+            started = clock()
+            resp = sender.post(burst_body, timeout)
+            return resp, started, clock()
+
+        with ThreadPoolExecutor(max_workers=cap["burst_concurrency"]) as pool:
+            responses = list(pool.map(burst_call, range(cap["burst_concurrency"])))
+        for i, (resp, started, ended) in enumerate(responses):
+            record = classify_record("burst", f"{burst_id}#{i + 1}", resp, config)
+            records.append(instrument(record, resp, len(ordinary) + i + 1, started, ended))
+
+    validation = validate_schedule(config, records, ordinary, violation, burst_started, pacer)
+    if not validation["valid"]:
+        return {
+            "candidate": config.candidate,
+            "endpoint": config.endpoint.preferred,
+            "run_id": cap["run_id"],
+            "contract_sha256": contract_sha256(config),
+            "experiment_status": "INVALID",
+            "passed": None,  # model capability NOT evaluated on an invalid schedule
+            "schedule": validation,
+            "records": [asdict(r) for r in records],
+        }
+    report = summarise(config, records, fixtures, sender.bodies, route_of)
+    return {
+        "run_id": cap["run_id"],
+        "experiment_status": "VALID",
+        "schedule": validation,
+        **report,
+    }
+
+
+def validate_schedule(
+    config: BoundedClassifierConfig,
+    records: Sequence[CallRecord],
+    ordinary: Sequence[tuple[str, str, dict[str, Any]]],
+    violation: str | None,
+    burst_started: float | None,
+    pacer: _Pacer,
+) -> dict[str, Any]:
+    """Verifies the observed schedule against the pre-registered one (no weakening)."""
+    schedule = config.capability["schedule"]
+    gap_s, tol = schedule["ordinary_call_gap_seconds"], schedule["gap_tolerance_seconds"]
+    calls = [r for r in records if r.step != "burst"]
+    gaps = [r.gap_before_s for r in calls if r.gap_before_s is not None]
+    expected_order = [(step, case) for step, case, _ in ordinary]
+    observed_order = [(r.step, r.case_id) for r in calls]
+    gated = [r.sequence for r in calls if r.step.split(":")[0] in GATED_STEPS]
+    diagnostic = [r.sequence for r in calls if r.step.split(":")[0] in DIAGNOSTIC_STEPS]
+    first_start = calls[0].started_s if calls else None
+    pre_burst = (
+        round(burst_started - pacer.previous_end, 6)
+        if burst_started is not None and pacer.previous_end is not None
+        else None
+    )
+    failures = [violation] if violation else []
+    if observed_order != expected_order:
+        failures.append("ordinary calls missing or out of the pre-registered order")
+    if gaps and min(gaps) < gap_s - tol:
+        failures.append(f"observed gap {min(gaps)}s < {gap_s}s")
+    if len(gaps) != max(len(calls) - 1, 0):
+        failures.append("gap not recorded for every ordinary call after the first")
+    if first_start is None or first_start < schedule["initial_quiet_seconds"] - tol:
+        failures.append("initial quiet period not honoured")
+    if gated and diagnostic and max(gated) > min(diagnostic):
+        failures.append("a diagnostic call preceded a gated call")
+    if pre_burst is None or pre_burst < schedule["pre_burst_quiet_seconds"] - tol:
+        failures.append("pre-burst quiet period not honoured")
+    return {
+        "valid": not failures,
+        "failures": failures,
+        "configured": dict(schedule),
+        "observed": {
+            "ordinary_calls": len(calls),
+            "min_gap_s": min(gaps) if gaps else None,
+            "max_gap_s": max(gaps) if gaps else None,
+            "initial_quiet_s": first_start,
+            "pre_burst_quiet_s": pre_burst,
+            "gated_sequences": gated,
+            "diagnostic_sequences": diagnostic,
+        },
+        "retry_after_over_gap": {  # recorded only; never acted on
+            "header": [
+                r.sequence for r in records if (_seconds(r.retry_after_header) or 0) > gap_s
+            ],
+            "body": [r.sequence for r in records if (_seconds(r.retry_after_body) or 0) > gap_s],
+        },
+    }
 
 
 def decision_bounded(
@@ -468,7 +673,8 @@ def summarise(
                 "concurrency": len(burst),
                 "statuses": dict(Counter(r.status for r in burst)),
                 "rate_limited": sum(r.status == 429 for r in burst),
-                "retry_after": [r.headers for r in burst if r.status == 429],
+                "retry_after_header": [r.retry_after_header for r in burst if r.status == 429],
+                "retry_after_body": [r.retry_after_body for r in burst if r.status == 429],
                 "contract_ok": sum(r.ok for r in burst),
                 "note": "deliberate burst; excluded from the operational failure rate",
             },
