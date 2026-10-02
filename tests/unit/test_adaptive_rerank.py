@@ -843,13 +843,19 @@ def test_collect_notebook_checks_lock_and_artifact_before_any_query():
     )  # the real production path, in order
 
 
-def test_frontier_is_recorded_and_no_live_result_exists_yet():
-    for name in ("adaptive_rerank_9e.json", "adaptive_rerank_9e.md"):
+def test_9e_closed_with_recorded_frontier_and_agreeing_live_result():
+    for name in ("adaptive_rerank_9e.json", "adaptive_rerank_9e.md", "adaptive_rerank_9e_live.md"):
         assert (REPO_ROOT / "evaluation" / name).exists()
     selection = json.loads((REPO_ROOT / "evaluation" / SELECTION_FILE).read_text("utf-8"))
     assert selection["point"] == "P3(0.4)" and selection["label"] == ae.LIVE_LABEL
-    for name in ("adaptive_rerank_9e_live.json", "adaptive_rerank_9e_live.md"):
-        assert not (REPO_ROOT / "evaluation" / name).exists()
+    live = json.loads(
+        (REPO_ROOT / "evaluation" / "adaptive_rerank_9e_live.json").read_text("utf-8")
+    )
+    assert live["selection"] == selection and set(live["points"]) == {"P0@50", "P3(0.4)"}
+    for point in live["points"].values():
+        assert point["mismatches"] == []
+        assert point["agreement"]["decision_mismatches"] == 0
+        assert point["agreement"]["top5_mismatches"] == 0
     assert math.isclose(CFG.drift["references"]["P1"]["mrr"], 0.6827)
 
 

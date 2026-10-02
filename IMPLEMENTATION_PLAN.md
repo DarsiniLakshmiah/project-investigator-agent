@@ -18,7 +18,7 @@ still open. Updated at the end of every phase.
 | 6 | Databricks platformization and governed Delta foundation | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 7 | Deterministic Gold intelligence layer | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings, AI Search index and notebook 07 Steps 4–7 and 07b staged experiments (incl. CrossEncoder) validated in Databricks (2026-10-01). Selected direction: adaptive reranking (trigger policy not yet implemented or evaluated)** |
-| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D CLOSED** (2026-10-02): Candidate A SELECTED - deterministic routing + targeted clarification; no semantic LLM fallback promoted (Candidate C GPT-OSS-20B DEV REJECTED on quality/repeatability; earlier Candidate C blocks were not quality rejections); **9E implemented and locked, collection not run** (adaptive-rerank diagnostic); 9F not started |
+| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D CLOSED** (2026-10-02): Candidate A SELECTED - deterministic routing + targeted clarification; no semantic LLM fallback promoted (Candidate C GPT-OSS-20B DEV REJECTED on quality/repeatability; earlier Candidate C blocks were not quality rejections); **9E CLOSED** (2026-10-02): adaptive-rerank diagnostic VALID offline and live-validated; descriptive only, no adaptive policy promoted, `production` stays null; 9F not started |
 | 10–13 | See §3 (roadmap from Claude.md §36) | Not started |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
@@ -2045,10 +2045,10 @@ The three blocked or rate-limited outcomes are **not** quality rejections.
 - **Technical debt for 9F / final Phase 9 hardening:** `scripts/semantic_dev_9d.py` can overwrite the now-FROZEN `evaluation/semantic_config_9d.yaml`. Before Phase 9 closes, add a fail-closed guard so an accidental DEV rerun cannot overwrite a FROZEN decision artifact unless an explicit, intentional override or versioning mechanism exists. Notebook 08 refusing to run against the FROZEN decision is expected and stays.
 
 **Remaining Phase 9 work:**
-- 9E: adaptive-rerank diagnostic (design first);
+- 9E: adaptive-rerank diagnostic — CLOSED 2026-10-02 (see Checkpoint 9E closure);
 - 9F: Databricks end-to-end validation, frozen-file protection, Phase 9 closure.
 
-#### Checkpoint 9E — adaptive-rerank diagnostic implemented and locked (2026-10-02; NOT run)
+#### Checkpoint 9E — adaptive-rerank diagnostic implemented and locked (2026-10-02)
 
 **Framing:** a preregistered *descriptive* diagnostic over the frozen Phase 8 set (49 questions, 44 answerable). It is **not** independent validation: all 44 were used in Phase 8. There is no new split, no cross-validated selection, and no automatic winner.
 
@@ -2084,4 +2084,45 @@ That's 15 points in total. (The approved design said 13 adaptive and 16 total; t
 
 **Fresh holdout:** NOT created. It's recorded as a requirement before any strong production-generalisation claim if 9E shows a promising policy, to be revisited in 9F after the 9E review.
 
-**Not run:** the Databricks collection (07c), the live confirmation (07d) and the real 9E results.
+**Not run at lock time:** the Databricks collection (07c), the live confirmation (07d) and the real 9E results. All three were later run once each; see the closure checkpoint below.
+
+#### Checkpoint 9E closure — adaptive-rerank diagnostic CLOSED (2026-10-02)
+
+**Status:** Phase 9E is closed experimentally. It was an engineering diagnostic, **not** a production-policy selection experiment. No further 9E experiment is to be run.
+
+**Commits:**
+- `bce11d4` protocol lock; `da59423` fail-closed index identity;
+- `9a68159` offline frontier recorded (`evaluation/adaptive_rerank_9e.json`, `.md`, `_live_selection.json`);
+- `299981b` live-validation preflight hardening (07d fails closed before any live query on dependency health, lock, policy definitions, collection artifact, frontier/selection reproducibility, authorised point, production null, endpoint / index name / row count / corpus / question identity);
+- `f60ea45` live result recorded (`evaluation/adaptive_rerank_9e_live.json`, `.md`).
+
+**Integrity:**
+- protocol lock `480d0a1ec02e6e54aeb7c4a86d1122c002e1b0607d76ad74a9571a7d231b591e`;
+- policy definitions `dafc0bf5c80acf2491099eb95991def149df51211c29eae7ccecafafd6eb1cff`;
+- collection artifact `collection__9e1.json` `8b6763e349215899b686fff45f49eb44483f65490167b6649e88014599a63d70`;
+- live artifact `live__9e1-live.json` `61a62846325685718c24c80b133d9892ce6040b2ae5d1e7630f9c92852c2c9d6`.
+
+**Results:**
+1. The offline collection and frontier were **VALID** (drift vs Phase 8 within 0.001 for P0 and P1; pass-consistent; no hybrid-reconstruction problems).
+2. **P0@50:** composed p50 121.1 ms vs live p50 120.9 ms; composed p95 178.7 ms vs live p95 169.4 ms.
+3. **P3(0.4):** rerank rate 0.4898 (offline and live); composed p50 178.9 ms vs live p50 196.9 ms; composed p95 6126.7 ms vs live p95 6378.3 ms.
+4. Across all 294 live executions (2 points × 49 questions × 3 passes, warm-up included): **zero decision mismatches and zero top-5 mismatches**.
+5. P3(0.4) live latency: reranked p50 ≈ 5604.9 ms; non-reranked p50 ≈ 113.9 ms.
+6. `cuda_available=false`: the CrossEncoder ran on CPU.
+7. The composed and live latencies describe the **warm-cache** path. A first-seen query's embedding adds substantial cold-start latency (≈1.5–2.0 s in the warm-up pass) that the steady-state metrics do not represent.
+8. Selective reranking has theoretical value: the ground-truth Oracle (NOT DEPLOYABLE) exceeded always-reranking (MRR 0.7525 vs 0.6827; nDCG@5 0.7898 vs 0.7169) while reranking only the 17 helped questions (rate 0.347).
+9. Several deterministic triggers, especially P2 and the P5 variants, showed promising **descriptive** results versus random reranking at the same rate.
+10. **No adaptive policy is promoted to production**: the 44 answerable questions were already used during Phase 8 development, so no result here demonstrates generalisation.
+11. **P3(0.4) is NOT the production policy.** It was chosen only by the preregistered closest-to-0.5 rerank-rate rule, as the live latency validation point.
+12. P179039 remains primarily a **candidate-generation** problem: four answerable questions (q28, q29, q30, q36) had no relevant evidence in the fused top-50. Reranking cannot repair those misses.
+
+**Production state:** `configs/retrieval/retrieval.yaml` `production` remains null (`final_k` 5). No P2/P3/P4/P5/P6 policy is promoted. The Phase 8 retrieval remains the validated retrieval baseline.
+
+**Deferred questions (future work, not authorised now):**
+- independent / fresh validation of adaptive reranking (no holdout created in 9E);
+- first-stage retrieval improvement for P179039;
+- cold-query embedding latency;
+- faster reranking options, if production latency requires them;
+- whether adaptive reranking should eventually be promoted.
+
+No thresholds were tuned, no other reranker was benchmarked, GPU was not enabled, and candidate depth was not changed.
