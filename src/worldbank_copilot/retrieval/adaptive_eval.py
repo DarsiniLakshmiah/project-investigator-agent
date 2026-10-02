@@ -133,13 +133,26 @@ def identity_failures(
     index_rows: int | None,
     questions: Sequence[Question],
     index_name: str,
+    *,
+    endpoint: str | None,
 ) -> list[str]:
-    """Frozen-data identity; any failure STOPs before the first query."""
+    """Frozen-data identity; any failure STOPs before the first query.
+
+    `index_rows` and `endpoint` are the RUNTIME values reported by the index description
+    (`status.indexed_row_count`, `endpoint_name`). A missing value fails closed: only the
+    exact frozen row count and endpoint may continue.
+    """
     exp, failures = config.expected, []
     if corpus_rows != exp["corpus_rows"]:
         failures.append(f"corpus rows {corpus_rows} != {exp['corpus_rows']}")
-    if index_rows is not None and index_rows != exp["index_rows"]:
-        failures.append(f"index rows {index_rows} != {exp['index_rows']}")
+    if index_rows is None:
+        failures.append("INDEX_ROW_COUNT_UNAVAILABLE: the index does not report indexed_row_count")
+    elif index_rows != exp["index_rows"]:
+        failures.append(f"INDEX_ROW_COUNT_MISMATCH: {index_rows} != {exp['index_rows']}")
+    if endpoint is None:
+        failures.append("ENDPOINT_UNAVAILABLE: the index does not report its endpoint")
+    elif endpoint != exp["endpoint"]:
+        failures.append(f"ENDPOINT_MISMATCH: {endpoint} != {exp['endpoint']}")
     if index_name.split(".")[-1] != exp["index_name"]:
         failures.append(f"index {index_name} != {exp['index_name']}")
     if (

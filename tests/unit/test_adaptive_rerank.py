@@ -625,15 +625,67 @@ def test_collection_artifact_holds_ids_only_and_matches_the_retriever_hybrid():
     assert no_answer["labels"] is None
 
 
-def test_identity_failures():
-    config = synthetic_config()
-    assert (
-        ae.identity_failures(
-            config, len(ROWS), None, QUESTIONS, "cat.silver." + CFG.expected["index_name"]
-        )
-        == []
+INDEX = "cat.silver." + CFG.expected["index_name"]
+ENDPOINT = CFG.expected["endpoint"]
+
+
+def identity(index_rows=12797, endpoint=ENDPOINT, config=None, corpus=None, questions=None):
+    config = config or synthetic_config()
+    return ae.identity_failures(
+        config,
+        len(ROWS) if corpus is None else corpus,
+        index_rows,
+        QUESTIONS if questions is None else questions,
+        INDEX,
+        endpoint=endpoint,
     )
-    assert ae.identity_failures(config, 1, 2, QUESTIONS[:3], "x")
+
+
+def test_identity_passes_only_with_the_frozen_row_count_and_endpoint():
+    assert CFG.expected["index_rows"] == 12797 and ENDPOINT == "worldbank-gep-ai-search"
+    assert identity() == []
+    assert identity(corpus=1, questions=QUESTIONS[:3])  # corpus / question checks still apply
+
+
+def test_missing_index_row_count_fails_closed():
+    failures = identity(index_rows=None)
+    assert len(failures) == 1 and failures[0].startswith("INDEX_ROW_COUNT_UNAVAILABLE")
+
+
+@pytest.mark.parametrize("rows", [0, 12796, 12798, 14327])
+def test_wrong_index_row_count_fails_closed(rows):
+    failures = identity(index_rows=rows)
+    assert len(failures) == 1 and failures[0].startswith("INDEX_ROW_COUNT_MISMATCH")
+
+
+def test_missing_runtime_endpoint_fails_closed():
+    failures = identity(endpoint=None)
+    assert len(failures) == 1 and failures[0].startswith("ENDPOINT_UNAVAILABLE")
+
+
+@pytest.mark.parametrize("endpoint", ["worldbank-copilot-vs", "WORLDBANK-GEP-AI-SEARCH", ""])
+def test_wrong_runtime_endpoint_fails_closed(endpoint):
+    failures = identity(endpoint=endpoint)
+    assert len(failures) == 1 and failures[0].startswith("ENDPOINT_MISMATCH")
+
+
+def test_endpoint_is_a_required_runtime_input():
+    with pytest.raises(TypeError):
+        ae.identity_failures(synthetic_config(), len(ROWS), 12797, QUESTIONS, INDEX)
+
+
+def test_collect_notebook_takes_identity_from_the_index_and_checks_it_before_any_query():
+    text = (REPO_ROOT / "notebooks" / "07c_adaptive_rerank_collect.py").read_text("utf-8")
+    check = text.index("failures = identity_failures(")
+    assert text.index('description.get("endpoint_name")') < check
+    assert text.index('.get("indexed_row_count")') < check
+    assert "endpoint=runtime_endpoint" in text
+    stop = text.index('raise RuntimeError(f"STOP: frozen-data identity failed')
+    assert check < stop < text.index("artifact = collect(")
+    before = text[:stop]
+    for query in (".candidates(", ".retrieve(", "first_stage(", "collect(", ".search("):
+        assert query not in before.replace("identity_failures(", ""), query
+    assert '"endpoint": runtime_endpoint' in text  # artifact records the runtime endpoint
 
 
 # -- live-selection rule and the live path ----------------------------------------------------

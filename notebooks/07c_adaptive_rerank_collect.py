@@ -79,12 +79,16 @@ if (rs.retrieval.reranker.model, rs.retrieval.reranker.max_length,
 provider = embedding_provider(rs.embeddings)
 retriever = rp.open_retriever(spark, settings, rs, registry.project_ids, provider)  # noqa: F821
 questions = ev.load_questions(repo / cfg.questions_file)
-status = retriever.dense.describe().get("status", {})
-index_rows = status.get("indexed_row_count")
+# Runtime identity from the index's own description (read-only; no retrieval query yet).
+description = retriever.dense.describe()
+index_rows = (description.get("status") or {}).get("indexed_row_count")
+runtime_endpoint = description.get("endpoint_name")
 index_name = rp.names(settings, rs)["index_name"]  # noqa: F821
-failures = identity_failures(cfg, len(retriever.store.rows), index_rows, questions, index_name)
+failures = identity_failures(cfg, len(retriever.store.rows), index_rows, questions, index_name,
+                             endpoint=runtime_endpoint)
 print({"lock": lock_sha256(lock), "index": index_name, "index_rows": index_rows,
-       "corpus_rows": len(retriever.store.rows), "questions": len(questions)})
+       "endpoint": runtime_endpoint, "corpus_rows": len(retriever.store.rows),
+       "questions": len(questions)})
 if failures:
     raise RuntimeError(f"STOP: frozen-data identity failed: {failures}")
 
@@ -111,7 +115,7 @@ environment = {
 artifact = collect(
     retriever, questions, CrossEncoderReranker(rs.retrieval.reranker), cfg,
     lock_sha256=lock_sha256(lock), environment=environment,
-    index={"endpoint": rs.retrieval.vector_search.endpoint, "name": index_name,
+    index={"endpoint": runtime_endpoint, "name": index_name,
            "row_count": index_rows, "corpus_rows": len(retriever.store.rows)},
 )
 
