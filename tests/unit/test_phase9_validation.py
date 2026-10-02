@@ -447,7 +447,7 @@ def test_live_entry_point_refuses_local_environment():
 
     settings = load_settings("local", env={})
     with pytest.raises(v.ConfigurationError, match="Databricks-only"):
-        v.run_databricks_validation(Mock(), settings, commit_sha="a" * 40)
+        v.run_databricks_validation(Mock(), settings, commit_sha="a" * 40, run_id="9f2")
 
 
 def test_structured_ai_interpretation_is_rejected():
@@ -551,3 +551,211 @@ def test_local_preflight_hash_failure_never_prepares_runtime(tmp_path):
     live.assert_not_called()
     assert "CASE_SET_HASH" in artifact["preflight"]["failures"]
     assert artifact["case_results"] == []
+
+
+@pytest.fixture
+def git_snapshot(tmp_path, monkeypatch):
+    for name in tuple(v.os.environ):
+        if name.startswith("GIT_"):
+            monkeypatch.delenv(name)
+    (tmp_path / ".git").mkdir()
+    monkeypatch.setattr(
+        v, "__file__", str(tmp_path / "src/worldbank_copilot/validation/phase9_contract.py")
+    )
+    discover = Mock(return_value=f"{tmp_path}\n{'a' * 40}\n".encode())
+    monkeypatch.setattr(v.subprocess, "check_output", discover)
+    return tmp_path, discover
+
+
+@pytest.mark.parametrize("sha", ["", "a" * 39, "a" * 41, "A" * 40, "g" * 40, "a" * 40 + "\n"])
+def test_revision_malformed_declared_sha_rejected(git_snapshot, sha):
+    repo, discover = git_snapshot
+    with pytest.raises(v.ConfigurationError, match="40-character"):
+        v.revision_identity(repo, sha)
+    discover.assert_not_called()
+
+
+@pytest.mark.parametrize("declared,status", [("a" * 40, "VERIFIED"), ("b" * 40, "MISMATCH")])
+def test_revision_trustworthy_head(git_snapshot, declared, status):
+    repo, discover = git_snapshot
+    identity = v.revision_identity(repo, declared)
+    assert identity.runtime_git_status == status
+    assert identity.runtime_git_head == "a" * 40
+    assert identity.declared_commit_sha == declared
+    assert (identity.commit_sha_source == "DECLARED_AND_RUNTIME_VERIFIED") == (status == "VERIFIED")
+    assert discover.call_args.kwargs["cwd"] == repo
+
+
+def test_revision_unavailable(git_snapshot):
+    repo, discover = git_snapshot
+    discover.side_effect = FileNotFoundError()
+    identity = v.revision_identity(repo, "b" * 40)
+    assert identity.runtime_git_status == "UNAVAILABLE"
+    assert identity.runtime_git_head is None
+    assert identity.declared_commit_sha == "b" * 40
+    assert identity.commit_sha_source == "USER_DECLARED_REVIEWED_REVISION"
+
+
+@pytest.mark.parametrize(
+    "kind", ["parent", "no_marker", "different_module", "environment", "invalid_output"]
+)
+def test_revision_ambiguous_head_is_not_authoritative(git_snapshot, monkeypatch, kind):
+    repo, discover = git_snapshot
+    if kind == "parent":
+        discover.return_value = f"{repo.parent}\n{'a' * 40}\n".encode()
+    elif kind == "no_marker":
+        (repo / ".git").rmdir()
+    elif kind == "different_module":
+        monkeypatch.setattr(v, "__file__", str(repo.parent / "other.py"))
+    elif kind == "environment":
+        monkeypatch.setenv("GIT_DIR", "unrelated")
+    else:
+        discover.return_value = b"unexpected output"
+    identity = v.revision_identity(repo, "b" * 40)
+    assert identity.runtime_git_status == "AMBIGUOUS"
+    assert identity.declared_commit_sha == "b" * 40
+    assert identity.commit_sha_source == "USER_DECLARED_REVIEWED_REVISION"
+
+
+@pytest.mark.parametrize("status", ["VERIFIED", "UNAVAILABLE", "AMBIGUOUS", "MISMATCH"])
+def test_revision_artifact_and_preflight_execution_boundary(tmp_path, status):
+    identity = v.RevisionIdentity(
+        declared_commit_sha="a" * 40,
+        runtime_git_head={"VERIFIED": "a" * 40, "MISMATCH": "b" * 40}.get(status),
+        runtime_git_status=status,
+        commit_sha_source="DECLARED_AND_RUNTIME_VERIFIED"
+        if status == "VERIFIED"
+        else "USER_DECLARED_REVIEWED_REVISION",
+        diagnostic="SYNTHETIC",
+    )
+    runtime = fake_runtime()
+    local, live = Mock(return_value=PROTOCOL), Mock(return_value=runtime)
+    old = tmp_path / v.ARTIFACT_NAME
+    old.write_bytes(b"preserved first attempt")
+    output = tmp_path / "phase9_contract_validation__9f2.json"
+    prior = {"run_id": "9f1", "status": "PRECHECK_FAILURE", "contract_cases_executed": 0}
+    artifact = v.run_first(
+        output=output,
+        commit_sha="a" * 40,
+        environment={},
+        run_id="9f2",
+        resolve_revision=lambda: identity,
+        prior_attempt=prior,
+        prepare_local=local,
+        prepare_runtime=live,
+    )
+    assert artifact["run_id"] == "9f2" and artifact["prior_attempt"] == prior
+    persisted = json.loads(output.read_text("utf-8"))
+    for name in type(identity).model_fields:
+        assert persisted[name] == getattr(identity, name)
+    assert old.read_bytes() == b"preserved first attempt"
+    if status == "MISMATCH":
+        local.assert_not_called()
+        live.assert_not_called()
+        assert artifact["case_results"] == [] and not any(runtime.counters.snapshot().values())
+        assert artifact["preflight"]["failures"] == [
+            "DECLARED_COMMIT_SHA_DIFFERS_FROM_TRUSTED_GIT_HEAD"
+        ]
+    else:
+        assert artifact["summary"]["overall_status"] == "PASS"
+    with pytest.raises(FileExistsError):
+        v.run_first(
+            output=output,
+            commit_sha="a" * 40,
+            environment={},
+            run_id="9f2",
+            prepare_local=local,
+            prepare_runtime=live,
+        )
+
+
+@pytest.mark.parametrize("status", ["UNAVAILABLE", "AMBIGUOUS"])
+@pytest.mark.parametrize("drift", ["closure", "case_set", "9e_lock", "production"])
+def test_revision_fallback_still_requires_all_content_integrity(tmp_path, status, drift):
+    for folder in ("configs", "evaluation"):
+        shutil.copytree(REPO_ROOT / folder, tmp_path / folder)
+    lock = json.loads((REPO_ROOT / v.LOCK_FILE).read_text("utf-8"))
+    for name in (*lock["frozen_files_sha256_lf"], "src/worldbank_copilot/agents/__init__.py"):
+        path = tmp_path / name
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(REPO_ROOT / name, path)
+    if drift == "closure":
+        path = tmp_path / "configs/phase9_closure.yaml"
+        path.write_text(path.read_text("utf-8") + "\n# drift\n", "utf-8")
+        expected = "CLOSURE_MANIFEST_HASH"
+    elif drift == "case_set":
+        path = tmp_path / v.CASE_FILE
+        path.write_text(path.read_text("utf-8") + "\n# drift\n", "utf-8")
+        expected = "CASE_SET_HASH"
+    elif drift == "9e_lock":
+        path = tmp_path / PROTOCOL.manifest["adaptive_reranking"]["protocol_lock"]
+        data = json.loads(path.read_text("utf-8"))
+        data["production_null"] = False
+        path.write_text(json.dumps(data), "utf-8")
+        expected = "9E_LOCK"
+    else:
+        path = tmp_path / "configs/retrieval/retrieval.yaml"
+        data = yaml.safe_load(path.read_text("utf-8"))
+        data["production"] = "unauthorized"
+        path.write_text(yaml.safe_dump(data), "utf-8")
+        expected = "PREFLIGHT_EXCEPTION:ConfigurationError"
+    identity = v.RevisionIdentity(
+        declared_commit_sha="a" * 40, runtime_git_status=status, diagnostic="SYNTHETIC"
+    )
+    live = Mock()
+    artifact = v.run_first(
+        output=tmp_path / "phase9_contract_validation__9f2.json",
+        commit_sha="a" * 40,
+        environment={},
+        run_id="9f2",
+        resolve_revision=lambda: identity,
+        prepare_local=lambda: v.prepare_protocol(tmp_path, dependency_ok=True),
+        prepare_runtime=live,
+    )
+    live.assert_not_called()
+    assert artifact["runtime_git_status"] == status
+    assert expected in artifact["preflight"]["failures"]
+    assert artifact["case_results"] == []
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_revision_corrected_live_attempt_records_original_precheck_without_touching_artifact(
+    tmp_path, monkeypatch, existing
+):
+    from types import SimpleNamespace
+
+    original = tmp_path / v.ARTIFACT_DIR / v.ARTIFACT_NAME
+    if existing:
+        original.parent.mkdir()
+        original.write_bytes(b"original evidence")
+    settings = SimpleNamespace(
+        environment=SimpleNamespace(value="databricks"),
+        repo_root=REPO_ROOT,
+        artifact_volume_path=str(tmp_path),
+    )
+    run = Mock(return_value={})
+    monkeypatch.setattr(v, "run_first", run)
+    v.run_databricks_validation(Mock(), settings, commit_sha="a" * 40, run_id="9f2")
+    args = run.call_args.kwargs
+    assert args["output"].name == "phase9_contract_validation__9f2.json"
+    assert args["run_id"] == "9f2"
+    assert args["prior_attempt"] == {
+        "run_id": "9f1",
+        "status": "PRECHECK_FAILURE",
+        "reason": "DECLARED_COMMIT_SHA_DIFFERS_FROM_ACCESSIBLE_GIT_HEAD",
+        "contract_cases_executed": 0,
+        "source": "USER_REPORTED_OBSERVED_DATABRICKS_FAILURE",
+        "artifact_created_by_failing_code_path": False,
+        "artifact_present_at_corrected_invocation": existing,
+    }
+    if existing:
+        assert original.read_bytes() == b"original evidence"
+    else:
+        assert not original.exists()
+
+
+def test_revision_git_pager_does_not_change_repository_association(git_snapshot, monkeypatch):
+    repo, _ = git_snapshot
+    monkeypatch.setenv("GIT_PAGER", "cat")
+    assert v.revision_identity(repo, "a" * 40).runtime_git_status == "VERIFIED"

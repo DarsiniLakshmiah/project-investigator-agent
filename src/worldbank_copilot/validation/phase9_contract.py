@@ -7,6 +7,7 @@ second document search. No routing/retrieval decisions, tuning, agents or retrie
 from __future__ import annotations
 
 import json
+import os
 import platform
 import re
 import subprocess
@@ -716,7 +717,9 @@ def validate_case(
     }
 
 
-def execute_case(case: Case, runtime: Runtime, protocol: Protocol) -> dict[str, Any]:
+def execute_case(
+    case: Case, runtime: Runtime, protocol: Protocol, *, run_id: str = RUN_ID
+) -> dict[str, Any]:
     runtime.counters.reset()
     runtime.executor.document_result = None
     start = time.perf_counter()
@@ -728,7 +731,7 @@ def execute_case(case: Case, runtime: Runtime, protocol: Protocol) -> dict[str, 
         authorized_projects=runtime.authorized_projects,
         active_project_id=case.active_project_id,
     )
-    result = runtime.service.handle(case.query, access, request_id=RUN_ID + ":" + case.case_id)
+    result = runtime.service.handle(case.query, access, request_id=run_id + ":" + case.case_id)
     try:
         decision = ex.execution_decision(result)
     except ex.ExecutionContractError:
@@ -770,6 +773,88 @@ def validate_artifact(artifact: dict[str, Any]) -> None:
         raise ValueError("case PASS/FAIL disagrees with failure reasons")
 
 
+class RevisionIdentity(BaseModel):
+    """Declared provenance plus separately established runtime repository association."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    declared_commit_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    runtime_git_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    runtime_git_status: Literal["VERIFIED", "UNAVAILABLE", "AMBIGUOUS", "MISMATCH"]
+    commit_sha_source: Literal[
+        "DECLARED_AND_RUNTIME_VERIFIED", "USER_DECLARED_REVIEWED_REVISION"
+    ] = "USER_DECLARED_REVIEWED_REVISION"
+    diagnostic: str
+
+    @model_validator(mode="after")
+    def consistent(self):
+        for sha in (self.declared_commit_sha, self.runtime_git_head):
+            if sha is not None and not re.fullmatch(r"[0-9a-f]{40}", sha):
+                raise ValueError("revision must be full lowercase hexadecimal SHA")
+        verified = self.runtime_git_status == "VERIFIED"
+        if (self.commit_sha_source == "DECLARED_AND_RUNTIME_VERIFIED") != verified:
+            raise ValueError("revision source disagrees with verification status")
+        if verified and self.runtime_git_head != self.declared_commit_sha:
+            raise ValueError("verified revision must match declared SHA")
+        if self.runtime_git_status == "MISMATCH" and (
+            self.runtime_git_head is None or self.runtime_git_head == self.declared_commit_sha
+        ):
+            raise ValueError("mismatch requires a different runtime SHA")
+        if self.runtime_git_status == "UNAVAILABLE" and self.runtime_git_head is not None:
+            raise ValueError("unavailable metadata cannot supply runtime HEAD")
+        return self
+
+
+def revision_identity(repo: Path, declared: str) -> RevisionIdentity:
+    """Trust only metadata rooted at this project and its executing module.
+
+    A successful rev-parse alone may refer to a parent repository. Git environment
+    overrides, absent project-local metadata, different top-level paths or a module
+    imported from another snapshot cannot establish source association. No remote calls.
+    """
+    if not re.fullmatch(r"[0-9a-f]{40}", declared):
+        raise ConfigurationError("a full lowercase 40-character Git commit SHA is required")
+
+    def result(status, diagnostic, head=None):
+        return RevisionIdentity(
+            declared_commit_sha=declared,
+            runtime_git_head=head,
+            runtime_git_status=status,
+            commit_sha_source="DECLARED_AND_RUNTIME_VERIFIED"
+            if status == "VERIFIED"
+            else "USER_DECLARED_REVIEWED_REVISION",
+            diagnostic=diagnostic,
+        )
+
+    if any(name.startswith("GIT_") and name != "GIT_PAGER" for name in os.environ):
+        return result("AMBIGUOUS", "GIT_ENVIRONMENT_OVERRIDE")
+    try:
+        lines = (
+            subprocess.check_output(
+                ["git", "rev-parse", "--show-toplevel", "HEAD"],
+                cwd=repo,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+            .decode()
+            .splitlines()
+        )
+    except (OSError, subprocess.SubprocessError):
+        return result("UNAVAILABLE", "GIT_METADATA_UNAVAILABLE")
+    if len(lines) != 2 or not re.fullmatch(r"[0-9a-f]{40}", lines[1]):
+        return result("AMBIGUOUS", "GIT_DISCOVERY_INVALID")
+    head = lines[1]
+    root = repo.resolve()
+    if Path(lines[0]).resolve() != root or not (root / ".git").exists():
+        return result("AMBIGUOUS", "GIT_REPOSITORY_NOT_PROJECT_ROOT", head)
+    if Path(__file__).resolve() != root / "src/worldbank_copilot/validation/phase9_contract.py":
+        return result("AMBIGUOUS", "EXECUTING_MODULE_NOT_PROJECT_SNAPSHOT", head)
+    return result(
+        "VERIFIED" if head == declared else "MISMATCH",
+        "PROJECT_ROOT_AND_EXECUTING_MODULE_ASSOCIATED",
+        head,
+    )
+
+
 def run_first(
     *,
     output: Path,
@@ -777,21 +862,33 @@ def run_first(
     environment: dict[str, Any],
     prepare_local: Callable[[], Protocol],
     prepare_runtime: Callable[[Protocol], Runtime],
+    run_id: Literal["9f1", "9f2"] = RUN_ID,
+    resolve_revision: Callable[[], RevisionIdentity] | None = None,
+    prior_attempt: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Reserve first run exclusively; checkpoint each case; never retry or overwrite.
 
-    Failed preflight and interrupted suites also consume run 9f1. Existing output stops
-    before either callback. A crash leaves the reservation: diagnose, never rerun.
+    Failed preflight and interrupted suites also consume the explicit run identifier.
+    Existing output stops before either callback. A crash leaves the reservation:
+    diagnose, never rerun.
     """
     if not re.fullmatch(r"[0-9a-f]{40}", commit_sha):
         raise ConfigurationError("a full Git commit SHA is required")
+    if run_id not in ("9f1", "9f2"):
+        raise ConfigurationError("unsupported validation attempt")
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("x+", encoding="utf-8") as handle:
         artifact = {
-            "schema_version": 1,
-            "run_id": RUN_ID,
+            "schema_version": 2,
+            "run_id": run_id,
             "timestamp": datetime.now(UTC).isoformat(),
             "commit_sha": commit_sha,
+            **RevisionIdentity(
+                declared_commit_sha=commit_sha,
+                runtime_git_status="UNAVAILABLE",
+                diagnostic="RUNTIME_VERIFICATION_NOT_COMPLETED",
+            ).model_dump(),
+            "prior_attempt": prior_attempt,
             "environment": environment,
             "integrity": {
                 name: None
@@ -822,6 +919,13 @@ def run_first(
 
         checkpoint()
         try:
+            if resolve_revision is not None:
+                revision = resolve_revision()
+                artifact.update(revision.model_dump())
+                if revision.declared_commit_sha != commit_sha:
+                    raise PreflightError(["DECLARED_REVISION_IDENTITY_MISMATCH"])
+                if revision.runtime_git_status == "MISMATCH":
+                    raise PreflightError(["DECLARED_COMMIT_SHA_DIFFERS_FROM_TRUSTED_GIT_HEAD"])
             protocol = prepare_local()
             artifact["integrity"].update(protocol.integrity)
             runtime = prepare_runtime(protocol)
@@ -845,7 +949,7 @@ def run_first(
         for case in protocol.cases.cases:
             start = time.perf_counter()
             try:
-                row = execute_case(case, runtime, protocol)
+                row = execute_case(case, runtime, protocol, run_id=run_id)
             except Exception as exc:
                 row = {
                     "case_id": case.case_id,
@@ -882,33 +986,34 @@ def run_first(
         return artifact
 
 
-def run_databricks_validation(spark: Any, settings: Any, *, commit_sha: str) -> dict[str, Any]:
-    """Explicit LIVE entry point. Never call during local implementation/validation."""
+def run_databricks_validation(
+    spark: Any, settings: Any, *, commit_sha: str, run_id: Literal["9f2"]
+) -> dict[str, Any]:
+    """Explicit corrected LIVE attempt; preserve the reported pre-artifact 9f1 failure."""
     if settings.environment.value != "databricks":
         raise ConfigurationError("07e is a Databricks-only live entry point")
+    if run_id != "9f2":
+        raise ConfigurationError("the authorized corrected attempt must use 9f2")
     repo = settings.repo_root
-    output = Path(settings.artifact_volume_path) / ARTIFACT_DIR / ARTIFACT_NAME
-    environment = {
-        "kind": "databricks",
-        "python": platform.python_version(),
-        "commit_sha_source": "user_declared_git_folder_revision",
+    output = (
+        Path(settings.artifact_volume_path)
+        / ARTIFACT_DIR
+        / f"phase9_contract_validation__{run_id}.json"
+    )
+    environment = {"kind": "databricks", "python": platform.python_version()}
+    # The observed old SHA mismatch raised BEFORE run_first reserved any artifact.
+    # Record that fact even if no 9f1 file exists; never alter any existing 9f1 file.
+    prior_attempt = {
+        "run_id": "9f1",
+        "status": "PRECHECK_FAILURE",
+        "reason": "DECLARED_COMMIT_SHA_DIFFERS_FROM_ACCESSIBLE_GIT_HEAD",
+        "contract_cases_executed": 0,
+        "source": "USER_REPORTED_OBSERVED_DATABRICKS_FAILURE",
+        "artifact_created_by_failing_code_path": False,
+        "artifact_present_at_corrected_invocation": (
+            Path(settings.artifact_volume_path) / ARTIFACT_DIR / ARTIFACT_NAME
+        ).exists(),
     }
-    # Databricks Git folders may not expose Git metadata. Verify where available;
-    # otherwise clearly record that the supplied revision is declared, not verified.
-    try:
-        actual = (
-            subprocess.check_output(
-                ["git", "rev-parse", "HEAD"], cwd=repo, stderr=subprocess.DEVNULL, timeout=10
-            )
-            .decode()
-            .strip()
-        )
-    except (OSError, subprocess.SubprocessError):
-        actual = None
-    if actual is not None and actual != commit_sha:
-        raise ConfigurationError("declared commit SHA differs from accessible Git HEAD")
-    if actual:
-        environment["commit_sha_source"] = "verified_git_head"
 
     def local():
         health = check_environment(repo, REQUIREMENTS, settings.config_dir)
@@ -963,4 +1068,7 @@ def run_databricks_validation(spark: Any, settings: Any, *, commit_sha: str) -> 
         environment=environment,
         prepare_local=local,
         prepare_runtime=live,
+        run_id=run_id,
+        resolve_revision=lambda: revision_identity(repo, commit_sha),
+        prior_attempt=prior_attempt,
     )
