@@ -18,7 +18,7 @@ still open. Updated at the end of every phase.
 | 6 | Databricks platformization and governed Delta foundation | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 7 | Deterministic Gold intelligence layer | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings, AI Search index and notebook 07 Steps 4–7 and 07b staged experiments (incl. CrossEncoder) validated in Databricks (2026-10-01). Selected direction: adaptive reranking (trigger policy not yet implemented or evaluated)** |
-| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D in progress**: Candidate A provisional, B lexical and B2 Qwen rejected on DEV, C_SEMIF_OPENJEV BLOCKED_BY_EXECUTION_ENVIRONMENT, C_DATABRICKS_BOUNDED_CLASSIFIER capability probe awaiting a Databricks run; 9E–9F not started |
+| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D in progress**: Candidate A provisional, B lexical and B2 Qwen rejected on DEV, C_SEMIF_OPENJEV BLOCKED_BY_EXECUTION_ENVIRONMENT, C_DATABRICKS_BOUNDED_CLASSIFIER: databricks-gpt-5-4-nano BLOCKED_BY_MODEL_AVAILABILITY, databricks-gpt-oss-20b selected and capability probe pending; 9E–9F not started |
 | 10–13 | See §3 (roadmap from Claude.md §36) | Not started |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
@@ -1829,3 +1829,46 @@ TEST was not evaluated.
 **Not run:** the Databricks capability probe (it awaits the user's run), DEV, C1, C2, ambiguity-probe predictions and TEST. No change to 9B.2, labels, the split or the Candidate A/B results. 9E and Phase 10 have not started.
 
 **Tests:** 1,224 unit passed. Ruff and the format check are clean.
+
+#### Checkpoint 9D — notebook 08d result: databricks-gpt-5-4-nano BLOCKED_BY_MODEL_AVAILABILITY (2026-10-02)
+
+Real workspace run (Serverless CPU):
+- notebook-identity authentication succeeded;
+- `databricks-gpt-5-4-nano` was not listed, and its readiness was unavailable;
+- every inference attempt returned HTTP 404 ENDPOINT_NOT_FOUND, so 0 model responses were obtained.
+
+This is **NOT a model-quality rejection**.
+
+The safety properties held:
+- the malformed fixtures failed closed;
+- no execution or tool fields were sent;
+- project, authorisation and scope stayed outside the classifier output;
+- the frozen routing-dataset and ambiguity-probe hashes were unchanged;
+- the capability artifact was written.
+
+No DEV, C1, C2, ambiguity-probe or TEST question was evaluated.
+
+Small chat endpoints discovered in the workspace: `databricks-gemma-3-12b`, `databricks-gpt-oss-20b`, `databricks-gpt-oss-120b`, `databricks-meta-llama-3-1-8b-instruct`. No substitution was made; endpoint selection is a design checkpoint awaiting review.
+
+#### Checkpoint 9D — endpoint selection: databricks-gpt-oss-20b (approved 2026-10-02)
+
+**Selected:** `databricks-gpt-oss-20b`. It is the smallest adequate of the discovered endpoints: an MoE model with 3.6B active parameters per token, the lowest per-token price of the four, and the endpoint Databricks' structured-output documentation demonstrates. The nano result stays recorded as BLOCKED_BY_MODEL_AVAILABILITY in `experiment_history`, which is append-only and not part of the contract.
+
+**Request configuration:**
+- strict JSON schema `{"intent": enum[11 intents + ABSTAIN]}`;
+- `max_tokens` 1024; 30 s timeout; no retries;
+- `required_parameters: {reasoning_effort: low}`. GPT OSS always reasons, and LOW fits bounded 12-way classification. If the endpoint rejects it, the capability fails.
+
+The `reasoning_effort: none` diagnostic was removed: Databricks treats it as unset (medium) for GPT OSS, so it can't disable reasoning.
+
+**Reasoning content is never persisted:**
+- Only the text part of the final answer is parsed. Reasoning parts and fields such as `reasoning_content` are never read beyond their type.
+- Failure details never quote model text.
+- Records store content part types, answer length and a SHA-256 digest, plus numeric usage only. Text excerpts were removed.
+- Decisions carry the label, and the route from requirements.
+
+**Artifact:** endpoint-specific, `capability_result_<sanitized endpoint>.json`. The notebook refuses to overwrite an existing file, so the nano result `capability_result.json` is kept.
+
+**Contract hash:** `c64561c2…fe8b`. The gates are unchanged, and no model call has been made.
+
+**Tests:** 1,230 unit passed. Ruff and the format check are clean.

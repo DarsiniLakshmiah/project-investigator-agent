@@ -25,6 +25,7 @@ from worldbank_copilot.routing.bounded_classifier_probe import (
     FORBIDDEN_DECISION_FIELDS,
     ChatResponse,
     DatabricksChatTransport,
+    artifact_name,
     chat_endpoints,
     decision_bounded,
     run_capability_probe,
@@ -65,8 +66,24 @@ def chat(content, finish="stop", status=200, **extra):
 
 def test_candidate_identity_and_preferred_endpoint():
     assert BC.candidate == CANDIDATE == "C_DATABRICKS_BOUNDED_CLASSIFIER"
-    assert BC.endpoint.preferred == "databricks-gpt-5-4-nano"
+    assert BC.endpoint.preferred == "databricks-gpt-oss-20b"
     assert BC.status == "CAPABILITY_PENDING" and BC.request.retries == 0
+    assert BC.request.required_parameters == {"reasoning_effort": "low"}
+
+
+def test_nano_availability_failure_is_preserved_not_reinterpreted():
+    nano = [h for h in BC.experiment_history if h["endpoint"] == "databricks-gpt-5-4-nano"]
+    assert len(nano) == 1
+    assert nano[0]["status"] == "BLOCKED_BY_MODEL_AVAILABILITY"
+    assert nano[0]["interpretation"] == "NOT a model-quality rejection"
+    assert "404 ENDPOINT_NOT_FOUND" in nano[0]["evidence"]
+    # history is not part of the model-facing contract
+    assert contract_sha256(BC.model_copy(update={"experiment_history": ()})) == contract_sha256(BC)
+
+
+def test_reasoning_none_is_not_probed_as_a_way_to_disable_gpt_oss_reasoning():
+    efforts = [p["params"].get("reasoning_effort") for p in CAP["parameter_probes"]]
+    assert "none" not in efforts and None not in [e for e in efforts if e is not None]
 
 
 def test_semif_is_recorded_as_blocked_not_rejected_and_its_lock_is_unchanged():
@@ -101,7 +118,8 @@ def test_request_is_bounded_and_carries_the_request_as_data_only():
     assert "untrusted data" in prompt and "do not explain" in prompt
     for forbidden in ("step by step", "chain of thought", "reasoning:", "explain your"):
         assert forbidden not in prompt
-    assert set(body) == {"messages", "max_tokens", "response_format"}
+    assert set(body) == {"messages", "max_tokens", "response_format", "reasoning_effort"}
+    assert body["reasoning_effort"] == "low"
     assert build_request(BC, "q", "p", "NONE", structured=False)["response_format"] == {
         "type": "json_object"
     }
@@ -207,15 +225,29 @@ class FakeEndpoint:
     def __init__(
         self,
         reject_params=(),
-        error_params=(),
+        error_if=lambda body: False,
         rate_limit_after=None,
         failing_calls=(),
         latency=0.4,
+        reasoning=False,
     ):
         self.bodies, self.reject_params = [], set(reject_params)
-        self.error_params, self.failing_calls = set(error_params), set(failing_calls)
+        self.error_if, self.failing_calls = error_if, set(failing_calls)
         self.rate_limit_after, self.latency = rate_limit_after, latency
+        self.reasoning = reasoning  # GPT-OSS-like: reasoning part + reasoning_content field
         self.lock = threading.Lock()
+
+    def reply(self, text, latency=0.4):
+        if not self.reasoning:
+            return ChatResponse(200, chat(text).body, {}, latency)
+        content = [
+            {"type": "reasoning", "summary": [{"type": "summary_text", "text": SENTINEL}]},
+            {"type": "text", "text": text},
+        ]
+        body = chat(content, reasoning_content=SENTINEL).body
+        body["choices"][0]["message"]["reasoning_content"] = SENTINEL
+        body["usage"]["completion_tokens_details"] = {"reasoning_tokens": 87, "note": SENTINEL}
+        return ChatResponse(200, body, {}, latency)
 
     def post(self, body, timeout):
         with self.lock:
@@ -225,7 +257,7 @@ class FakeEndpoint:
             return ChatResponse(
                 400, {"error_code": "BAD_REQUEST", "message": "unsupported"}, {}, 0.1
             )
-        if self.error_params & set(body):
+        if self.error_if(body):
             return ChatResponse(503, {"error_code": "TEMPORARILY_UNAVAILABLE"}, {}, 0.1)
         if n in self.failing_calls:
             return ChatResponse(0, None, {}, 30.0, "ReadTimeout")
@@ -234,12 +266,16 @@ class FakeEndpoint:
                 429, {"error_code": "REQUEST_LIMIT_EXCEEDED"}, {"Retry-After": "2"}, 0.05
             )
         if "response_format" not in body:
-            return chat("READY")
+            return self.reply("READY")
         request = json.loads(body["messages"][1]["content"])["request"]
         if body["response_format"]["type"] == "json_object":
-            return chat('{"intent": "DELETE_ALL_DATA", "sql": "DROP TABLE loans"}')
+            return self.reply(f"Thinking aloud: {SENTINEL_ANSWER} DROP TABLE loans")
         label = "ABSTAIN" if "thing from before" in request or "Ignore" in request else "RISKS"
-        return ChatResponse(200, chat(json.dumps({"intent": label})).body, {}, self.latency)
+        return self.reply(json.dumps({"intent": label}), self.latency)
+
+
+SENTINEL = "SENTINEL-REASONING-7f3a: the user probably means the loan"
+SENTINEL_ANSWER = "SENTINEL-ANSWER-91c2"
 
 
 def probe(fake, config=BC):
@@ -263,7 +299,7 @@ def test_capability_gates_are_exactly_the_approved_set():
     report = probe(FakeEndpoint())
     assert set(report["checks"]) == REQUIRED_GATES
     assert "max_p95_latency_seconds" not in CAP["gates"]
-    assert BC.request.required_parameters == {}
+    assert BC.request.required_parameters == {"reasoning_effort": "low"}
 
 
 def test_capability_probe_passes_against_a_conforming_endpoint():
@@ -276,18 +312,67 @@ def test_capability_probe_passes_against_a_conforming_endpoint():
     assert report["metrics"]["tool_keys_in_requests"] == []
     diagnostics = report["diagnostics"]
     assert all(
-        not r["ok"] and r["fail_reason"] == "WRONG_SHAPE" for r in diagnostics["json_object_mode"]
+        not r["ok"] and r["fail_reason"] == "NOT_JSON" for r in diagnostics["json_object_mode"]
     )  # unconstrained output fails closed
     assert diagnostics["synthetic_sanity"]["note"].startswith("diagnostic")
     assert report["contract_sha256"] == contract_sha256(BC)
     sent = json.dumps(fake.bodies)
     assert "routing_cases" not in sent and "P1" not in sent
-    # records keep labels, statuses and usage - never message content or reasoning
-    assert all(
-        not {"content", "message", "reasoning"} & set(r) and r["rejected_text_excerpt"] is None
-        for r in report["records"]
-        if r["step"] == "structured"
+    # records keep labels, statuses, numeric usage and digests - never message text
+    assert all(not {"content", "message", "reasoning"} & set(r) for r in report["records"])
+
+
+def test_every_real_classification_request_carries_reasoning_effort_low():
+    fake = FakeEndpoint()
+    probe(fake)
+    plain, params = fake.bodies[0], fake.bodies[1 : 1 + len(CAP["parameter_probes"])]
+    classification = fake.bodies[1 + len(CAP["parameter_probes"]) :]
+    assert "reasoning_effort" not in plain  # capability ping, not a classification
+    assert classification and all(b["reasoning_effort"] == "low" for b in classification)
+    by_id = dict(zip([p["id"] for p in CAP["parameter_probes"]], params, strict=True))
+    assert by_id["reasoning_minimal"]["reasoning_effort"] == "minimal"  # explicit diagnostic
+    assert all(by_id[k]["reasoning_effort"] == "low" for k in ("temperature_zero", "logprobs"))
+
+
+def test_required_reasoning_effort_rejection_fails_capability():
+    report = probe(FakeEndpoint(reject_params={"reasoning_effort"}))
+    assert not report["checks"]["required_request_configuration_accepted"]
+    assert not report["passed"]
+    params = report["diagnostics"]["parameters"]
+    assert params["reasoning_low"]["required"] and not params["reasoning_minimal"]["required"]
+
+
+def test_reasoning_content_never_reaches_decisions_records_or_the_artifact():
+    report = probe(FakeEndpoint(reasoning=True))
+    assert report["passed"], report["checks"]
+    artifact = json.dumps(report)
+    assert SENTINEL not in artifact and SENTINEL_ANSWER not in artifact
+    assert "reasoning_content" not in artifact
+    structured = [r for r in report["records"] if r["step"] == "structured"]
+    assert structured[0]["content_part_types"] == ["reasoning", "text"]
+    assert structured[0]["usage"]["completion_tokens_details"] == {"reasoning_tokens": 87}
+    rejected = report["diagnostics"]["json_object_mode"][0]
+    assert rejected["fail_reason"] == "NOT_JSON" and len(rejected["answer_text_sha256"]) == 64
+
+    body = FakeEndpoint(reasoning=True).reply('{"intent": "RISKS"}').body
+    output = parse_response(200, body, BC)
+    decision = to_decision(output, ROUTES, version="t")
+    assert SENTINEL not in json.dumps(decision.model_dump(mode="json"))
+    assert SENTINEL not in repr(output)
+    bad = FakeEndpoint(reasoning=True).reply(f'{{"intent": "{SENTINEL_ANSWER}"}}').body
+    with pytest.raises(InvalidClassifierOutput) as exc:
+        parse_response(200, bad, BC)
+    failed = to_decision(None, ROUTES, version="t", failure=exc.value)
+    assert SENTINEL_ANSWER not in failed.reason and SENTINEL_ANSWER not in str(exc.value)
+
+
+def test_capability_artifact_name_is_endpoint_specific():
+    assert (
+        artifact_name("databricks-gpt-oss-20b") == "capability_result_databricks_gpt_oss_20b.json"
     )
+    assert artifact_name("databricks-gpt-5-4-nano") != artifact_name("databricks-gpt-oss-20b")
+    assert artifact_name(BC.endpoint.preferred) != "capability_result.json"  # nano run's file
+    assert artifact_name("../x/../y") == "capability_result_x_y.json"  # no path traversal
 
 
 def test_unsupported_structured_output_fails_the_capability_gates():
@@ -300,17 +385,21 @@ def test_unsupported_structured_output_fails_the_capability_gates():
 
 def test_optional_parameters_are_diagnostic_with_status_and_metadata():
     report = probe(
-        FakeEndpoint(reject_params={"temperature", "logprobs"}, error_params={"reasoning_effort"})
+        FakeEndpoint(
+            reject_params={"temperature", "logprobs"},
+            error_if=lambda body: body.get("reasoning_effort") == "minimal",
+        )
     )
     assert report["passed"], report["checks"]  # unsupported optional params never gate
     params = report["diagnostics"]["parameters"]
     assert params["temperature_zero"]["status"] == "UNSUPPORTED"
     assert params["logprobs"]["status"] == "UNSUPPORTED"
-    assert params["reasoning_low"]["status"] == "ERROR"
+    assert params["reasoning_minimal"]["status"] == "ERROR"
+    assert params["reasoning_low"]["status"] == "SUPPORTED"
     assert params["logprobs"]["error_code"] == "BAD_REQUEST"
     assert params["logprobs"]["error_message"] == "unsupported"
     assert params["logprobs"]["params"] == {"logprobs": True, "top_logprobs": 5}
-    assert not any(p["required"] for p in params.values())
+    assert [k for k, p in params.items() if p["required"]] == ["reasoning_low"]
     assert probe(FakeEndpoint())["diagnostics"]["parameters"]["logprobs"]["status"] == "SUPPORTED"
 
 

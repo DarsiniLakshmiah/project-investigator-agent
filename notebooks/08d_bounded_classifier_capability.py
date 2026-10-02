@@ -13,7 +13,8 @@
 # MAGIC Capability only, SYNTHETIC requests about a fictional project (no World Bank, routing
 # MAGIC dataset, ambiguity-probe or TEST text):
 # MAGIC 1. frozen-artefact guard (hashes only); 2. notebook-identity authentication;
-# MAGIC 3. read-only discovery: is `databricks-gpt-5-4-nano` present and ready (never substituted);
+# MAGIC 3. read-only discovery: is the configured preferred endpoint (currently
+# MAGIC    `databricks-gpt-oss-20b`, `reasoning_effort: low`) present and ready (never substituted);
 # MAGIC 4. the pre-registered probe sequence (plain call, parameter acceptance, strict-schema
 # MAGIC    classification, unconstrained JSON mode, malformed fixtures, warm latency, burst) -
 # MAGIC    one attempt per call, no retries; 5. result JSON to the artifact Volume. Then STOP.
@@ -100,6 +101,7 @@ from pathlib import Path  # noqa: E402
 
 from worldbank_copilot.routing.bounded_classifier_probe import (  # noqa: E402
     DatabricksChatTransport,
+    artifact_name,
     run_capability_probe,
 )
 from worldbank_copilot.routing.config import load_routing_config  # noqa: E402
@@ -114,9 +116,12 @@ report |= {"availability": availability, "authentication": auth, "frozen_hashes"
 
 out_dir = Path(settings.artifact_volume_path) / "bounded_classifier_capability"  # noqa: F821
 out_dir.mkdir(parents=True, exist_ok=True)
-(out_dir / "capability_result.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
+artifact = out_dir / artifact_name(bc.endpoint.preferred)  # endpoint-specific
+if artifact.exists():  # earlier endpoint results (e.g. the nano run) are never overwritten
+    raise RuntimeError(f"STOP: {artifact.name} already exists - results are never overwritten")
+artifact.write_text(json.dumps(report, indent=1), encoding="utf-8")
 print(json.dumps({k: v for k, v in report.items() if k != "records"}, indent=1))
-print(f"\nwritten: {out_dir / 'capability_result.json'}")
+print(f"\nwritten: {artifact}")
 print(
     ("CAPABILITY GATES PASSED" if report["passed"] else "CAPABILITY GATES FAILED")
     + ". STOP - report before any DEV, C1, C2, probe or TEST prediction."

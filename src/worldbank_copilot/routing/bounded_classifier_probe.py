@@ -23,6 +23,8 @@ latency and selected headers. Transport is injected so the logic is testable off
 
 from __future__ import annotations
 
+import hashlib
+import re
 import statistics
 import threading
 import time
@@ -40,6 +42,7 @@ from worldbank_copilot.routing.bounded_classifier import (
     contract_sha256,
     malformed_fixtures,
     message_text,
+    numeric_usage,
     parse_response,
     to_decision,
 )
@@ -145,7 +148,27 @@ class CallRecord:
     usage: dict[str, Any] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
     logprobs_present: bool | None = None
-    rejected_text_excerpt: str | None = None  # final answer text only, never reasoning
+    # Model text is never stored: only structure, size and a digest of the final-answer text.
+    content_part_types: list[str] = field(default_factory=list)
+    answer_text_chars: int | None = None
+    answer_text_sha256: str | None = None
+
+
+def _content_shape(choice: dict[str, Any]) -> tuple[list[str], int | None, str | None]:
+    content = (choice.get("message") or {}).get("content")
+    if isinstance(content, list):
+        types = [str(p.get("type")) if isinstance(p, dict) else type(p).__name__ for p in content]
+    else:
+        types = [type(content).__name__] if content is not None else []
+    text = message_text(content)
+    if not text:
+        return types, None, None
+    return types, len(text), hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def artifact_name(endpoint: str) -> str:
+    """Endpoint-specific capability artifact, so earlier endpoint results are never overwritten."""
+    return f"capability_result_{re.sub(r'[^A-Za-z0-9]+', '_', endpoint).strip('_')}.json"
 
 
 def _kept_headers(headers: dict[str, str]) -> dict[str, str]:
@@ -183,17 +206,17 @@ def classify_record(
         error_message=(message if resp.status != 200 else None) or resp.transport_error,
         model=resp.body.get("model") if isinstance(resp.body, dict) else None,
         finish_reason=choice.get("finish_reason"),
-        usage=resp.body.get("usage") or {} if isinstance(resp.body, dict) else {},
+        usage=numeric_usage(resp.body.get("usage")) if isinstance(resp.body, dict) else {},
         headers=_kept_headers(resp.headers),
         logprobs_present=choice.get("logprobs") is not None if choice else None,
+    )
+    record.content_part_types, record.answer_text_chars, record.answer_text_sha256 = _content_shape(
+        choice
     )
     try:
         output = parse_response(resp.status, resp.body, config)
     except InvalidClassifierOutput as exc:
         record.fail_reason = exc.reason.value
-        if resp.status == 200:
-            text = message_text((choice.get("message") or {}).get("content"))
-            record.rejected_text_excerpt = text[:200] or None
         return record
     record.ok, record.label = True, output.label
     return record
@@ -202,20 +225,22 @@ def classify_record(
 def plain_record(resp: ChatResponse) -> CallRecord:
     code, message = _error(resp.body)
     choice = _choice(resp.body)
-    text = message_text((choice.get("message") or {}).get("content")).strip()
+    types, chars, digest = _content_shape(choice)
     return CallRecord(
         step="plain",
         case_id="plain",
         status=resp.status,
         latency_s=round(resp.latency_s, 4),
-        ok=resp.status == 200 and bool(text),
+        ok=resp.status == 200 and bool(chars),
         error_code=code if resp.status != 200 else None,
         error_message=(message if resp.status != 200 else None) or resp.transport_error,
         model=resp.body.get("model") if isinstance(resp.body, dict) else None,
         finish_reason=choice.get("finish_reason"),
-        usage=resp.body.get("usage") or {} if isinstance(resp.body, dict) else {},
+        usage=numeric_usage(resp.body.get("usage")) if isinstance(resp.body, dict) else {},
         headers=_kept_headers(resp.headers),
-        label=text[:20] or None,
+        content_part_types=types,
+        answer_text_chars=chars,
+        answer_text_sha256=digest,
     )
 
 
@@ -399,13 +424,13 @@ def summarise(
         <= gates["max_operational_failure_rate"],
     }
     probe_params = {p["id"]: p["params"] for p in cap["parameter_probes"]}
-    required_names = set(config.request.required_parameters)
     parameters = {
         r.step.split(":", 1)[1]: {
             "status": parameter_status(r),  # SUPPORTED / UNSUPPORTED / ERROR
             "http_status": r.status,
             "params": probe_params[r.step.split(":", 1)[1]],
-            "required": bool(required_names & set(probe_params[r.step.split(":", 1)[1]])),
+            "required": probe_params[r.step.split(":", 1)[1]].items()
+            <= config.request.required_parameters.items(),
             **{k: v for k, v in asdict(r).items() if k not in ("step", "case_id", "status")},
         }
         for r in by_step.get("param", [])

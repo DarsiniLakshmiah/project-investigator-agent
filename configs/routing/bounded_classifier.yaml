@@ -11,9 +11,25 @@
 # synthetic requests. No DEV, C1, C2, probe or TEST predictions.
 version: 1
 candidate: C_DATABRICKS_BOUNDED_CLASSIFIER
-status: CAPABILITY_PENDING
+status: CAPABILITY_PENDING      # for the current preferred endpoint (databricks-gpt-oss-20b)
+# Experiment history (append-only; never overwritten or reinterpreted).
+experiment_history:
+  - endpoint: databricks-gpt-5-4-nano
+    notebook: notebooks/08d_bounded_classifier_capability.py
+    date: 2026-10-02
+    status: BLOCKED_BY_MODEL_AVAILABILITY
+    evidence: not listed in the workspace; readiness unavailable; every inference call HTTP
+      404 ENDPOINT_NOT_FOUND; 0 model responses; fixtures failed closed; no tool fields sent;
+      scope stayed outside the output; frozen hashes unchanged; artifact capability_result.json
+    interpretation: NOT a model-quality rejection
+  - endpoint: databricks-gpt-oss-20b
+    date: 2026-10-02
+    status: SELECTED_FOR_CAPABILITY_PROBE
+    evidence: design checkpoint approved - smallest adequate of the discovered endpoints
+      (MoE, 3.6B active parameters), the endpoint Databricks' structured-output docs
+      demonstrate; always reasons, so reasoning_effort is pinned to low
 endpoint:
-  preferred: databricks-gpt-5-4-nano   # never silently substituted; alternatives are only listed
+  preferred: databricks-gpt-oss-20b    # never silently substituted; alternatives are only listed
   # read-only discovery: pay-per-token chat endpoints whose names match these markers are
   # recorded as small-model alternatives (for the report, not used automatically)
   small_model_markers: [nano, mini, small, lite, flash, haiku, 8b, 20b, gemma]
@@ -24,9 +40,10 @@ request:
   schema_name: bounded_intent
   strict: true
   # optional chat parameters REQUIRED by the selected request configuration (sent on every
-  # classification call). None: the capability needed is bounded structured classification,
-  # not log-probabilities, temperature or a particular reasoning effort.
-  required_parameters: {}
+  # classification call; rejection fails the capability). GPT OSS always reasons; LOW is the
+  # minimum documented effort and fits bounded 12-way classification. Reasoning content is
+  # never requested, persisted, evaluated or exposed - only the final {"intent"} is consumed.
+  required_parameters: {reasoning_effort: low}
 # Minimal model output contract: {"intent": <enum>}. abstain = (intent == ABSTAIN) and
 # confidence are derived by the harness; the model is never asked for reasons or reasoning.
 abstain_label: ABSTAIN
@@ -69,7 +86,8 @@ capability:
   # DIAGNOSTIC single calls: SUPPORTED / UNSUPPORTED / ERROR per optional parameter, with the
   # response/error metadata. They gate nothing unless a parameter is in required_parameters.
   parameter_probes:
-    - {id: reasoning_none, params: {reasoning_effort: none}}
+    # reasoning_effort=none is NOT probed: for GPT OSS Databricks treats it as unset
+    # (default medium), so it cannot disable reasoning and would be a misleading diagnostic.
     - {id: reasoning_minimal, params: {reasoning_effort: minimal}}
     - {id: reasoning_low, params: {reasoning_effort: low}}
     - {id: temperature_zero, params: {temperature: 0}}

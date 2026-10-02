@@ -55,6 +55,7 @@ class BoundedClassifierConfig(_Model):
     version: int
     candidate: Literal["C_DATABRICKS_BOUNDED_CLASSIFIER"]
     status: str
+    experiment_history: tuple[dict[str, Any], ...]  # append-only record; not in the contract
     endpoint: EndpointConfig
     request: RequestConfig
     abstain_label: Literal["ABSTAIN"]
@@ -176,7 +177,8 @@ class ClassifierOutput:
 
 
 def message_text(content: Any) -> str:
-    """Final answer text. Reasoning parts (list-form content) are ignored and never kept."""
+    """Final answer text only. Reasoning parts (list-form content, e.g. GPT OSS) and any
+    other message fields (e.g. reasoning_content) are never read beyond their type."""
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -209,14 +211,35 @@ def parse_response(status: int, body: Any, config: BoundedClassifierConfig) -> C
         data = json.loads(text)
     except json.JSONDecodeError as exc:
         raise InvalidClassifierOutput(FailReason.NOT_JSON) from exc
+    # Failure details never quote model-generated text (keys, values or prose).
     if not isinstance(data, dict) or set(data) != {"intent"}:
-        keys = sorted(data) if isinstance(data, dict) else type(data).__name__
-        raise InvalidClassifierOutput(FailReason.WRONG_SHAPE, f"keys {keys}")
+        shape = f"{len(data)} keys" if isinstance(data, dict) else type(data).__name__
+        raise InvalidClassifierOutput(FailReason.WRONG_SHAPE, shape)
     label = data["intent"]
     if not isinstance(label, str) or label not in config.labels:
-        raise InvalidClassifierOutput(FailReason.OUT_OF_ENUM, repr(label)[:60])
-    usage = body.get("usage") if isinstance(body.get("usage"), dict) else {}
-    return ClassifierOutput(label, body.get("model"), usage)
+        raise InvalidClassifierOutput(FailReason.OUT_OF_ENUM, type(label).__name__)
+    return ClassifierOutput(label, body.get("model"), numeric_usage(body.get("usage")))
+
+
+def numeric_usage(usage: Any) -> dict[str, Any]:
+    """Token counts only (numbers, nested one level); any text is dropped."""
+    if not isinstance(usage, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for key, value in usage.items():
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int | float):
+            out[key] = value
+        elif isinstance(value, dict):
+            nested = {
+                k: v
+                for k, v in value.items()
+                if isinstance(v, int | float) and not isinstance(v, bool)
+            }
+            if nested:
+                out[key] = nested
+    return out
 
 
 # -- harness mapping --------------------------------------------------------------------------
