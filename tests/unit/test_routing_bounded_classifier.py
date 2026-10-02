@@ -67,7 +67,7 @@ def chat(content, finish="stop", status=200, **extra):
 def test_candidate_identity_and_preferred_endpoint():
     assert BC.candidate == CANDIDATE == "C_DATABRICKS_BOUNDED_CLASSIFIER"
     assert BC.endpoint.preferred == "databricks-gpt-oss-20b"
-    assert BC.status == "CAPABILITY_PENDING" and BC.request.retries == 0
+    assert BC.status == "CAPABILITY_PASSED" and BC.request.retries == 0
     assert BC.request.required_parameters == {"reasoning_effort": "low"}
 
 
@@ -79,6 +79,24 @@ def test_gpt_oss_run1_is_preserved_as_rate_limit_block_not_rejection():
     run2 = [h for h in BC.experiment_history if h.get("run") == CAP["run_id"]]
     assert len(run2) == 1 and run2[0]["status"] == "PREREGISTERED"
     assert "NOT a server-derived threshold" in run2[0]["evidence"]
+
+
+def test_experiment_trail_is_complete_and_append_only():
+    statuses = [(h["endpoint"], h["status"]) for h in BC.experiment_history]
+    assert statuses == [
+        ("databricks-gpt-5-4-nano", "BLOCKED_BY_MODEL_AVAILABILITY"),
+        ("databricks-gpt-oss-20b", "SELECTED_FOR_CAPABILITY_PROBE"),
+        ("databricks-gpt-oss-20b", "CAPABILITY_BLOCKED_BY_RATE_LIMIT"),
+        ("databricks-gpt-oss-20b", "PREREGISTERED"),
+        ("databricks-gpt-oss-20b", "CAPABILITY_PASSED"),
+        ("databricks-gpt-oss-20b", "TERMINOLOGY_NOTE"),
+    ]
+    run2 = next(h for h in BC.experiment_history if h["status"] == "CAPABILITY_PASSED")
+    assert "run2_paced_5s.json" in run2["evidence"]
+    assert "NOT evidence of routing-quality improvement" in run2["interpretation"]
+    assert "not model inference time" in run2["interpretation"]  # pacing != latency
+    semif = load_semif_config(REPO_CONFIG_DIR)
+    assert semif.status == "BLOCKED_BY_EXECUTION_ENVIRONMENT"
 
 
 def test_nano_availability_failure_is_preserved_not_reinterpreted():
@@ -348,6 +366,18 @@ REQUIRED_GATES = {
 FIRST_STRUCTURED_CALL = 2  # plain is call 1; gated calls come first
 
 
+def test_call_count_terminology_has_explicit_denominators():
+    metrics = probe(FakeEndpoint())["metrics"]
+    assert metrics["scheduled_gated_calls"] == 18  # plain + 7 strict + 10 warm
+    assert metrics["classification_required_calls"] == 17  # 7 strict + 10 warm
+    assert "required_calls" not in metrics  # ambiguous name retired
+    failing_plain = probe(FakeEndpoint(failing_calls={1}))["metrics"]
+    assert failing_plain["operational_failure_rate"] == round(1 / 18, 4)  # denominator 18
+    note = next(h for h in BC.experiment_history if h["status"] == "TERMINOLOGY_NOTE")
+    assert "0/18 scheduled gated" in note["evidence"]
+    assert "all 17 classification-required calls succeeded" in note["evidence"]
+
+
 def test_capability_gates_are_exactly_the_approved_set():
     report = probe(FakeEndpoint())
     assert set(report["checks"]) == REQUIRED_GATES
@@ -508,9 +538,10 @@ def test_retry_after_header_and_body_are_never_combined():
         rate_limit_after=TOTAL_CALLS - 1, retry_after_header=None, retry_after_body=7
     )
     report = probe(fake)
-    last = report["records"][-1]
-    assert last["status"] == 429
-    assert last["retry_after_header"] is None and last["retry_after_body"] == 7
+    # the single 429 is whichever concurrent burst call arrived last - find it, not by index
+    limited = [r for r in report["records"] if r["status"] == 429]
+    assert len(limited) == 1 and limited[0]["step"] == "burst"
+    assert limited[0]["retry_after_header"] is None and limited[0]["retry_after_body"] == 7
     assert report["diagnostics"]["burst"]["retry_after_header"] == [None]
     assert report["diagnostics"]["burst"]["retry_after_body"] == [7]
 

@@ -11,7 +11,8 @@
 # synthetic requests. No DEV, C1, C2, probe or TEST predictions.
 version: 1
 candidate: C_DATABRICKS_BOUNDED_CLASSIFIER
-status: CAPABILITY_PENDING   # databricks-gpt-oss-20b run 2 (paced); run 1 = RATE_LIMIT, see history
+status: CAPABILITY_PASSED   # databricks-gpt-oss-20b run2-paced-5s; capability only - NOT evidence
+# that Candidate C improves routing quality (that is the DEV evaluation's question)
 # Experiment history (append-only; never overwritten or reinterpreted).
 experiment_history:
   - endpoint: databricks-gpt-5-4-nano
@@ -53,6 +54,35 @@ experiment_history:
       retries=0, gates and contract c64561c25e0e417328b3a525c8b225a6b2f9e465b7c9d177a9128d08f013fe8b.
       5 s is a preregistered conservative pacing experiment, NOT a server-derived threshold
       (run 1 exposed no verifiable Retry-After value)
+  - endpoint: databricks-gpt-oss-20b
+    notebook: notebooks/08d_bounded_classifier_capability.py
+    run: run2-paced-5s result
+    date: 2026-10-02
+    status: CAPABILITY_PASSED
+    evidence: listed and READY; notebook identity authentication worked; reasoning_effort=low
+      accepted; strict json_schema output worked; every successful strict reply contained
+      exactly one allowed intent; malformed responses failed closed; no execution capability;
+      project/auth/scope stayed with the deterministic harness; schedule VALID with zero
+      violations (initial quiet >= 60 s, min ordinary gap >= 5 s, pre-burst quiet >= 60 s);
+      operational failure rate 0.0 (every call counted by the reliability metric succeeded);
+      7/7 synthetic sanity cases gave the expected intent (diagnostic only); inference
+      latency warm p50 ~0.34 s / p95 ~0.47 s, strict structured p50 ~0.60 s / p95 ~0.61 s;
+      diagnostic burst (excluded from reliability) 7 x 200 + 1 x 429 with no Retry-After
+      value supplied; optional json_object diagnostics returned 400 - not a production
+      blocker (production uses strict json_schema, which passed); frozen hashes unchanged;
+      artifact capability_result_databricks_gpt_oss_20b__run2_paced_5s.json (immutable)
+    interpretation: capability pass only, NOT evidence of routing-quality improvement.
+      Inference is sub-second; the 5 s gap is experimental request pacing to stay within
+      observed workspace API capacity, not model inference time
+  - endpoint: databricks-gpt-oss-20b
+    run: run2-paced-5s terminology note
+    date: 2026-10-02
+    status: TERMINOLOGY_NOTE
+    evidence: explicit denominators from now on - scheduled_gated_calls = 18 (plain + 7 strict
+      + 10 warm; the operational-failure-rate denominator) and classification_required_calls =
+      17 (7 strict + 10 warm). The immutable run-2 artifact's `required_calls` = 17 means
+      classification_required_calls. Run 2 operational failure rate = 0/18 scheduled gated
+      calls; all 17 classification-required calls succeeded
 endpoint:
   preferred: databricks-gpt-oss-20b    # never silently substituted; alternatives are only listed
   # read-only discovery: pay-per-token chat endpoints whose names match these markers are
@@ -148,3 +178,25 @@ capability:
     enum_valid_rate: 1.0
     malformed_fixtures_rejected: 1.0
     max_operational_failure_rate: 0.05
+# --- Phase 9D Candidate C DEV evaluation (approved 2026-10-02). Frozen before any DEV
+# prediction and hashed into evaluation/candidate_c_dev_lock.json. Not part of the
+# model-facing contract (contract hash unchanged). TEST is never evaluated here.
+dev_evaluation:
+  run_id: dev1
+  status: IMPLEMENTED_NOT_RUN
+  # Assertion targets only - the mechanical derivations are authoritative and must equal them.
+  expected_c1: [r015, r048]          # frozen 9B.2 router -> SEMANTIC_CLASSIFICATION_REQUIRED
+  expected_c2_size: 22               # RESOLVED project + non-refusal intent + executable route
+  expected_c2_repeat: [r002, r014, r052, r006]   # STRUCTURED, DOCUMENT, INVESTIGATION, distinct
+  c1_repeats: 5                      # hard repeatability gate
+  c2_repeats: 3                      # diagnostic only
+  candidate_a_dev_route_correct: 24  # frozen 9B.2 rules-only, SEMANTIC_REQUIRED -> CLARIFY
+  # integrity reference only - the DEV notebook never opens the probe file
+  ambiguity_probe_sha256_lf: 93d44d28d38d348bc06f76422212d0d66681197823d111a09ccd8737dea47b94
+  schedule:                          # sequential only; no concurrency, burst, retry, backoff
+    initial_quiet_seconds: 60
+    ordinary_call_gap_seconds: 5.0   # previous call END -> next call START
+    gap_tolerance_seconds: 0.000001  # floating-point rounding only
+  gates:
+    max_operational_failure_rate: 0.05    # over dev_scheduled_calls (44)
+    max_inference_p95_seconds: 5          # successful calls, pacing excluded

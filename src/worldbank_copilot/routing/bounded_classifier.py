@@ -62,6 +62,7 @@ class BoundedClassifierConfig(_Model):
     intent_descriptions: dict[str, str]
     instructions: str
     capability: dict[str, Any]
+    dev_evaluation: dict[str, Any]  # Phase 9D DEV protocol; not part of the model contract
 
     @model_validator(mode="after")
     def _labels(self) -> BoundedClassifierConfig:

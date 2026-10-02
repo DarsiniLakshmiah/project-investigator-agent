@@ -170,7 +170,7 @@ class CallRecord:
     retry_after_body: Any = None
 
 
-def _content_shape(choice: dict[str, Any]) -> tuple[list[str], int | None, str | None]:
+def content_shape(choice: dict[str, Any]) -> tuple[list[str], int | None, str | None]:
     content = (choice.get("message") or {}).get("content")
     if isinstance(content, list):
         types = [str(p.get("type")) if isinstance(p, dict) else type(p).__name__ for p in content]
@@ -233,7 +233,7 @@ def _error(body: Any) -> tuple[str | None, str | None]:
     return body.get("error_code"), str(body.get("message", body.get("text", "")))[:300] or None
 
 
-def _choice(body: Any) -> dict[str, Any]:
+def first_choice(body: Any) -> dict[str, Any]:
     choices = body.get("choices") if isinstance(body, dict) else None
     return (
         choices[0] if isinstance(choices, list) and choices and isinstance(choices[0], dict) else {}
@@ -244,7 +244,7 @@ def classify_record(
     step: str, case_id: str, resp: ChatResponse, config: BoundedClassifierConfig
 ) -> CallRecord:
     code, message = _error(resp.body)
-    choice = _choice(resp.body)
+    choice = first_choice(resp.body)
     record = CallRecord(
         step=step,
         case_id=case_id,
@@ -259,7 +259,7 @@ def classify_record(
         headers=_kept_headers(resp.headers),
         logprobs_present=choice.get("logprobs") is not None if choice else None,
     )
-    record.content_part_types, record.answer_text_chars, record.answer_text_sha256 = _content_shape(
+    record.content_part_types, record.answer_text_chars, record.answer_text_sha256 = content_shape(
         choice
     )
     try:
@@ -273,8 +273,8 @@ def classify_record(
 
 def plain_record(resp: ChatResponse) -> CallRecord:
     code, message = _error(resp.body)
-    choice = _choice(resp.body)
-    types, chars, digest = _content_shape(choice)
+    choice = first_choice(resp.body)
+    types, chars, digest = content_shape(choice)
     return CallRecord(
         step="plain",
         case_id="plain",
@@ -351,7 +351,7 @@ class ScheduleViolation(RuntimeError):
 
 
 @dataclass
-class _Pacer:
+class Pacer:
     gap_s: float
     tolerance_s: float
     clock: Callable[[], float]
@@ -392,7 +392,7 @@ def run_capability_probe(
     project, timeout = cap["synthetic_project"], config.request.timeout_seconds
     cases = {c["id"]: c for c in cap["synthetic_cases"]}
     sender = _RecordingTransport(transport)
-    pacer = _Pacer(
+    pacer = Pacer(
         schedule["ordinary_call_gap_seconds"], schedule["gap_tolerance_seconds"], clock, sleep
     )
 
@@ -512,7 +512,7 @@ def validate_schedule(
     ordinary: Sequence[tuple[str, str, dict[str, Any]]],
     violation: str | None,
     burst_started: float | None,
-    pacer: _Pacer,
+    pacer: Pacer,
 ) -> dict[str, Any]:
     """Verifies the observed schedule against the pre-registered one (no weakening)."""
     schedule = config.capability["schedule"]
@@ -597,10 +597,12 @@ def summarise(
     rejected = [r for r in required if r.status in (400, 422)]
     answered = [r for r in required if r.status == 200]
     schema_broken = [r for r in answered if r.fail_reason in SCHEMA_FAILURES]
-    operational = [plain, *required]  # burst excluded by design
+    operational = [plain, *required]  # scheduled gated calls; burst excluded by design
     labels = [r.label for r in answered if r.ok]
     metrics = {
-        "required_calls": len(required),
+        # Explicit denominators (the run-2 artifact's `required_calls` = the 17 below):
+        "scheduled_gated_calls": len(operational),  # plain + strict + warm (18)
+        "classification_required_calls": len(required),  # strict + warm (17)
         "answered": len(answered),
         "enum_valid_rate": round(sum(r.ok for r in answered) / len(answered), 4)
         if answered

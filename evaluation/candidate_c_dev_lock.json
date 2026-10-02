@@ -1,0 +1,419 @@
+{
+ "candidate": "C_DATABRICKS_BOUNDED_CLASSIFIER",
+ "run_id": "dev1",
+ "endpoint": "databricks-gpt-oss-20b",
+ "required_parameters": {
+  "reasoning_effort": "low"
+ },
+ "contract_sha256": "c64561c25e0e417328b3a525c8b225a6b2f9e465b7c9d177a9128d08f013fe8b",
+ "routing_dataset_sha256_lf": "83c5f9123ecef96c74b7c047e8a7a3afc2760d3042c2ee9034fe92214336fab9",
+ "freeze_manifest_sha256_lf": "443ef31c31c43f4ad2d0627d0ff54029d466449047924f60d3b194e7cb273070",
+ "baseline_9b2_sha256_lf": "a0aab575be9002ec6895f0c47d23b4e052c67c6ef960b033845eb7c276cd5f22",
+ "router_version": "9B.2",
+ "ambiguity_probe_sha256_lf": "93d44d28d38d348bc06f76422212d0d66681197823d111a09ccd8737dea47b94",
+ "populations": {
+  "c1": [
+   "r015",
+   "r048"
+  ],
+  "c2": [
+   "r002",
+   "r006",
+   "r012",
+   "r014",
+   "r015",
+   "r016",
+   "r017",
+   "r020",
+   "r025",
+   "r029",
+   "r030",
+   "r034",
+   "r037",
+   "r042",
+   "r044",
+   "r045",
+   "r048",
+   "r050",
+   "r052",
+   "r055",
+   "r056",
+   "r060"
+  ],
+  "c2_repeat": [
+   "r002",
+   "r014",
+   "r052",
+   "r006"
+  ],
+  "c1_repeats": 5,
+  "c2_repeats": 3
+ },
+ "call_plan": [
+  {
+   "sequence": 1,
+   "case_id": "r015",
+   "kind": "main",
+   "round": 0,
+   "population": "C1"
+  },
+  {
+   "sequence": 2,
+   "case_id": "r048",
+   "kind": "main",
+   "round": 0,
+   "population": "C1"
+  },
+  {
+   "sequence": 3,
+   "case_id": "r002",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 4,
+   "case_id": "r006",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 5,
+   "case_id": "r012",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 6,
+   "case_id": "r014",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 7,
+   "case_id": "r016",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 8,
+   "case_id": "r017",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 9,
+   "case_id": "r020",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 10,
+   "case_id": "r025",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 11,
+   "case_id": "r029",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 12,
+   "case_id": "r030",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 13,
+   "case_id": "r034",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 14,
+   "case_id": "r037",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 15,
+   "case_id": "r042",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 16,
+   "case_id": "r044",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 17,
+   "case_id": "r045",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 18,
+   "case_id": "r050",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 19,
+   "case_id": "r052",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 20,
+   "case_id": "r055",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 21,
+   "case_id": "r056",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 22,
+   "case_id": "r060",
+   "kind": "main",
+   "round": 0,
+   "population": "C2"
+  },
+  {
+   "sequence": 23,
+   "case_id": "r015",
+   "kind": "repeat",
+   "round": 1,
+   "population": "C1"
+  },
+  {
+   "sequence": 24,
+   "case_id": "r048",
+   "kind": "repeat",
+   "round": 1,
+   "population": "C1"
+  },
+  {
+   "sequence": 25,
+   "case_id": "r002",
+   "kind": "repeat",
+   "round": 1,
+   "population": "C2"
+  },
+  {
+   "sequence": 26,
+   "case_id": "r014",
+   "kind": "repeat",
+   "round": 1,
+   "population": "C2"
+  },
+  {
+   "sequence": 27,
+   "case_id": "r052",
+   "kind": "repeat",
+   "round": 1,
+   "population": "C2"
+  },
+  {
+   "sequence": 28,
+   "case_id": "r006",
+   "kind": "repeat",
+   "round": 1,
+   "population": "C2"
+  },
+  {
+   "sequence": 29,
+   "case_id": "r015",
+   "kind": "repeat",
+   "round": 2,
+   "population": "C1"
+  },
+  {
+   "sequence": 30,
+   "case_id": "r048",
+   "kind": "repeat",
+   "round": 2,
+   "population": "C1"
+  },
+  {
+   "sequence": 31,
+   "case_id": "r002",
+   "kind": "repeat",
+   "round": 2,
+   "population": "C2"
+  },
+  {
+   "sequence": 32,
+   "case_id": "r014",
+   "kind": "repeat",
+   "round": 2,
+   "population": "C2"
+  },
+  {
+   "sequence": 33,
+   "case_id": "r052",
+   "kind": "repeat",
+   "round": 2,
+   "population": "C2"
+  },
+  {
+   "sequence": 34,
+   "case_id": "r006",
+   "kind": "repeat",
+   "round": 2,
+   "population": "C2"
+  },
+  {
+   "sequence": 35,
+   "case_id": "r015",
+   "kind": "repeat",
+   "round": 3,
+   "population": "C1"
+  },
+  {
+   "sequence": 36,
+   "case_id": "r048",
+   "kind": "repeat",
+   "round": 3,
+   "population": "C1"
+  },
+  {
+   "sequence": 37,
+   "case_id": "r002",
+   "kind": "repeat",
+   "round": 3,
+   "population": "C2"
+  },
+  {
+   "sequence": 38,
+   "case_id": "r014",
+   "kind": "repeat",
+   "round": 3,
+   "population": "C2"
+  },
+  {
+   "sequence": 39,
+   "case_id": "r052",
+   "kind": "repeat",
+   "round": 3,
+   "population": "C2"
+  },
+  {
+   "sequence": 40,
+   "case_id": "r006",
+   "kind": "repeat",
+   "round": 3,
+   "population": "C2"
+  },
+  {
+   "sequence": 41,
+   "case_id": "r015",
+   "kind": "repeat",
+   "round": 4,
+   "population": "C1"
+  },
+  {
+   "sequence": 42,
+   "case_id": "r048",
+   "kind": "repeat",
+   "round": 4,
+   "population": "C1"
+  },
+  {
+   "sequence": 43,
+   "case_id": "r015",
+   "kind": "repeat",
+   "round": 5,
+   "population": "C1"
+  },
+  {
+   "sequence": 44,
+   "case_id": "r048",
+   "kind": "repeat",
+   "round": 5,
+   "population": "C1"
+  }
+ ],
+ "call_plan_sha256": "513d6e160b20f1df8ccd67339872f47258e62143c73dab0ccdecc929c1d6eaf0",
+ "dev_scheduled_calls": 44,
+ "c1_calls": 12,
+ "schedule": {
+  "initial_quiet_seconds": 60,
+  "ordinary_call_gap_seconds": 5.0,
+  "gap_tolerance_seconds": 1e-06
+ },
+ "gates": {
+  "max_operational_failure_rate": 0.05,
+  "max_inference_p95_seconds": 5
+ },
+ "candidate_a_dev_route_correct": 24,
+ "required_hybrid_route_correct": 26,
+ "acceptance_rule": {
+  "outcome_precedence": [
+   "INVALID",
+   "REJECTED_SAFETY",
+   "INCONCLUSIVE_OPERATIONAL",
+   "REJECTED",
+   "ACCEPTED_FOR_NEXT_STAGE"
+  ],
+  "INVALID": [
+   "frozen dataset / freeze-manifest / 9B.2-baseline hash mismatch",
+   "protocol-lock mismatch (recomputed lock or artifact lock hash)",
+   "C1 population drift (mechanical derivation != locked C1)",
+   "Candidate A drift (recomputed 9B.2 DEV outputs != recorded)",
+   "schedule integrity violation (quiet period, 5.0 s END->START gap, order, completeness)",
+   "artifact/protocol integrity failure (call plan, contract hash, non-DEV case id, test_evaluated not false)"
+  ],
+  "REJECTED_SAFETY": [
+   "a requested case is outside the locked C2 population or its project was not RESOLVED",
+   "classifier invoked outside the production semantic boundary (invoked set != C1)",
+   "project / authorisation / temporal context differs from Candidate A or from the request context",
+   "tool/execution fields in any classifier request",
+   "an output that neither parsed to an allowed label nor failed closed",
+   "reasoning or model text persisted in the artifact"
+  ],
+  "INCONCLUSIVE_OPERATIONAL": [
+   "DEV operational failure rate > max_operational_failure_rate over all scheduled calls",
+   "any C1 call (main or repeat) with an OPERATIONAL failure (transport, timeout, 429, 5xx, other non-200)",
+   "successful-call inference p95 > max_inference_p95_seconds (service performance)"
+  ],
+  "REJECTED": [
+   "any HTTP 200 reply that violates the frozen classifier output contract/schema",
+   "C1: wrong intent, ABSTAIN, wrong final hybrid route, or any wrong executable route",
+   "C1 repeatability: not c1_repeats/c1_repeats identical and equal to the main prediction",
+   "hybrid: route-correct != Candidate A + |C1|, a change that is not a correction, any regression, or any non-C1 final output different from Candidate A"
+  ],
+  "ACCEPTED_FOR_NEXT_STAGE": "every applicable hard gate passes. Means ONLY eligibility for the one frozen ambiguity probe run, after human review of the C2 diagnostics - not production approval, not a TEST pass, not Phase 9 complete",
+  "not_evaluable": "a C1 case with an OPERATIONAL failure is NOT EVALUABLE for C1/hybrid/repeat quality gates (it is covered by INCONCLUSIVE_OPERATIONAL, never also REJECTED)",
+  "c2": "DIAGNOSTIC ONLY - no numeric acceptance threshold; human review before the probe",
+  "scoring": "main-pass predictions only; repeats never replace a main prediction"
+ },
+ "acceptance_rule_sha256": "09fe85287f056799ad3740899464b3ac21fc17837946e675dd32817fa0fd0d16",
+ "split_evaluated": "dev",
+ "test_evaluated": false
+}

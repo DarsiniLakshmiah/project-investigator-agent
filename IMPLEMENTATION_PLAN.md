@@ -18,7 +18,7 @@ still open. Updated at the end of every phase.
 | 6 | Databricks platformization and governed Delta foundation | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 7 | Deterministic Gold intelligence layer | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings, AI Search index and notebook 07 Steps 4–7 and 07b staged experiments (incl. CrossEncoder) validated in Databricks (2026-10-01). Selected direction: adaptive reranking (trigger policy not yet implemented or evaluated)** |
-| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D in progress**: Candidate A provisional, B lexical and B2 Qwen rejected on DEV, C_SEMIF_OPENJEV BLOCKED_BY_EXECUTION_ENVIRONMENT, C_DATABRICKS_BOUNDED_CLASSIFIER: databricks-gpt-5-4-nano BLOCKED_BY_MODEL_AVAILABILITY, databricks-gpt-oss-20b run 1 CAPABILITY_BLOCKED_BY_RATE_LIMIT, paced run 2 (`run2-paced-5s`) implemented and awaiting a Databricks run; 9E–9F not started |
+| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D in progress**: Candidate A provisional, B lexical and B2 Qwen rejected on DEV, C_SEMIF_OPENJEV BLOCKED_BY_EXECUTION_ENVIRONMENT, C_DATABRICKS_BOUNDED_CLASSIFIER: databricks-gpt-5-4-nano BLOCKED_BY_MODEL_AVAILABILITY, databricks-gpt-oss-20b run 1 CAPABILITY_BLOCKED_BY_RATE_LIMIT, run 2 (`run2-paced-5s`) CAPABILITY_PASSED; Candidate C DEV evaluation implemented and locked (`dev1`), awaiting the Databricks run; 9E–9F not started |
 | 10–13 | See §3 (roadmap from Claude.md §36) | Not started |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
@@ -1932,3 +1932,69 @@ Contract hash unchanged: `c64561c2…fe8b`. The schedule is outside the model-fa
 **Artifact:** `capability_result_databricks_gpt_oss_20b__run2_paced_5s.json`. The notebook checks that it doesn't exist *before* any call, so the run-1 artifact stays immutable.
 
 **Tests:** 1,238 unit passed. Ruff and the format check are clean. No Databricks call was made.
+
+#### Checkpoint 9D — databricks-gpt-oss-20b run2-paced-5s: CAPABILITY_PASSED (2026-10-02, reviewed)
+
+This is a capability pass only. It is **not** evidence that Candidate C improves routing quality; the DEV evaluation answers that.
+
+**Capability results:**
+- the endpoint was READY and notebook identity worked;
+- `reasoning_effort=low` was accepted, and strict `json_schema` output worked;
+- every successful reply contained exactly one allowed intent;
+- malformed responses failed closed;
+- no execution capability; project, authorisation and scope stayed with the deterministic harness.
+
+**Schedule and reliability:**
+- the schedule was VALID with zero violations;
+- operational failure rate 0.0;
+- 7/7 synthetic sanity cases gave the expected intent (diagnostic only).
+
+**Inference latency:**
+- warm: p50 ~0.34 s, p95 ~0.47 s;
+- strict: p50 ~0.60 s, p95 ~0.61 s.
+
+Inference is sub-second. The 5 s gap is experimental request pacing to stay within observed workspace API capacity, **not** inference time.
+
+**Diagnostics only:**
+- the burst returned 7 × 200 and 1 × 429, with no Retry-After value;
+- the optional `json_object` calls returned 400. Production uses strict `json_schema`, so this is not a blocker.
+
+Artifact `capability_result_databricks_gpt_oss_20b__run2_paced_5s.json` is immutable. The contract is unchanged: `c64561c2…fe8b`.
+
+**Candidate C experiment trail (append-only):**
+- SemIf/OpenJev: BLOCKED_BY_EXECUTION_ENVIRONMENT;
+- databricks-gpt-5-4-nano: BLOCKED_BY_MODEL_AVAILABILITY;
+- databricks-gpt-oss-20b run 1: CAPABILITY_BLOCKED_BY_RATE_LIMIT, not a quality rejection;
+- databricks-gpt-oss-20b run 2 (paced 5 s): CAPABILITY_PASSED.
+
+**Next:** the Candidate C DEV evaluation design, under review. Not implemented, no Databricks call made, TEST and the ambiguity probe untouched.
+
+#### Checkpoint 9D — Candidate C DEV evaluation implemented (`dev1`, not run)
+
+The approved design is implemented locally. No Databricks call, no model prediction, TEST untouched, and the ambiguity probe has not been opened.
+
+**Populations:** derived mechanically and locked before any prediction.
+- **C1** = DEV cases where the frozen 9B.2 `RoutingService` returns SEMANTIC_CLASSIFICATION_REQUIRED. The real service runs with a context factory that raises at the first data access, which happens only after the semantic boundary. The result is checked for drift against the recorded 9B.2 rows. Result: **r015, r048**.
+- **C2** (shadow, DIAGNOSTIC ONLY): a RESOLVED project, a non-refusal intent and an executable route. 22 cases.
+- **Repeats:** C1 × 5 (hard gate); r002, r014, r052, r006 × 3 (diagnostic).
+- **Call plan:** 44 calls, of which 12 are C1 calls.
+
+**Protocol lock:** `evaluation/candidate_c_dev_lock.json`, sha256 `15d848642942dfd6aa200911c8d1fdfb7075739805acd357bdffe4b1df13267a`, written by `scripts/candidate_c_dev_lock.py`. It holds the dataset, manifest, 9B.2-baseline and probe-reference hashes, the populations, the call plan and its hash, the schedule, the gates, the acceptance rule and its hash `09fe8528…`, and contract `c64561c2…fe8b`.
+
+**Outcomes:** mutually exclusive, by precedence INVALID > REJECTED_SAFETY > INCONCLUSIVE_OPERATIONAL > REJECTED > ACCEPTED_FOR_NEXT_STAGE. Every call has exactly one failure kind:
+- NONE;
+- OPERATIONAL: no HTTP 200;
+- CONTRACT: an HTTP 200 that violates the contract.
+
+A C1 case with an operational failure is NOT EVALUABLE for the quality gates, so it can never be both INCONCLUSIVE and REJECTED. Inference p95 above 5 s maps to INCONCLUSIVE_OPERATIONAL.
+
+**Execution:**
+- `notebooks/08e_candidate_c_dev.py` (Serverless CPU) re-derives the lock and checks that the artifact doesn't exist, both before any call. It then runs the paced 44-call plan (60 s quiet, sequential, 5.0 s END→START, no retries, backoff or burst) and writes `candidate_c_dev_predictions__dev1.json`, with no question or model text.
+- `scripts/candidate_c_dev_9d.py` (local, `.venv-spark`) replays the recorded main-pass predictions through the real `RoutingService`, using the same Gold harness as the 9B.2 baseline, then writes the report. `--check-harness` already reproduces all 29 recorded 9B.2 DEV rows with **zero drift**.
+
+**Terminology:**
+- `scheduled_gated_calls` = 18; `classification_required_calls` = 17. The ambiguous `required_calls` is retired.
+- Run 2: 0/18 operational failures.
+- DEV: `dev_scheduled_calls` = 44, `c1_calls` = 12.
+
+**Tests:** see the implementation report.
