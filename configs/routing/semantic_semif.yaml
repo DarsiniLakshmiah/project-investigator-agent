@@ -1,0 +1,125 @@
+# Candidate C_SEMIF_OPENJEV - bounded semantic decision layer (Phase 9D, path B-nb).
+#
+# SemIf-OpenJev is an independent open implementation inspired by the bounded-decision
+# paradigm; it is NOT TypeSafe Jev. Evaluated notebook-only on Databricks Serverless GPU
+# (no Model Serving endpoint). Everything below is pinned and hashed into
+# evaluation/semif_protocol_lock.json BEFORE any P1 or DEV prediction; nothing here may
+# change after predictions are observed. Frozen TEST is never predicted, used for examples,
+# prompts, thresholds, analysis or the survival decision.
+version: 1
+candidate: C_SEMIF_OPENJEV
+path: B-nb                      # notebook-only Serverless GPU; no serving endpoint
+status: P0_P1_PENDING
+implementation:
+  repository: https://github.com/TheoLeeCJ/SemIf-OpenJev
+  commit: 23cf1f39fc9534fe81437200959b6dfc7106e45a   # master, 2026-09-23
+  package: semif-phase1==0.1.0
+  entry_point: semif-score      # semif_phase1.cli:main (documented interface)
+  install: isolated virtual environment on the GPU node - SemIf pins protobuf==7.36.1,
+    torch==2.10.0, transformers==5.17.0, which conflict with this project's validated
+    constraints (protobuf<7); it never shares the notebook's Python environment
+model:
+  id: Qwen/Qwen3.5-4B
+  revision: 851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  mode: direct                  # one forward pass over declared option logits
+  backend: torch
+  device: cuda
+  dtype: bfloat16               # needs CUDA compute capability >= 8.0; checked in P0
+contract:
+  returned_fields: [id, option_ids, probabilities, prompt_sha256, prompt_version, model]
+  expected_prompt_version: direct-options-v1
+  choice: harness argmax over probabilities (direct mode returns no choice field)
+  probability_sum_tolerance: 0.001
+# Fixed option set (12 <= SemIf's 16). Ids are the reviewed intents + one clarification
+# option; descriptions follow the reviewed intent semantics and the seven frozen rules.
+options:
+  - id: PROJECT_OVERVIEW
+    description: The current overall state of the project as a whole - status, key dates, financing snapshot, latest ratings - including broad 'how is it going' requests.
+  - id: CURRENT_RATINGS
+    description: The latest implementation-status ratings (PDO, implementation progress, overall risk) of the project.
+  - id: RATING_HISTORY
+    description: How implementation-status ratings evolved across reports or in a specific report, without asking why.
+  - id: TIMELINE_EVENTS
+    description: When project events happened - approvals, effectiveness, restructurings, closing-date changes - or a list of them.
+  - id: FINANCIAL_STATUS
+    description: A governed financial value - commitments, disbursement, undisbursed balance, cancellations or additional financing amounts.
+  - id: RESULTS_PROGRESS
+    description: Results-framework indicators - baselines, current values, targets and progress towards them.
+  - id: RISKS
+    description: The recorded risk ratings and assessment findings of the project, as a list or register.
+  - id: ATTENTION
+    description: What deserves attention now, based on observable rule-based implementation signals.
+  - id: DOCUMENT_CONTENT
+    description: What a specific named or identified source document states or concludes about a topic.
+  - id: EXPLANATION
+    description: The documented reason for an already uniquely identified decision or change.
+  - id: CHANGE_INVESTIGATION
+    description: Why something changed or is happening when the change, state or event must first be established from data and then explained from documents.
+  - id: CLARIFICATION_NEEDED
+    description: The request does not identify which project item, event, document, loan or time it means, or what is being asked, so it cannot be answered without guessing.
+criterion:
+  version: semif-routing-criterion-v1
+  V1: >-
+    Which single option best describes the information the user's request asks for?
+    Apply these rules: (1) asking what a named or source document says means
+    DOCUMENT_CONTENT; (2) a governed fact that can be looked up deterministically means the
+    matching structured option; (3) the reason for an already uniquely identified decision
+    or change means EXPLANATION; (4) a 'why' that first requires establishing which change,
+    state or event occurred means CHANGE_INVESTIGATION; (5) if the entity, event, document
+    or time is ambiguous, choose CLARIFICATION_NEEDED rather than guessing; (6) a broad
+    current-state request means PROJECT_OVERVIEW; (7) relative time periods refer to the
+    governed data snapshot, not today's date.
+  V2_examples_dev_case_ids: [r029, r016, r017, r052, r030]   # appended to V1 as examples;
+                                                            # dropped for their own family
+state_fields: [request, resolved_project, time_scope]   # read-only context; no documents
+# Harness-owned acceptance policy (the model never decides). Pre-registered finite grids;
+# never modified or expanded after predictions. Selection on C2 DEV ONLY with the approved
+# criterion; the ambiguity probe is never used for selection.
+policy:
+  accept_when: argmax is not CLARIFICATION_NEEDED and top_probability >= tau and
+    (top_probability - second_probability) >= margin; otherwise ABSTAIN
+  tau_grid: [0.30, 0.40, 0.50, 0.60, 0.70, 0.80]
+  margin_grid: [0.00, 0.10, 0.20, 0.30]
+  variants: [V1, V2]
+  selection: >-
+    over every (variant, tau, margin): keep combinations with C2 selective route
+    precision >= 0.90 at coverage >= 0.30; choose maximum coverage, then higher
+    precision, then lower tau, then lower margin, then V1 over V2. None qualifying ->
+    Candidate C rejected.
+c1_eligible_dev_case_ids: [r015, r048]
+c2_shadow_dev_case_ids: [r002, r006, r012, r014, r015, r016, r017, r020, r025, r029, r030,
+                         r034, r037, r042, r044, r045, r048, r050, r052, r055, r056, r060]
+probe_set:
+  file: evaluation/semantic_ambiguity_probe.yaml
+  sha256_lf: 93d44d28d38d348bc06f76422212d0d66681197823d111a09ccd8737dea47b94
+  gate: {min_abstain_ambiguous: 5, min_correct_controls: 4, security_violations: 0}
+acceptance_gates:          # approved 2026-10-01; passing = eligible for a later TEST run only
+  security_violations: 0
+  c2_min_selective_route_precision: 0.90
+  c2_min_coverage: 0.30
+  c2_min_route_accuracy_abstain_counts_wrong_exclusive: 0.50
+  c1_max_wrong_executable_routes: 0
+  max_failure_rate: 0.05
+  max_p95_latency_seconds: 5
+# P1 synthetic capability decisions: no World Bank, dataset or probe text.
+p1_synthetic:
+  - id: syn-2opt
+    state: {request: "The kettle was switched on ten minutes ago and the light is off now."}
+    question: Is the kettle currently heating?
+    options:
+      - {id: YES, description: The kettle is heating.}
+      - {id: NO, description: The kettle is not heating.}
+  - id: syn-4opt
+    state: {request: "Please move my dentist appointment from Tuesday to Thursday."}
+    question: Which kind of request is this?
+    options:
+      - {id: BOOK, description: Create a new appointment.}
+      - {id: RESCHEDULE, description: Change the time of an existing appointment.}
+      - {id: CANCEL, description: Cancel an existing appointment.}
+      - {id: INFO, description: Ask for information only.}
+  - id: syn-12opt          # the exact 12-option set and V1 criterion, synthetic state
+    state: {request: "What time does the office cafeteria open on Saturdays?",
+            resolved_project: SYNTHETIC, time_scope: NONE}
+    question: USE_CRITERION_V1
+    options: USE_FIXED_OPTIONS
+p1_repeats_for_warm_latency: 5   # syn-12opt repeated; first record of the process excluded

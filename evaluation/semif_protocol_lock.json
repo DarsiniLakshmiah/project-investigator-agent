@@ -1,0 +1,34 @@
+{
+ "candidate": "C_SEMIF_OPENJEV",
+ "path": "B-nb",
+ "semif_commit": "23cf1f39fc9534fe81437200959b6dfc7106e45a",
+ "model_id": "Qwen/Qwen3.5-4B",
+ "model_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+ "mode_backend_device_dtype": [
+  "direct",
+  "torch",
+  "cuda",
+  "bfloat16"
+ ],
+ "option_set_sha256": "061dd738f1eaed9b188a6683f6057db4cc4157a369a0feb8e9ed763e4b418877",
+ "criterion_version": "semif-routing-criterion-v1",
+ "criterion_sha256": "aea6e13fd2cfd325691adfb7f7f6c64491f850d2c650622ca7c4e54c4383801a",
+ "tau_grid": [
+  0.3,
+  0.4,
+  0.5,
+  0.6,
+  0.7,
+  0.8
+ ],
+ "margin_grid": [
+  0.0,
+  0.1,
+  0.2,
+  0.3
+ ],
+ "threshold_grid_sha256": "a23dfa09eb26e89364958f20f92cedc98c2c4700b367a5bf12f1f5ca8098c4c7",
+ "probe_set_sha256_lf": "93d44d28d38d348bc06f76422212d0d66681197823d111a09ccd8737dea47b94",
+ "routing_dataset_sha256_lf": "83c5f9123ecef96c74b7c047e8a7a3afc2760d3042c2ee9034fe92214336fab9",
+ "p1_synthetic_sha256": "60a15690d5f10f55ba7de8429360216a96f5ab7290c958bcf00f91cdc69f1564"
+}

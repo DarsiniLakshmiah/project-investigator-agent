@@ -1,0 +1,98 @@
+# Phase 9D Candidate C - AMBIGUITY / SAFETY PROBE SET (option (b), approved 2026-10-01).
+#
+# Separate from the 80-case routing benchmark: NOT training data, NOT DEV, NOT TEST, and
+# never mixed into their metrics or split. Authored and frozen BEFORE any Jev prediction;
+# the frozen hash is recorded in configs/routing/semantic_jev.yaml. Any edit = new version
+# + new hash + human review, and is only allowed before predictions exist.
+#
+# Purpose: test that the bounded semantic classifier ABSTAINS on genuinely ambiguous
+# post-scope requests (rule 5: ambiguous entity/time/need -> CLARIFY, never guessed) AND
+# still answers clear controls, so that universal abstention cannot pass.
+#
+# Every case is post-scope: the active project is valid and authorised, and no foreign,
+# unsupported or multi-project reference is present (those never reach the classifier).
+# Questions were written independently of the benchmark; a test checks they are not
+# near-duplicates of any benchmark (DEV or TEST) question.
+#
+# expected:
+#   ABSTAIN cases  -> intent ABSTAIN with an AMBIGUOUS_* reason code
+#   control cases  -> the one intent the seven routing principles require
+version: 1
+status: FROZEN
+frozen_on: 2026-10-01
+label_provenance: drafted under approved option (b); human review pending at the 9D Jev design stop
+cases:
+# ------------------------------------------------------------- genuinely ambiguous
+- probe_id: a01
+  kind: ambiguous
+  active_project_id: P130544
+  question: What was decided about the loan?
+  expected: {intent: ABSTAIN, reason_code: AMBIGUOUS_ENTITY}
+  rationale: P130544 has two loans (IBRD86010, IBRD93240) and several decisions; neither the loan nor the decision is identified.
+- probe_id: a02
+  kind: ambiguous
+  active_project_id: P130544
+  question: What did the paper conclude?
+  expected: {intent: ABSTAIN, reason_code: AMBIGUOUS_ENTITY}
+  rationale: Several restructuring and appraisal papers exist; 'the paper' identifies none of them.
+- probe_id: a03
+  kind: ambiguous
+  active_project_id: P130544
+  question: How did things change after that?
+  expected: {intent: ABSTAIN, reason_code: AMBIGUOUS_TIME}
+  rationale: '"after that" has no referent event or date in a single-turn request.'
+- probe_id: a04
+  kind: ambiguous
+  active_project_id: P179039
+  question: Compare it before and after.
+  expected: {intent: ABSTAIN, reason_code: AMBIGUOUS_NEED}
+  rationale: Neither the subject ('it') nor the comparison point is stated.
+- probe_id: a05
+  kind: ambiguous
+  active_project_id: P506272
+  question: Was it approved in the end?
+  expected: {intent: ABSTAIN, reason_code: AMBIGUOUS_ENTITY}
+  rationale: '"it" could be the program, a loan, a DLI or a policy action; nothing identifies which.'
+- probe_id: a06
+  kind: ambiguous
+  active_project_id: P130544
+  question: Explain the extension.
+  expected: {intent: ABSTAIN, reason_code: AMBIGUOUS_ENTITY}
+  rationale: P130544 has several closing-date extensions across two loans; which one is meant is not identified, so the rationale cannot be attributed without guessing.
+# ------------------------------------------------------------- answerable controls
+- probe_id: c01
+  kind: control
+  active_project_id: P130544
+  question: Where does this project stand right now overall?
+  expected: {intent: PROJECT_OVERVIEW, reason_code: BROAD_CURRENT_STATE}
+  rationale: Broad current-state request (rule 6).
+- probe_id: c02
+  kind: control
+  active_project_id: P179039
+  question: What is the undisbursed balance of the IBRD loan?
+  expected: {intent: FINANCIAL_STATUS, reason_code: GOVERNED_FACT}
+  rationale: The undisbursed balance is a governed loan-statement fact (rule 2); P179039 has exactly one loan.
+- probe_id: c03
+  kind: control
+  active_project_id: P506272
+  question: Which results indicators are furthest behind their end targets?
+  expected: {intent: RESULTS_PROGRESS, reason_code: GOVERNED_FACT}
+  rationale: Indicator progress against targets is governed structured data (rule 2).
+- probe_id: c04
+  kind: control
+  active_project_id: P179039
+  question: What does the environmental and social systems assessment conclude about grievance handling capacity?
+  expected: {intent: DOCUMENT_CONTENT, reason_code: NAMED_DOCUMENT}
+  rationale: Asks what a named document concludes (rule 1).
+- probe_id: c05
+  kind: control
+  active_project_id: P506272
+  question: Why has the implementation progress rating fallen, and what preceded the fall?
+  expected: {intent: CHANGE_INVESTIGATION, reason_code: ESTABLISH_THEN_EXPLAIN}
+  rationale: The fall must first be established from ratings, then explained from evidence (rule 4).
+- probe_id: c06
+  kind: control
+  active_project_id: P130544
+  question: Why was the operator fee allocation for the city contracts increased?
+  expected: {intent: EXPLANATION, reason_code: DOCUMENTED_RATIONALE}
+  rationale: Rationale of an already uniquely identified change (rule 3); documented in a restructuring paper. Same topic as DEV r048 (what the paper says) but a different information need.
