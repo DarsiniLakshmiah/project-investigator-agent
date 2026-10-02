@@ -1,0 +1,261 @@
+{
+ "phase": "9E",
+ "run_ids": {
+  "collection": "9e1",
+  "live": "9e1-live"
+ },
+ "artifact_dir": "adaptive_rerank_9e",
+ "hashes": {
+  "questions": "646aea75f82036bd87e9735b607fcfd5d99484d8de24ae79abba99f234ab5211",
+  "retrieval_yaml": "7a24757e14e8252aecc12c165d5b533a15b589d4e7d062a6a1c7503c396e59ae",
+  "query_yaml": "9d15d413051c2b05c9074cccb8ca4076a965430b9f94667141b54b2708eee63d",
+  "chunking_yaml": "322278a10e085ae4061e8a35454cba8bc8e7a1f589b8f944d62c2b3879d30fe0",
+  "embeddings_yaml": "56c1081e19a48ff91837c3609c5941c47c03fe1573c65cbd3fbc22a369221637"
+ },
+ "production_null": true,
+ "retrieval_production": {
+  "chunk_strategy": null,
+  "retrieval": null,
+  "reranker": null,
+  "candidate_k": null,
+  "final_k": 5
+ },
+ "stack": {
+  "chunk_strategy": "fixed",
+  "method": "hybrid",
+  "use_type_filters": false,
+  "rrf_k": 60,
+  "bm25_k1": 1.5,
+  "bm25_b": 0.75,
+  "p0_candidate_k": 10,
+  "adaptive_candidate_k": 50,
+  "final_k": 5,
+  "metrics_k": [
+   5,
+   10
+  ],
+  "reranker": "cross_encoder",
+  "reranker_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+  "reranker_max_length": 512,
+  "reranker_batch_size": 32
+ },
+ "expected": {
+  "questions": 49,
+  "answerable": 44,
+  "corpus_rows": 14327,
+  "index_rows": 12797,
+  "index_name": "document_chunk_index_qwen3_v1",
+  "endpoint": "worldbank-gep-ai-search"
+ },
+ "policy_definitions": {
+  "policies": [
+   {
+    "id": "P2",
+    "family": "top1_disagreement",
+    "rule": "rerank iff lexical top-1 != dense top-1",
+    "thresholds": []
+   },
+   {
+    "id": "P3",
+    "family": "head_overlap",
+    "rule": "rerank iff |L10 & D10| / 10 < tau",
+    "thresholds": [
+     0.2,
+     0.3,
+     0.4,
+     0.5
+    ]
+   },
+   {
+    "id": "P4",
+    "family": "head_document_diversity",
+    "rule": "rerank iff distinct document_id among fused top-5 >= m",
+    "thresholds": [
+     3.0,
+     4.0,
+     5.0
+    ]
+   },
+   {
+    "id": "P5",
+    "family": "lexical_coverage",
+    "rule": "rerank iff |C(q) & T(top-1 chunk_text)| / |C(q)| < tau; empty C(q) -> 0",
+    "thresholds": [
+     0.3,
+     0.5,
+     0.7
+    ]
+   },
+   {
+    "id": "P6",
+    "family": "anchoring",
+    "rule": "rerank iff the query is NOT anchored",
+    "thresholds": []
+   }
+  ],
+  "features": {
+   "overlap_depth": 10,
+   "diversity_depth": 5,
+   "min_term_length": 3,
+   "stopwords": [
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "has",
+    "have",
+    "in",
+    "is",
+    "it",
+    "its",
+    "of",
+    "on",
+    "or",
+    "that",
+    "the",
+    "this",
+    "to",
+    "was",
+    "were",
+    "what",
+    "which",
+    "with",
+    "how",
+    "why",
+    "when",
+    "did",
+    "does",
+    "do",
+    "there",
+    "their",
+    "been",
+    "any"
+   ],
+   "anchoring": {
+    "year_regex": "(19|20)\\d\\d",
+    "digit_regex": "\\d"
+   },
+   "no_candidates": "never_rerank"
+  }
+ },
+ "policy_definitions_sha256": "dafc0bf5c80acf2491099eb95991def149df51211c29eae7ccecafafd6eb1cff",
+ "preregistered_points": [
+  "P2",
+  "P3(0.2)",
+  "P3(0.3)",
+  "P3(0.4)",
+  "P3(0.5)",
+  "P4(3)",
+  "P4(4)",
+  "P4(5)",
+  "P5(0.3)",
+  "P5(0.5)",
+  "P5(0.7)",
+  "P6"
+ ],
+ "classification": {
+  "epsilon": 1e-09,
+  "order": [
+   "RETRIEVAL_MISS",
+   "HELPED",
+   "HURT",
+   "NEUTRAL"
+  ],
+  "retrieval_miss": "no evidence-matching chunk in fused_k50",
+  "helped": "dRR > eps, or (|dRR| <= eps and dNDCG@5 > eps)",
+  "hurt": "dRR < -eps, or (|dRR| <= eps and dNDCG@5 < -eps)",
+  "neutral": "otherwise",
+  "signs_conflict": "dRR and dNDCG@5 have opposite strict signs (recorded; class by dRR)"
+ },
+ "diagnostic_formulas": {
+  "rerank_rate": "|T| / 49",
+  "answerable_rerank_rate": "|T & A| / 44",
+  "help_capture": "|T & H| / |H|",
+  "missed_help": "|H - T|",
+  "hurt_exposure": "|T & U| (and / |U|)",
+  "unnecessary_rerank_rate": "|T & (N | U)| / |T & A|",
+  "futile_reranks": "|T & M|",
+  "no_answer_reranks": "|T - A|",
+  "retained_gain": "(point - P0@50) / (P1 - P0@50) for MRR and nDCG@5",
+  "composed_latency": "first_stage_k50 + features + rerank_k50 if reranked; mean of timed passes; p50 median, p95 nearest-rank over all 49"
+ },
+ "random": {
+  "seed": "9e1",
+  "draws": 10000,
+  "expectation": "P0@50 + (k/44) * (P1 - P0@50)"
+ },
+ "oracle": {
+  "rule": "rerank exactly the HELPED questions; never no-answer questions",
+  "label": "USES GROUND TRUTH — NOT DEPLOYABLE"
+ },
+ "pareto": {
+  "deployable_points": [
+   "P0@50",
+   "P1",
+   "P2",
+   "P3",
+   "P4",
+   "P5",
+   "P6"
+  ],
+  "objectives": [
+   [
+    "mrr",
+    "rerank_rate"
+   ],
+   [
+    "ndcg_at_5",
+    "rerank_rate"
+   ],
+   [
+    "mrr",
+    "composed_p95_ms"
+   ]
+  ]
+ },
+ "drift": {
+  "tolerance": 0.001,
+  "references": {
+   "P0": {
+    "recall_at_10": 0.7955,
+    "mrr": 0.5904,
+    "ndcg_at_5": 0.6415
+   },
+   "P1": {
+    "recall_at_10": 0.8409,
+    "mrr": 0.6827,
+    "ndcg_at_5": 0.7169
+   }
+  }
+ },
+ "passes": {
+  "warmup": 1,
+  "timed": 2
+ },
+ "consistency": {
+  "ce_score_tolerance": 1e-06
+ },
+ "live": {
+  "points": [
+   "P0@50",
+   "LATENCY_VALIDATION_POINT"
+  ],
+  "selection_rule": "deployable P2-P6 point whose rerank rate (over all 49) is closest to 0.5; ties -> lower policy id, then lower threshold. Rerank rate only - never quality.",
+  "label": "latency validation point - NOT a production winner",
+  "passes": {
+   "warmup": 1,
+   "timed": 2
+  }
+ },
+ "scope": {
+  "production_change": false,
+  "holdout_created": false,
+  "routing_test_untouched": true
+ }
+}

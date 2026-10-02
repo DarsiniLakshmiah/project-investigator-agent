@@ -18,7 +18,7 @@ still open. Updated at the end of every phase.
 | 6 | Databricks platformization and governed Delta foundation | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 7 | Deterministic Gold intelligence layer | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings, AI Search index and notebook 07 Steps 4–7 and 07b staged experiments (incl. CrossEncoder) validated in Databricks (2026-10-01). Selected direction: adaptive reranking (trigger policy not yet implemented or evaluated)** |
-| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D CLOSED** (2026-10-02): Candidate A SELECTED - deterministic routing + targeted clarification; no semantic LLM fallback promoted (Candidate C GPT-OSS-20B DEV REJECTED on quality/repeatability; earlier Candidate C blocks were not quality rejections); 9E–9F not started |
+| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D CLOSED** (2026-10-02): Candidate A SELECTED - deterministic routing + targeted clarification; no semantic LLM fallback promoted (Candidate C GPT-OSS-20B DEV REJECTED on quality/repeatability; earlier Candidate C blocks were not quality rejections); **9E implemented and locked, collection not run** (adaptive-rerank diagnostic); 9F not started |
 | 10–13 | See §3 (roadmap from Claude.md §36) | Not started |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
@@ -2047,3 +2047,41 @@ The three blocked or rate-limited outcomes are **not** quality rejections.
 **Remaining Phase 9 work:**
 - 9E: adaptive-rerank diagnostic (design first);
 - 9F: Databricks end-to-end validation, frozen-file protection, Phase 9 closure.
+
+#### Checkpoint 9E — adaptive-rerank diagnostic implemented and locked (2026-10-02; NOT run)
+
+**Framing:** a preregistered *descriptive* diagnostic over the frozen Phase 8 set (49 questions, 44 answerable). It is **not** independent validation: all 44 were used in Phase 8. There is no new split, no cross-validated selection, and no automatic winner.
+
+**Points:**
+- P0: the historical `fixed|hybrid|none|k10` baseline.
+- P0@50: the k50 no-rerank counterfactual.
+- P1: the same k50 candidates, all reranked by the CrossEncoder.
+- **12** adaptive points:
+  - P2: top-1 lexical/dense disagreement;
+  - P3: head overlap < τ, τ ∈ {0.2, 0.3, 0.4, 0.5};
+  - P4: distinct documents in the top-5 ≥ m, m ∈ {3, 4, 5};
+  - P5: lexical coverage of the top result < τ, τ ∈ {0.3, 0.5, 0.7};
+  - P6: the anchoring heuristic.
+
+That's 15 points in total. (The approved design said 13 adaptive and 16 total; that was an arithmetic slip. The policies and thresholds are exactly as approved.)
+
+**Policy input boundary:** policies read only `TriggerFeatures` (no labels or metadata). Retained gain is always measured against P0@50, never P0.
+
+**Implementation:**
+- `retrieval/adaptive_rerank.py`: features, policies, the live `RerankPolicy` adapter, and a dense-hit recorder (so the live path makes no second index query).
+- `retrieval/adaptive_eval.py`:
+  - the collector, with hybrid-equivalence, pass-consistency and drift checks;
+  - the HELPED / HURT / NEUTRAL / RETRIEVAL_MISS counterfactual classes;
+  - trigger diagnostics, Random(r) (exact expectation plus 10,000 draws seeded `9e1:k`), the Oracle (USES GROUND TRUTH — NOT DEPLOYABLE), Pareto sets and per-project breakdowns;
+  - the fail-closed INVALID reports;
+  - the rate-only live-selection rule;
+  - the live run and the composed-vs-live comparison.
+- Notebooks `07c_adaptive_rerank_collect.py` and `07d_adaptive_rerank_live.py`; scripts `adaptive_rerank_lock.py`, `adaptive_rerank_9e.py` and `adaptive_rerank_9e_live.py`.
+
+**Protocol lock:** `evaluation/adaptive_rerank_9e_lock.json`, sha256 `480d0a1ec02e6e54aeb7c4a86d1122c002e1b0607d76ad74a9571a7d231b591e`. Policy definitions sha256 `dafc0bf5c80acf2491099eb95991def149df51211c29eae7ccecafafd6eb1cff`.
+
+**Production:** `configs/retrieval/retrieval.yaml` is unchanged (`production` null); `retriever.py`, `query.yaml`, chunking, embeddings, the index and the labels are untouched.
+
+**Fresh holdout:** NOT created. It's recorded as a requirement before any strong production-generalisation claim if 9E shows a promising policy, to be revisited in 9F after the 9E review.
+
+**Not run:** the Databricks collection (07c), the live confirmation (07d) and the real 9E results.

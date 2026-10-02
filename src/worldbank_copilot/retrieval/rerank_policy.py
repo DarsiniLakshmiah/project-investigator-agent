@@ -5,9 +5,10 @@ Phase 9A implements only the two MEASURED bounds of Phase 8:
 * ``NeverRerank``  - fixed + hybrid, no reranker (measured baseline at k10);
 * ``AlwaysRerank`` - fixed + hybrid + CrossEncoder (measured quality ceiling at k50).
 
-Adaptive candidate policies (P2-P6) are added and evaluated in the 9E diagnostic
-experiment. No policy is a production default: ``retrieval.yaml`` ``production`` stays
-null until an adaptive policy has been evaluated and explicitly accepted.
+Adaptive candidate policies (P2-P6) live in ``retrieval/adaptive_rerank.py`` and are
+evaluated by the 9E diagnostic (``retrieval/adaptive_eval.py``). No policy is a production
+default: ``retrieval.yaml`` ``production`` stays null until an adaptive policy has been
+evaluated and explicitly accepted.
 The policy decides; deterministic harness code (``DocumentSearch``) executes.
 """
 

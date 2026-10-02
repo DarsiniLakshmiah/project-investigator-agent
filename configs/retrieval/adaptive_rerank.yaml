@@ -1,0 +1,114 @@
+# Phase 9E adaptive-rerank DIAGNOSTIC (approved design, 2026-10-02).
+#
+# A preregistered, DESCRIPTIVE diagnostic over the frozen Phase 8 retrieval set
+# (evaluation/retrieval_questions.yaml: 49 questions, 44 answerable). It is NOT independent
+# validation: all 44 answerable questions were used in Phase 8. No new split, no
+# cross-validated selection, no automatic winner. Every point below is reported.
+#
+# Production is NOT changed: configs/retrieval/retrieval.yaml `production` stays null until
+# the experiment has run, been reviewed and an acceptance criterion is explicitly approved.
+# Everything here is hashed into evaluation/adaptive_rerank_9e_lock.json before collection
+# and must not change after results are observed (only `status` may change).
+version: 1
+phase: 9E
+status: IMPLEMENTED_NOT_RUN
+run_ids: {collection: 9e1, live: 9e1-live}
+artifact_dir: adaptive_rerank_9e        # under the artifact Volume
+questions_file: evaluation/retrieval_questions.yaml
+
+# Frozen Phase 8 stack (identical to the 07b measurement).
+stack:
+  chunk_strategy: fixed
+  method: hybrid                         # BM25 + Qwen dense, reciprocal rank fusion
+  use_type_filters: false
+  rrf_k: 60
+  bm25_k1: 1.5
+  bm25_b: 0.75
+  p0_candidate_k: 10                     # P0: historical Phase 8 NEVER baseline
+  adaptive_candidate_k: 50               # P0@50, P1 and every adaptive policy
+  final_k: 5
+  metrics_k: [5, 10]
+  reranker: cross_encoder
+  reranker_model: cross-encoder/ms-marco-MiniLM-L-6-v2
+  reranker_max_length: 512
+  reranker_batch_size: 32
+
+# Identity of the frozen Phase 8 data (a mismatch STOPs the collection before any query).
+expected:
+  questions: 49
+  answerable: 44
+  corpus_rows: 14327                     # silver.document_chunks, all strategies (Phase 8)
+  index_rows: 12797                      # AI Search index (checked when the status reports it)
+  index_name: document_chunk_index_qwen3_v1
+  endpoint: worldbank-gep-ai-search
+
+# Adaptive policies P2-P6 (exactly these; no additions, removals or threshold changes).
+# Policies read ONLY TriggerFeatures (first-stage signals) - never labels or metadata.
+policies:
+  - {id: P2, family: top1_disagreement, rule: "rerank iff lexical top-1 != dense top-1"}
+  - {id: P3, family: head_overlap, thresholds: [0.2, 0.3, 0.4, 0.5],
+     rule: "rerank iff |L10 & D10| / 10 < tau"}
+  - {id: P4, family: head_document_diversity, thresholds: [3, 4, 5],
+     rule: "rerank iff distinct document_id among fused top-5 >= m"}
+  - {id: P5, family: lexical_coverage, thresholds: [0.3, 0.5, 0.7],
+     rule: "rerank iff |C(q) & T(top-1 chunk_text)| / |C(q)| < tau; empty C(q) -> 0"}
+  - {id: P6, family: anchoring, rule: "rerank iff the query is NOT anchored"}
+features:
+  overlap_depth: 10
+  diversity_depth: 5
+  min_term_length: 3
+  # verbatim copy of the frozen BM25 stop words (retrieval/lexical.py STOPWORDS)
+  stopwords: ["a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "have",
+              "in", "is", "it", "its", "of", "on", "or", "that", "the", "this", "to", "was",
+              "were", "what", "which", "with", "how", "why", "when", "did", "does", "do",
+              "there", "their", "been", "any"]
+  anchoring:
+    year_regex: "(19|20)\\d\\d"
+    digit_regex: "\\d"
+    # anchored = isr_sequences or latest_isr or document_type_hints or year or any digit
+  no_candidates: never_rerank
+
+# Counterfactual classes (answerable questions only), Phase 8 ranking_metrics semantics.
+classification:
+  epsilon: 1.0e-9
+  order: [RETRIEVAL_MISS, HELPED, HURT, NEUTRAL]
+  retrieval_miss: no evidence-matching chunk in fused_k50
+  helped: dRR > eps, or (|dRR| <= eps and dNDCG@5 > eps)
+  hurt: dRR < -eps, or (|dRR| <= eps and dNDCG@5 < -eps)
+  neutral: otherwise
+  signs_conflict: dRR and dNDCG@5 have opposite strict signs (recorded; class by dRR)
+
+random:
+  seed: "9e1"                            # per-k stream: random.Random(f"9e1:{k}")
+  draws: 10000
+  expectation: P0@50 + (k/44) * (P1 - P0@50)
+
+oracle:
+  rule: rerank exactly the HELPED questions; never no-answer questions
+  label: USES GROUND TRUTH — NOT DEPLOYABLE
+
+pareto:
+  deployable_points: [P0@50, P1, P2, P3, P4, P5, P6]   # never P0 (k10), Random or Oracle
+  objectives: [[mrr, rerank_rate], [ndcg_at_5, rerank_rate], [mrr, composed_p95_ms]]
+
+# Fail-closed drift check against the Phase 8 07b measurements.
+drift:
+  tolerance: 0.001
+  references:
+    P0: {recall_at_10: 0.7955, mrr: 0.5904, ndcg_at_5: 0.6415}
+    P1: {recall_at_10: 0.8409, mrr: 0.6827, ndcg_at_5: 0.7169}
+
+passes: {warmup: 1, timed: 2}
+consistency: {ce_score_tolerance: 1.0e-6}
+
+live:
+  points: [P0@50, LATENCY_VALIDATION_POINT]
+  selection_rule: deployable P2-P6 point whose rerank rate (over all 49) is closest to 0.5;
+    ties -> lower policy id, then lower threshold. Rerank rate only - never quality.
+  label: latency validation point - NOT a production winner
+  passes: {warmup: 1, timed: 2}
+
+scope:
+  production_change: false
+  holdout_created: false
+  routing_test_untouched: true
