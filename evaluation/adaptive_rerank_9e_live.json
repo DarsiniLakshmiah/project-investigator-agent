@@ -1,0 +1,807 @@
+{
+ "selection": {
+  "point": "P3(0.4)",
+  "policy_id": "P3",
+  "threshold": 0.4,
+  "rerank_rate": 0.4898,
+  "rule": "closest rerank rate to 0.5; ties: lower policy id, then lower threshold",
+  "label": "latency validation point - NOT a production winner",
+  "lock_sha256": "480d0a1ec02e6e54aeb7c4a86d1122c002e1b0607d76ad74a9571a7d231b591e",
+  "collection_artifact_sha256": "8b6763e349215899b686fff45f49eb44483f65490167b6649e88014599a63d70"
+ },
+ "points": {
+  "P0@50": {
+   "composed_p50_ms": 121.1,
+   "composed_p95_ms": 178.7,
+   "live_p50_ms": 120.9,
+   "live_p95_ms": 169.4,
+   "difference_p50_ms": -0.2,
+   "difference_p95_ms": -9.3,
+   "relative_difference_p50": -0.0017,
+   "relative_difference_p95": -0.052,
+   "observed_rerank_rate": 0.0,
+   "agreement": {
+    "rows_checked": 147,
+    "decision_mismatches": 0,
+    "top5_mismatches": 0
+   },
+   "live_by_decision": {
+    "reranked": {
+     "n": 0,
+     "p50_ms": null,
+     "p95_ms": null,
+     "mean_ms": null
+    },
+    "not_reranked": {
+     "n": 49,
+     "p50_ms": 120.9,
+     "p95_ms": 169.4,
+     "mean_ms": 125.5469
+    }
+   },
+   "passes": {
+    "1": {
+     "kind": "warm-up",
+     "p50_ms": 1596.4,
+     "p95_ms": 1975.7,
+     "max_ms": 1989.559
+    },
+    "2": {
+     "kind": "timed",
+     "p50_ms": 113.8,
+     "p95_ms": 185.4,
+     "max_ms": 328.02
+    },
+    "3": {
+     "kind": "timed",
+     "p50_ms": 114.3,
+     "p95_ms": 170.1,
+     "max_ms": 222.617
+    }
+   },
+   "per_question": [
+    {
+     "question_id": "q01",
+     "rerank": false,
+     "composed_ms": 124.4,
+     "live_ms": 169.4,
+     "difference_ms": 45.1
+    },
+    {
+     "question_id": "q02",
+     "rerank": false,
+     "composed_ms": 121.9,
+     "live_ms": 128.8,
+     "difference_ms": 6.9
+    },
+    {
+     "question_id": "q03",
+     "rerank": false,
+     "composed_ms": 228.1,
+     "live_ms": 120.5,
+     "difference_ms": -107.6
+    },
+    {
+     "question_id": "q04",
+     "rerank": false,
+     "composed_ms": 104.9,
+     "live_ms": 169.6,
+     "difference_ms": 64.7
+    },
+    {
+     "question_id": "q05",
+     "rerank": false,
+     "composed_ms": 132.0,
+     "live_ms": 108.6,
+     "difference_ms": -23.3
+    },
+    {
+     "question_id": "q06",
+     "rerank": false,
+     "composed_ms": 106.4,
+     "live_ms": 144.6,
+     "difference_ms": 38.2
+    },
+    {
+     "question_id": "q07",
+     "rerank": false,
+     "composed_ms": 107.4,
+     "live_ms": 130.7,
+     "difference_ms": 23.3
+    },
+    {
+     "question_id": "q08",
+     "rerank": false,
+     "composed_ms": 170.9,
+     "live_ms": 113.8,
+     "difference_ms": -57.1
+    },
+    {
+     "question_id": "q09",
+     "rerank": false,
+     "composed_ms": 115.7,
+     "live_ms": 113.9,
+     "difference_ms": -1.8
+    },
+    {
+     "question_id": "q10",
+     "rerank": false,
+     "composed_ms": 126.1,
+     "live_ms": 124.9,
+     "difference_ms": -1.2
+    },
+    {
+     "question_id": "q11",
+     "rerank": false,
+     "composed_ms": 100.6,
+     "live_ms": 101.3,
+     "difference_ms": 0.7
+    },
+    {
+     "question_id": "q12",
+     "rerank": false,
+     "composed_ms": 107.2,
+     "live_ms": 112.1,
+     "difference_ms": 4.8
+    },
+    {
+     "question_id": "q13",
+     "rerank": false,
+     "composed_ms": 118.9,
+     "live_ms": 120.9,
+     "difference_ms": 2.0
+    },
+    {
+     "question_id": "q14",
+     "rerank": false,
+     "composed_ms": 102.4,
+     "live_ms": 130.7,
+     "difference_ms": 28.3
+    },
+    {
+     "question_id": "q15",
+     "rerank": false,
+     "composed_ms": 196.4,
+     "live_ms": 122.5,
+     "difference_ms": -73.9
+    },
+    {
+     "question_id": "q16",
+     "rerank": false,
+     "composed_ms": 100.3,
+     "live_ms": 117.5,
+     "difference_ms": 17.2
+    },
+    {
+     "question_id": "q17",
+     "rerank": false,
+     "composed_ms": 106.2,
+     "live_ms": 129.3,
+     "difference_ms": 23.0
+    },
+    {
+     "question_id": "q18",
+     "rerank": false,
+     "composed_ms": 115.4,
+     "live_ms": 152.0,
+     "difference_ms": 36.5
+    },
+    {
+     "question_id": "q19",
+     "rerank": false,
+     "composed_ms": 124.8,
+     "live_ms": 105.6,
+     "difference_ms": -19.2
+    },
+    {
+     "question_id": "q20",
+     "rerank": false,
+     "composed_ms": 178.7,
+     "live_ms": 101.5,
+     "difference_ms": -77.2
+    },
+    {
+     "question_id": "q21",
+     "rerank": false,
+     "composed_ms": 106.9,
+     "live_ms": 134.2,
+     "difference_ms": 27.3
+    },
+    {
+     "question_id": "q22",
+     "rerank": false,
+     "composed_ms": 100.2,
+     "live_ms": 115.5,
+     "difference_ms": 15.3
+    },
+    {
+     "question_id": "q23",
+     "rerank": false,
+     "composed_ms": 153.6,
+     "live_ms": 110.6,
+     "difference_ms": -43.0
+    },
+    {
+     "question_id": "q24",
+     "rerank": false,
+     "composed_ms": 106.8,
+     "live_ms": 140.1,
+     "difference_ms": 33.3
+    },
+    {
+     "question_id": "q25",
+     "rerank": false,
+     "composed_ms": 144.1,
+     "live_ms": 106.4,
+     "difference_ms": -37.8
+    },
+    {
+     "question_id": "q26",
+     "rerank": false,
+     "composed_ms": 121.1,
+     "live_ms": 157.8,
+     "difference_ms": 36.6
+    },
+    {
+     "question_id": "q27",
+     "rerank": false,
+     "composed_ms": 120.0,
+     "live_ms": 94.3,
+     "difference_ms": -25.7
+    },
+    {
+     "question_id": "q28",
+     "rerank": false,
+     "composed_ms": 115.1,
+     "live_ms": 106.4,
+     "difference_ms": -8.7
+    },
+    {
+     "question_id": "q29",
+     "rerank": false,
+     "composed_ms": 108.3,
+     "live_ms": 124.2,
+     "difference_ms": 15.9
+    },
+    {
+     "question_id": "q30",
+     "rerank": false,
+     "composed_ms": 129.9,
+     "live_ms": 222.0,
+     "difference_ms": 92.2
+    },
+    {
+     "question_id": "q31",
+     "rerank": false,
+     "composed_ms": 114.9,
+     "live_ms": 107.9,
+     "difference_ms": -7.0
+    },
+    {
+     "question_id": "q32",
+     "rerank": false,
+     "composed_ms": 130.8,
+     "live_ms": 108.1,
+     "difference_ms": -22.8
+    },
+    {
+     "question_id": "q33",
+     "rerank": false,
+     "composed_ms": 145.9,
+     "live_ms": 112.0,
+     "difference_ms": -33.9
+    },
+    {
+     "question_id": "q34",
+     "rerank": false,
+     "composed_ms": 152.4,
+     "live_ms": 144.3,
+     "difference_ms": -8.1
+    },
+    {
+     "question_id": "q35",
+     "rerank": false,
+     "composed_ms": 106.2,
+     "live_ms": 104.5,
+     "difference_ms": -1.8
+    },
+    {
+     "question_id": "q36",
+     "rerank": false,
+     "composed_ms": 112.1,
+     "live_ms": 159.0,
+     "difference_ms": 46.9
+    },
+    {
+     "question_id": "q37",
+     "rerank": false,
+     "composed_ms": 159.1,
+     "live_ms": 140.0,
+     "difference_ms": -19.1
+    },
+    {
+     "question_id": "q38",
+     "rerank": false,
+     "composed_ms": 130.4,
+     "live_ms": 130.8,
+     "difference_ms": 0.4
+    },
+    {
+     "question_id": "q39",
+     "rerank": false,
+     "composed_ms": 143.9,
+     "live_ms": 106.1,
+     "difference_ms": -37.8
+    },
+    {
+     "question_id": "q40",
+     "rerank": false,
+     "composed_ms": 104.0,
+     "live_ms": 118.6,
+     "difference_ms": 14.6
+    },
+    {
+     "question_id": "q41",
+     "rerank": false,
+     "composed_ms": 125.5,
+     "live_ms": 105.1,
+     "difference_ms": -20.4
+    },
+    {
+     "question_id": "q42",
+     "rerank": false,
+     "composed_ms": 133.7,
+     "live_ms": 110.1,
+     "difference_ms": -23.5
+    },
+    {
+     "question_id": "q43",
+     "rerank": false,
+     "composed_ms": 112.8,
+     "live_ms": 101.2,
+     "difference_ms": -11.6
+    },
+    {
+     "question_id": "q44",
+     "rerank": false,
+     "composed_ms": 129.9,
+     "live_ms": 126.2,
+     "difference_ms": -3.6
+    },
+    {
+     "question_id": "q45",
+     "rerank": false,
+     "composed_ms": 110.9,
+     "live_ms": 143.6,
+     "difference_ms": 32.7
+    },
+    {
+     "question_id": "q46",
+     "rerank": false,
+     "composed_ms": 138.0,
+     "live_ms": 125.7,
+     "difference_ms": -12.4
+    },
+    {
+     "question_id": "q47",
+     "rerank": false,
+     "composed_ms": 149.3,
+     "live_ms": 107.4,
+     "difference_ms": -41.9
+    },
+    {
+     "question_id": "q48",
+     "rerank": false,
+     "composed_ms": 173.4,
+     "live_ms": 147.4,
+     "difference_ms": -26.1
+    },
+    {
+     "question_id": "q49",
+     "rerank": false,
+     "composed_ms": 105.6,
+     "live_ms": 124.1,
+     "difference_ms": 18.5
+    }
+   ],
+   "mismatches": []
+  },
+  "P3(0.4)": {
+   "composed_p50_ms": 178.9,
+   "composed_p95_ms": 6126.7,
+   "live_p50_ms": 196.9,
+   "live_p95_ms": 6378.3,
+   "difference_p50_ms": 18.0,
+   "difference_p95_ms": 251.6,
+   "relative_difference_p50": 0.1006,
+   "relative_difference_p95": 0.0411,
+   "observed_rerank_rate": 0.4898,
+   "agreement": {
+    "rows_checked": 147,
+    "decision_mismatches": 0,
+    "top5_mismatches": 0
+   },
+   "live_by_decision": {
+    "reranked": {
+     "n": 24,
+     "p50_ms": 5604.9,
+     "p95_ms": 6610.4,
+     "mean_ms": 5531.45
+    },
+    "not_reranked": {
+     "n": 25,
+     "p50_ms": 113.9,
+     "p95_ms": 142.7,
+     "mean_ms": 118.74
+    }
+   },
+   "passes": {
+    "1": {
+     "kind": "warm-up",
+     "p50_ms": 279.1,
+     "p95_ms": 6439.3,
+     "max_ms": 12160.654
+    },
+    "2": {
+     "kind": "timed",
+     "p50_ms": 155.6,
+     "p95_ms": 6368.0,
+     "max_ms": 8040.857
+    },
+    "3": {
+     "kind": "timed",
+     "p50_ms": 268.9,
+     "p95_ms": 6437.2,
+     "max_ms": 7120.846
+    }
+   },
+   "per_question": [
+    {
+     "question_id": "q01",
+     "rerank": false,
+     "composed_ms": 124.5,
+     "live_ms": 104.1,
+     "difference_ms": -20.3
+    },
+    {
+     "question_id": "q02",
+     "rerank": false,
+     "composed_ms": 122.0,
+     "live_ms": 111.4,
+     "difference_ms": -10.6
+    },
+    {
+     "question_id": "q03",
+     "rerank": true,
+     "composed_ms": 4977.3,
+     "live_ms": 5298.5,
+     "difference_ms": 321.2
+    },
+    {
+     "question_id": "q04",
+     "rerank": false,
+     "composed_ms": 105.0,
+     "live_ms": 142.7,
+     "difference_ms": 37.7
+    },
+    {
+     "question_id": "q05",
+     "rerank": false,
+     "composed_ms": 132.1,
+     "live_ms": 117.4,
+     "difference_ms": -14.7
+    },
+    {
+     "question_id": "q06",
+     "rerank": false,
+     "composed_ms": 106.6,
+     "live_ms": 134.4,
+     "difference_ms": 27.8
+    },
+    {
+     "question_id": "q07",
+     "rerank": true,
+     "composed_ms": 5745.1,
+     "live_ms": 6244.3,
+     "difference_ms": 499.2
+    },
+    {
+     "question_id": "q08",
+     "rerank": false,
+     "composed_ms": 171.1,
+     "live_ms": 111.4,
+     "difference_ms": -59.7
+    },
+    {
+     "question_id": "q09",
+     "rerank": false,
+     "composed_ms": 115.8,
+     "live_ms": 101.7,
+     "difference_ms": -14.1
+    },
+    {
+     "question_id": "q10",
+     "rerank": false,
+     "composed_ms": 126.2,
+     "live_ms": 123.5,
+     "difference_ms": -2.6
+    },
+    {
+     "question_id": "q11",
+     "rerank": false,
+     "composed_ms": 100.7,
+     "live_ms": 97.1,
+     "difference_ms": -3.6
+    },
+    {
+     "question_id": "q12",
+     "rerank": true,
+     "composed_ms": 6231.1,
+     "live_ms": 6610.4,
+     "difference_ms": 379.3
+    },
+    {
+     "question_id": "q13",
+     "rerank": false,
+     "composed_ms": 119.0,
+     "live_ms": 132.8,
+     "difference_ms": 13.8
+    },
+    {
+     "question_id": "q14",
+     "rerank": false,
+     "composed_ms": 102.6,
+     "live_ms": 141.6,
+     "difference_ms": 39.0
+    },
+    {
+     "question_id": "q15",
+     "rerank": true,
+     "composed_ms": 4283.4,
+     "live_ms": 4650.9,
+     "difference_ms": 367.5
+    },
+    {
+     "question_id": "q16",
+     "rerank": false,
+     "composed_ms": 100.5,
+     "live_ms": 96.1,
+     "difference_ms": -4.3
+    },
+    {
+     "question_id": "q17",
+     "rerank": true,
+     "composed_ms": 4731.1,
+     "live_ms": 5227.1,
+     "difference_ms": 496.0
+    },
+    {
+     "question_id": "q18",
+     "rerank": true,
+     "composed_ms": 6138.6,
+     "live_ms": 5827.7,
+     "difference_ms": -310.9
+    },
+    {
+     "question_id": "q19",
+     "rerank": false,
+     "composed_ms": 124.9,
+     "live_ms": 113.9,
+     "difference_ms": -11.0
+    },
+    {
+     "question_id": "q20",
+     "rerank": false,
+     "composed_ms": 178.9,
+     "live_ms": 111.7,
+     "difference_ms": -67.2
+    },
+    {
+     "question_id": "q21",
+     "rerank": false,
+     "composed_ms": 107.1,
+     "live_ms": 110.9,
+     "difference_ms": 3.8
+    },
+    {
+     "question_id": "q22",
+     "rerank": false,
+     "composed_ms": 100.3,
+     "live_ms": 113.4,
+     "difference_ms": 13.1
+    },
+    {
+     "question_id": "q23",
+     "rerank": true,
+     "composed_ms": 5401.7,
+     "live_ms": 6626.1,
+     "difference_ms": 1224.4
+    },
+    {
+     "question_id": "q24",
+     "rerank": false,
+     "composed_ms": 106.9,
+     "live_ms": 117.3,
+     "difference_ms": 10.3
+    },
+    {
+     "question_id": "q25",
+     "rerank": true,
+     "composed_ms": 5228.4,
+     "live_ms": 5596.1,
+     "difference_ms": 367.6
+    },
+    {
+     "question_id": "q26",
+     "rerank": false,
+     "composed_ms": 121.2,
+     "live_ms": 98.6,
+     "difference_ms": -22.6
+    },
+    {
+     "question_id": "q27",
+     "rerank": false,
+     "composed_ms": 120.1,
+     "live_ms": 96.5,
+     "difference_ms": -23.7
+    },
+    {
+     "question_id": "q28",
+     "rerank": true,
+     "composed_ms": 3864.4,
+     "live_ms": 3807.2,
+     "difference_ms": -57.2
+    },
+    {
+     "question_id": "q29",
+     "rerank": true,
+     "composed_ms": 5302.6,
+     "live_ms": 5382.0,
+     "difference_ms": 79.4
+    },
+    {
+     "question_id": "q30",
+     "rerank": true,
+     "composed_ms": 6126.7,
+     "live_ms": 6062.4,
+     "difference_ms": -64.4
+    },
+    {
+     "question_id": "q31",
+     "rerank": false,
+     "composed_ms": 115.0,
+     "live_ms": 130.9,
+     "difference_ms": 15.9
+    },
+    {
+     "question_id": "q32",
+     "rerank": false,
+     "composed_ms": 131.0,
+     "live_ms": 104.5,
+     "difference_ms": -26.4
+    },
+    {
+     "question_id": "q33",
+     "rerank": true,
+     "composed_ms": 4586.1,
+     "live_ms": 4956.5,
+     "difference_ms": 370.4
+    },
+    {
+     "question_id": "q34",
+     "rerank": true,
+     "composed_ms": 4354.6,
+     "live_ms": 4445.7,
+     "difference_ms": 91.1
+    },
+    {
+     "question_id": "q35",
+     "rerank": true,
+     "composed_ms": 5047.8,
+     "live_ms": 5730.3,
+     "difference_ms": 682.6
+    },
+    {
+     "question_id": "q36",
+     "rerank": true,
+     "composed_ms": 6028.6,
+     "live_ms": 5613.6,
+     "difference_ms": -415.0
+    },
+    {
+     "question_id": "q37",
+     "rerank": true,
+     "composed_ms": 5549.5,
+     "live_ms": 5874.4,
+     "difference_ms": 324.8
+    },
+    {
+     "question_id": "q38",
+     "rerank": false,
+     "composed_ms": 130.5,
+     "live_ms": 124.7,
+     "difference_ms": -5.8
+    },
+    {
+     "question_id": "q39",
+     "rerank": false,
+     "composed_ms": 144.0,
+     "live_ms": 196.9,
+     "difference_ms": 52.9
+    },
+    {
+     "question_id": "q40",
+     "rerank": true,
+     "composed_ms": 5423.2,
+     "live_ms": 5707.5,
+     "difference_ms": 284.2
+    },
+    {
+     "question_id": "q41",
+     "rerank": false,
+     "composed_ms": 125.7,
+     "live_ms": 119.7,
+     "difference_ms": -5.9
+    },
+    {
+     "question_id": "q42",
+     "rerank": true,
+     "composed_ms": 5183.1,
+     "live_ms": 5193.5,
+     "difference_ms": 10.4
+    },
+    {
+     "question_id": "q43",
+     "rerank": true,
+     "composed_ms": 5830.1,
+     "live_ms": 6309.9,
+     "difference_ms": 479.8
+    },
+    {
+     "question_id": "q44",
+     "rerank": true,
+     "composed_ms": 4154.2,
+     "live_ms": 4020.6,
+     "difference_ms": -133.6
+    },
+    {
+     "question_id": "q45",
+     "rerank": true,
+     "composed_ms": 5165.9,
+     "live_ms": 5532.5,
+     "difference_ms": 366.5
+    },
+    {
+     "question_id": "q46",
+     "rerank": false,
+     "composed_ms": 138.1,
+     "live_ms": 115.3,
+     "difference_ms": -22.8
+    },
+    {
+     "question_id": "q47",
+     "rerank": true,
+     "composed_ms": 5394.4,
+     "live_ms": 5540.2,
+     "difference_ms": 145.9
+    },
+    {
+     "question_id": "q48",
+     "rerank": true,
+     "composed_ms": 6091.5,
+     "live_ms": 6119.1,
+     "difference_ms": 27.6
+    },
+    {
+     "question_id": "q49",
+     "rerank": true,
+     "composed_ms": 5693.3,
+     "live_ms": 6378.3,
+     "difference_ms": 685.0
+    }
+   ],
+   "mismatches": []
+  }
+ },
+ "label": "latency validation point - NOT a production winner"
+}
