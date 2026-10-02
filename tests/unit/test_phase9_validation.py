@@ -447,7 +447,7 @@ def test_live_entry_point_refuses_local_environment():
 
     settings = load_settings("local", env={})
     with pytest.raises(v.ConfigurationError, match="Databricks-only"):
-        v.run_databricks_validation(Mock(), settings, commit_sha="a" * 40, run_id="9f2")
+        v.run_databricks_validation(Mock(), settings, commit_sha="a" * 40, run_id="9f3")
 
 
 def test_structured_ai_interpretation_is_rejected():
@@ -517,13 +517,14 @@ def test_interrupted_run_checkpoints_completed_cases_and_blocks_rerun(tmp_path):
     with pytest.raises(KeyboardInterrupt):
         run_fake(tmp_path, runtime=runtime)
     path = tmp_path / v.ARTIFACT_NAME
-    before = path.read_bytes()
-    artifact = json.loads(before)
+    assert not path.exists()
+    artifact = v.latest_completed_checkpoint(path)
+    before = copy.deepcopy(artifact)
     assert [r["case_id"] for r in artifact["case_results"]] == ["C01", "C02", "C03"]
     assert artifact["summary"]["overall_status"] == "FAIL"
     with pytest.raises(FileExistsError):
         run_fake(tmp_path)
-    assert path.read_bytes() == before
+    assert v.latest_completed_checkpoint(path) == before
 
 
 def test_local_preflight_hash_failure_never_prepares_runtime(tmp_path):
@@ -640,11 +641,11 @@ def test_revision_artifact_and_preflight_execution_boundary(tmp_path, status):
         environment={},
         run_id="9f2",
         resolve_revision=lambda: identity,
-        prior_attempt=prior,
+        prior_attempts=[prior],
         prepare_local=local,
         prepare_runtime=live,
     )
-    assert artifact["run_id"] == "9f2" and artifact["prior_attempt"] == prior
+    assert artifact["run_id"] == "9f2" and artifact["prior_attempts"] == [prior]
     persisted = json.loads(output.read_text("utf-8"))
     for name in type(identity).model_fields:
         assert persisted[name] == getattr(identity, name)
@@ -726,8 +727,10 @@ def test_revision_corrected_live_attempt_records_original_precheck_without_touch
     from types import SimpleNamespace
 
     original = tmp_path / v.ARTIFACT_DIR / v.ARTIFACT_NAME
+    second = original.with_name("phase9_contract_validation__9f2.json")
+    second.parent.mkdir(parents=True, exist_ok=True)
+    second.write_bytes(b"preserved second attempt")
     if existing:
-        original.parent.mkdir()
         original.write_bytes(b"original evidence")
     settings = SimpleNamespace(
         environment=SimpleNamespace(value="databricks"),
@@ -736,11 +739,11 @@ def test_revision_corrected_live_attempt_records_original_precheck_without_touch
     )
     run = Mock(return_value={})
     monkeypatch.setattr(v, "run_first", run)
-    v.run_databricks_validation(Mock(), settings, commit_sha="a" * 40, run_id="9f2")
+    v.run_databricks_validation(Mock(), settings, commit_sha="a" * 40, run_id="9f3")
     args = run.call_args.kwargs
-    assert args["output"].name == "phase9_contract_validation__9f2.json"
-    assert args["run_id"] == "9f2"
-    assert args["prior_attempt"] == {
+    assert args["output"].name == "phase9_contract_validation__9f3.json"
+    assert args["run_id"] == "9f3"
+    assert args["prior_attempts"][0] == {
         "run_id": "9f1",
         "status": "PRECHECK_FAILURE",
         "reason": "DECLARED_COMMIT_SHA_DIFFERS_FROM_ACCESSIBLE_GIT_HEAD",
@@ -749,6 +752,13 @@ def test_revision_corrected_live_attempt_records_original_precheck_without_touch
         "artifact_created_by_failing_code_path": False,
         "artifact_present_at_corrected_invocation": existing,
     }
+    assert second.read_bytes() == b"preserved second attempt"
+    assert args["prior_attempts"][1]["artifact_present_at_corrected_invocation"] is True
+    assert args["prior_attempts"][1]["status"] == "ARTIFACT_CHECKPOINT_FAILURE"
+    assert args["prior_attempts"][1]["reason"] == "DATABRICKS_VOLUME_IO_ERROR"
+    assert args["prior_attempts"][1]["run_id"] == "9f2"
+    assert args["prior_attempts"][1]["contract_cases_executed"] == 0
+    assert args["prior_attempts"][1]["preflight_status"] == "PASS"
     if existing:
         assert original.read_bytes() == b"original evidence"
     else:
@@ -759,3 +769,194 @@ def test_revision_git_pager_does_not_change_repository_association(git_snapshot,
     repo, _ = git_snapshot
     monkeypatch.setenv("GIT_PAGER", "cat")
     assert v.revision_identity(repo, "a" * 40).runtime_git_status == "VERIFIED"
+
+
+def test_persistence_only_uses_sequential_write_handles(tmp_path, monkeypatch):
+    original_open = v.Path.open
+    modes = []
+
+    class SequentialOnly:
+        def __init__(self, handle):
+            self.handle = handle
+
+        def __enter__(self):
+            self.handle.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self.handle.__exit__(*args)
+
+        def write(self, payload):
+            return self.handle.write(payload)
+
+        def seek(self, *args):
+            raise AssertionError("random-access seek is forbidden")
+
+        def truncate(self, *args):
+            raise AssertionError("truncate is forbidden")
+
+        def flush(self):
+            raise AssertionError("explicit flush is forbidden")
+
+    def sequential_open(path, mode="r", *args, **kwargs):
+        modes.append(mode)
+        if mode == "rb":
+            return original_open(path, mode, *args, **kwargs)
+        assert mode == "xb"  # no x+, updates, append, or overwrite
+        return SequentialOnly(original_open(path, mode, *args, **kwargs))
+
+    monkeypatch.setattr(v.Path, "open", sequential_open)
+    artifact = run_fake(tmp_path)
+    assert v.read_completed_artifact(tmp_path / v.ARTIFACT_NAME) == artifact
+    assert artifact["summary"]["overall_status"] == "PASS"
+    assert artifact["persistence"]["finalized"] is True
+    assert artifact["persistence"]["checkpoint_sequence"] == 12
+    checkpoints = sorted(
+        p for p in tmp_path.glob("*.checkpoint-*.json") if not p.name.endswith(".complete.json")
+    )
+    assert len(checkpoints) == 12
+    first = v.read_completed_artifact(checkpoints[0], require_final=False)
+    latest = v.latest_completed_checkpoint(tmp_path / v.ARTIFACT_NAME)
+    assert first["summary"]["not_run"] == 10
+    assert len(latest["case_results"]) == 10
+    assert latest["persistence"]["finalized"] is False
+    with pytest.raises(ValueError, match="not a final"):
+        v.read_completed_artifact(checkpoints[-1])
+    assert all(mode in ("xb", "rb") for mode in modes)
+
+
+@pytest.mark.parametrize("run_id", ["9f1", "9f2", "9f3"])
+def test_persistence_existing_attempt_is_never_overwritten(tmp_path, run_id):
+    path = tmp_path / f"phase9_contract_validation__{run_id}.json"
+    path.write_bytes(b"preserved observed attempt")
+    local, live = Mock(), Mock()
+    with pytest.raises(FileExistsError):
+        v.run_first(
+            output=path,
+            commit_sha="a" * 40,
+            environment={},
+            run_id=run_id,
+            prepare_local=local,
+            prepare_runtime=live,
+        )
+    local.assert_not_called()
+    live.assert_not_called()
+    assert path.read_bytes() == b"preserved observed attempt"
+
+
+@pytest.mark.parametrize("failure", ["partial_write", "receipt", "readback"])
+def test_persistence_preloop_failure_blocks_c01_and_preserves_completed_state(
+    tmp_path, monkeypatch, failure
+):
+    original = v._write_new_json
+    runtime = fake_runtime()
+    runtime.service.handle = Mock()
+    output = tmp_path / v.ARTIFACT_NAME
+
+    def fail(path, value):
+        if path.name.endswith("checkpoint-01.json"):
+            if failure == "partial_write":
+                with path.open("xb") as handle:
+                    handle.write(b'{"partial":')
+                raise OSError(5, "simulated Volume IO error")
+            payload = original(path, value)
+            if failure == "readback":
+                return payload + b"invalid"
+            return payload
+        if failure == "receipt" and path.name.endswith("checkpoint-01.json.complete.json"):
+            raise OSError(5, "simulated completion receipt failure")
+        return original(path, value)
+
+    monkeypatch.setattr(v, "_write_new_json", fail)
+    with pytest.raises(OSError):
+        run_fake(tmp_path, runtime=runtime)
+    runtime.service.handle.assert_not_called()
+    assert not output.exists()
+    latest = v.latest_completed_checkpoint(output)
+    assert latest["case_results"] == []
+    assert latest["summary"]["overall_status"] == "FAIL"
+    assert latest["persistence"]["checkpoint_sequence"] == 0
+    assert (tmp_path / (output.stem + ".checkpoint-01.json")).exists()
+    with pytest.raises(FileExistsError):
+        run_fake(tmp_path, runtime=runtime)
+
+
+@pytest.mark.parametrize("failure", ["partial_json", "missing_receipt", "partial_receipt"])
+def test_persistence_failed_final_publication_never_qualifies_as_pass(
+    tmp_path, monkeypatch, failure
+):
+    output = tmp_path / v.ARTIFACT_NAME
+    original = v._write_new_json
+
+    def fail(path, value):
+        if path == output and failure == "partial_json":
+            with path.open("xb") as handle:
+                handle.write(b'{"summary":')
+            raise OSError(5, "simulated final write failure")
+        if path == v.completion_receipt(output):
+            if failure == "partial_receipt":
+                with path.open("xb") as handle:
+                    handle.write(b'{"bytes":')
+            raise OSError(5, "simulated final receipt failure")
+        return original(path, value)
+
+    monkeypatch.setattr(v, "_write_new_json", fail)
+    with pytest.raises(OSError):
+        run_fake(tmp_path)
+    assert output.exists()
+    with pytest.raises((OSError, ValueError)):
+        v.read_completed_artifact(output)
+    latest = v.latest_completed_checkpoint(output)
+    assert len(latest["case_results"]) == 10
+    assert not latest["persistence"]["finalized"]
+    with pytest.raises(FileExistsError):
+        run_fake(tmp_path)
+
+
+def test_persistence_receipt_detects_altered_complete_json(tmp_path):
+    run_fake(tmp_path)
+    output = tmp_path / v.ARTIFACT_NAME
+    output.write_bytes(output.read_bytes() + b" ")
+    with pytest.raises(ValueError, match="receipt mismatch"):
+        v.read_completed_artifact(output)
+
+
+def test_persistence_reservation_alone_consumes_attempt(tmp_path):
+    output = tmp_path / v.ARTIFACT_NAME
+    v.ArtifactCheckpoints(output)
+    assert not output.exists()
+    with pytest.raises(FileExistsError):
+        v.ArtifactCheckpoints(output)
+
+
+def test_persistence_final_created_after_reservation_cannot_be_replaced(tmp_path):
+    output = tmp_path / v.ARTIFACT_NAME
+    writer = v.ArtifactCheckpoints(output)
+    artifact = run_fake(tmp_path / "separate")
+    output.write_bytes(b"externally created preserved final")
+    with pytest.raises(FileExistsError):
+        writer.write(artifact, final=True)
+    assert output.read_bytes() == b"externally created preserved final"
+
+
+def test_persistence_preflight_failure_is_published_without_c01(tmp_path):
+    live = Mock()
+    output = tmp_path / v.ARTIFACT_NAME
+    artifact = v.run_first(
+        output=output,
+        commit_sha="a" * 40,
+        environment={},
+        prepare_local=Mock(side_effect=v.PreflightError(["TEST_FAILURE"])),
+        prepare_runtime=live,
+    )
+    live.assert_not_called()
+    assert artifact["case_results"] == []
+    assert artifact["summary"]["overall_status"] == "FAIL"
+    assert v.read_completed_artifact(output) == artifact
+
+
+def test_persistence_next_notebook_attempt_is_explicitly_9f3():
+    source = (REPO_ROOT / "notebooks/07e_phase9_contract_validation.py").read_text("utf-8")
+    assert 'run_id="9f3"' in source
+    assert "phase9_contract_validation__9f3.json" in source
+    assert ".complete.json" in source

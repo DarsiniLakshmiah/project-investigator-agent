@@ -6,6 +6,7 @@ second document search. No routing/retrieval decisions, tuning, agents or retrie
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import platform
@@ -855,6 +856,108 @@ def revision_identity(repo: Path, declared: str) -> RevisionIdentity:
     )
 
 
+def _write_new_json(path: Path, value: dict[str, Any]) -> bytes:
+    """One sequential write to a new file; never append, seek, truncate or replace."""
+    payload = (json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode()
+    with path.open("xb") as handle:
+        if handle.write(payload) != len(payload):
+            raise OSError("incomplete artifact write")
+    return payload
+
+
+def completion_receipt(path: Path) -> Path:
+    return path.with_name(path.name + ".complete.json")
+
+
+def read_completed_artifact(path: Path, *, require_final: bool = True) -> dict[str, Any]:
+    """Accept only complete, hash-checked JSON with its separate completion receipt.
+
+    A file alone (even parseable JSON with a PASS summary) is never sufficient.
+    Checkpoints are diagnostic state; only final publication establishes completion.
+    """
+    receipt = json.loads(completion_receipt(path).read_bytes())
+    payload = path.read_bytes()
+    if receipt != {
+        "artifact": path.name,
+        "bytes": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }:
+        raise ValueError("artifact completion receipt mismatch")
+    artifact = json.loads(payload)
+    validate_artifact(artifact)
+    if artifact["persistence"]["completion_receipt"] != completion_receipt(path).name:
+        raise ValueError("artifact receipt identity mismatch")
+    if require_final and not artifact["persistence"]["finalized"]:
+        raise ValueError("checkpoint is not a final validation artifact")
+    return artifact
+
+
+class ArtifactCheckpoints:
+    """Bounded immutable snapshots and final publication, suitable for sequential FUSE IO.
+
+    Exclusive reservation consumes the attempt even on crash. Partial files remain;
+    no retry, cleanup, rename or atomic-publication claim. A receipt is written only
+    after the snapshot is closed and its complete bytes have been read back correctly.
+    """
+
+    def __init__(self, output: Path):
+        self.output = output
+        self.sequence = 0
+        output.parent.mkdir(parents=True, exist_ok=True)
+        reservation = output.with_name(output.stem + ".attempt.json")
+        if (
+            output.exists()
+            or completion_receipt(output).exists()
+            or any(output.parent.glob(output.stem + ".checkpoint-*.json*"))
+        ):
+            raise FileExistsError("validation attempt already has an artifact or checkpoint")
+        _write_new_json(reservation, {"status": "RESERVED", "final_artifact": output.name})
+
+    def write(self, artifact: dict[str, Any], *, final: bool = False) -> None:
+        path = (
+            self.output
+            if final
+            else self.output.with_name(f"{self.output.stem}.checkpoint-{self.sequence:02}.json")
+        )
+        artifact["persistence"] = {
+            "checkpoint_sequence": self.sequence,
+            "finalized": final,
+            "completion_receipt": completion_receipt(path).name,
+        }
+        validate_artifact(artifact)
+        payload = _write_new_json(path, artifact)
+        if path.read_bytes() != payload:
+            raise OSError("artifact read-back differs from serialized snapshot")
+        _write_new_json(
+            completion_receipt(path),
+            {
+                "artifact": path.name,
+                "bytes": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+            },
+        )
+        read_completed_artifact(path, require_final=final)
+        self.sequence += 1
+
+
+def latest_completed_checkpoint(output: Path) -> dict[str, Any]:
+    """Read diagnostic state only; ignore incomplete files, never resume the attempt."""
+    paths = sorted(
+        (
+            p
+            for p in output.parent.glob(output.stem + ".checkpoint-*.json")
+            if not p.name.endswith(".complete.json")
+        ),
+        reverse=True,
+    )
+    for path in paths:
+        try:
+            return read_completed_artifact(path, require_final=False)
+        except (OSError, ValueError, KeyError):
+            continue
+    raise FileNotFoundError("no complete checkpoint exists for this attempt")
+
+
 def run_first(
     *,
     output: Path,
@@ -862,9 +965,9 @@ def run_first(
     environment: dict[str, Any],
     prepare_local: Callable[[], Protocol],
     prepare_runtime: Callable[[Protocol], Runtime],
-    run_id: Literal["9f1", "9f2"] = RUN_ID,
+    run_id: Literal["9f1", "9f2", "9f3"] = RUN_ID,
     resolve_revision: Callable[[], RevisionIdentity] | None = None,
-    prior_attempt: dict[str, Any] | None = None,
+    prior_attempts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Reserve first run exclusively; checkpoint each case; never retry or overwrite.
 
@@ -874,126 +977,122 @@ def run_first(
     """
     if not re.fullmatch(r"[0-9a-f]{40}", commit_sha):
         raise ConfigurationError("a full Git commit SHA is required")
-    if run_id not in ("9f1", "9f2"):
+    if run_id not in ("9f1", "9f2", "9f3"):
         raise ConfigurationError("unsupported validation attempt")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("x+", encoding="utf-8") as handle:
-        artifact = {
-            "schema_version": 2,
-            "run_id": run_id,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "commit_sha": commit_sha,
-            **RevisionIdentity(
-                declared_commit_sha=commit_sha,
-                runtime_git_status="UNAVAILABLE",
-                diagnostic="RUNTIME_VERIFICATION_NOT_COMPLETED",
-            ).model_dump(),
-            "prior_attempt": prior_attempt,
-            "environment": environment,
-            "integrity": {
-                name: None
-                for name in (
-                    "closure_manifest_sha256_lf",
-                    "case_set_sha256_lf",
-                    "phase9e_lock_sha256",
-                    "endpoint",
-                    "index_name",
-                    "index_rows",
-                    "corpus_rows",
-                    "embedding_endpoint",
-                    "embedding_dimension",
-                    "retrieval_profile",
-                )
-            },
-            "preflight": {"status": "FAIL", "failures": ["RUN_NOT_COMPLETED"]},
-            "case_results": [],
-        }
+    writer = ArtifactCheckpoints(output)
+    artifact = {
+        "schema_version": 3,
+        "run_id": run_id,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "commit_sha": commit_sha,
+        **RevisionIdentity(
+            declared_commit_sha=commit_sha,
+            runtime_git_status="UNAVAILABLE",
+            diagnostic="RUNTIME_VERIFICATION_NOT_COMPLETED",
+        ).model_dump(),
+        "prior_attempts": prior_attempts or [],
+        "environment": environment,
+        "integrity": {
+            name: None
+            for name in (
+                "closure_manifest_sha256_lf",
+                "case_set_sha256_lf",
+                "phase9e_lock_sha256",
+                "endpoint",
+                "index_name",
+                "index_rows",
+                "corpus_rows",
+                "embedding_endpoint",
+                "embedding_dimension",
+                "retrieval_profile",
+            )
+        },
+        "preflight": {"status": "FAIL", "failures": ["RUN_NOT_COMPLETED"]},
+        "case_results": [],
+    }
 
-        def checkpoint():
-            artifact["summary"] = summary(artifact["case_results"], artifact["preflight"]["status"])
-            validate_artifact(artifact)
-            handle.seek(0)
-            handle.write(json.dumps(artifact, indent=2, ensure_ascii=False) + "\n")
-            handle.truncate()
-            handle.flush()
+    def checkpoint(*, final=False):
+        artifact["summary"] = summary(artifact["case_results"], artifact["preflight"]["status"])
+        validate_artifact(artifact)
+        writer.write(artifact, final=final)
 
-        checkpoint()
-        try:
-            if resolve_revision is not None:
-                revision = resolve_revision()
-                artifact.update(revision.model_dump())
-                if revision.declared_commit_sha != commit_sha:
-                    raise PreflightError(["DECLARED_REVISION_IDENTITY_MISMATCH"])
-                if revision.runtime_git_status == "MISMATCH":
-                    raise PreflightError(["DECLARED_COMMIT_SHA_DIFFERS_FROM_TRUSTED_GIT_HEAD"])
-            protocol = prepare_local()
-            artifact["integrity"].update(protocol.integrity)
-            runtime = prepare_runtime(protocol)
-            artifact["integrity"].update(runtime.identity)
-            failures = runtime_preflight(protocol, runtime)
-            if failures:
-                raise PreflightError(failures)
-        except Exception as exc:
-            if isinstance(exc, PreflightError):
-                artifact["integrity"].update(exc.integrity)
-            artifact["preflight"] = {
-                "status": "FAIL",
-                "failures": exc.failures
-                if isinstance(exc, PreflightError)
-                else ["PREFLIGHT_EXCEPTION:" + type(exc).__name__],
-            }
-            checkpoint()
-            return artifact
-        artifact["preflight"] = {"status": "PASS", "failures": []}
-        checkpoint()
-        for case in protocol.cases.cases:
-            start = time.perf_counter()
-            try:
-                row = execute_case(case, runtime, protocol, run_id=run_id)
-            except Exception as exc:
-                row = {
-                    "case_id": case.case_id,
-                    "expected_router_route": case.expected_router_route.value,
-                    "actual_router_route": None,
-                    "expected_execution_mode": case.expected_execution_mode.value,
-                    "actual_execution_mode": None,
-                    "expected_router_reason": case.expected_router_reason,
-                    "actual_router_reason": None,
-                    "expected_execution_reason": case.expected_execution_reason,
-                    "actual_execution_reason": None,
-                    "expected_project": case.expected_project_id,
-                    "resolved_project": None,
-                    "project_status": None,
-                    "translated": None,
-                    "result_status": "ERROR",
-                    "provenance_classes": [],
-                    "citation_validation": "NOT_ASSESSED",
-                    "execution_counters": runtime.counters.snapshot(),
-                    "latency_ms": round((time.perf_counter() - start) * 1000, 3),
-                    "status": "FAIL",
-                    "failure_reasons": ["CASE_EXCEPTION:" + type(exc).__name__],
-                }
-            artifact["case_results"].append(row)
-            checkpoint()
-        # Also catch drift introduced during the final case.
-        try:
-            failures = runtime_preflight(protocol, runtime)
-        except Exception as exc:
-            failures = ["FINAL_INTEGRITY_EXCEPTION:" + type(exc).__name__]
+    checkpoint()
+    try:
+        if resolve_revision is not None:
+            revision = resolve_revision()
+            artifact.update(revision.model_dump())
+            if revision.declared_commit_sha != commit_sha:
+                raise PreflightError(["DECLARED_REVISION_IDENTITY_MISMATCH"])
+            if revision.runtime_git_status == "MISMATCH":
+                raise PreflightError(["DECLARED_COMMIT_SHA_DIFFERS_FROM_TRUSTED_GIT_HEAD"])
+        protocol = prepare_local()
+        artifact["integrity"].update(protocol.integrity)
+        runtime = prepare_runtime(protocol)
+        artifact["integrity"].update(runtime.identity)
+        failures = runtime_preflight(protocol, runtime)
         if failures:
-            artifact["preflight"] = {"status": "FAIL", "failures": failures}
-        checkpoint()
+            raise PreflightError(failures)
+    except Exception as exc:
+        if isinstance(exc, PreflightError):
+            artifact["integrity"].update(exc.integrity)
+        artifact["preflight"] = {
+            "status": "FAIL",
+            "failures": exc.failures
+            if isinstance(exc, PreflightError)
+            else ["PREFLIGHT_EXCEPTION:" + type(exc).__name__],
+        }
+        checkpoint(final=True)
         return artifact
+    artifact["preflight"] = {"status": "PASS", "failures": []}
+    checkpoint()
+    for case in protocol.cases.cases:
+        start = time.perf_counter()
+        try:
+            row = execute_case(case, runtime, protocol, run_id=run_id)
+        except Exception as exc:
+            row = {
+                "case_id": case.case_id,
+                "expected_router_route": case.expected_router_route.value,
+                "actual_router_route": None,
+                "expected_execution_mode": case.expected_execution_mode.value,
+                "actual_execution_mode": None,
+                "expected_router_reason": case.expected_router_reason,
+                "actual_router_reason": None,
+                "expected_execution_reason": case.expected_execution_reason,
+                "actual_execution_reason": None,
+                "expected_project": case.expected_project_id,
+                "resolved_project": None,
+                "project_status": None,
+                "translated": None,
+                "result_status": "ERROR",
+                "provenance_classes": [],
+                "citation_validation": "NOT_ASSESSED",
+                "execution_counters": runtime.counters.snapshot(),
+                "latency_ms": round((time.perf_counter() - start) * 1000, 3),
+                "status": "FAIL",
+                "failure_reasons": ["CASE_EXCEPTION:" + type(exc).__name__],
+            }
+        artifact["case_results"].append(row)
+        checkpoint()
+    # Also catch drift introduced during the final case.
+    try:
+        failures = runtime_preflight(protocol, runtime)
+    except Exception as exc:
+        failures = ["FINAL_INTEGRITY_EXCEPTION:" + type(exc).__name__]
+    if failures:
+        artifact["preflight"] = {"status": "FAIL", "failures": failures}
+    checkpoint(final=True)
+    return artifact
 
 
 def run_databricks_validation(
-    spark: Any, settings: Any, *, commit_sha: str, run_id: Literal["9f2"]
+    spark: Any, settings: Any, *, commit_sha: str, run_id: Literal["9f3"]
 ) -> dict[str, Any]:
-    """Explicit corrected LIVE attempt; preserve the reported pre-artifact 9f1 failure."""
+    """Explicit LIVE attempt 9f3; preserve both reported integration failures."""
     if settings.environment.value != "databricks":
         raise ConfigurationError("07e is a Databricks-only live entry point")
-    if run_id != "9f2":
-        raise ConfigurationError("the authorized corrected attempt must use 9f2")
+    if run_id != "9f3":
+        raise ConfigurationError("the authorized corrected attempt must use 9f3")
     repo = settings.repo_root
     output = (
         Path(settings.artifact_volume_path)
@@ -1003,17 +1102,33 @@ def run_databricks_validation(
     environment = {"kind": "databricks", "python": platform.python_version()}
     # The observed old SHA mismatch raised BEFORE run_first reserved any artifact.
     # Record that fact even if no 9f1 file exists; never alter any existing 9f1 file.
-    prior_attempt = {
-        "run_id": "9f1",
-        "status": "PRECHECK_FAILURE",
-        "reason": "DECLARED_COMMIT_SHA_DIFFERS_FROM_ACCESSIBLE_GIT_HEAD",
-        "contract_cases_executed": 0,
-        "source": "USER_REPORTED_OBSERVED_DATABRICKS_FAILURE",
-        "artifact_created_by_failing_code_path": False,
-        "artifact_present_at_corrected_invocation": (
-            Path(settings.artifact_volume_path) / ARTIFACT_DIR / ARTIFACT_NAME
-        ).exists(),
-    }
+    prior_attempts = [
+        {
+            "run_id": "9f1",
+            "status": "PRECHECK_FAILURE",
+            "reason": "DECLARED_COMMIT_SHA_DIFFERS_FROM_ACCESSIBLE_GIT_HEAD",
+            "contract_cases_executed": 0,
+            "source": "USER_REPORTED_OBSERVED_DATABRICKS_FAILURE",
+            "artifact_created_by_failing_code_path": False,
+            "artifact_present_at_corrected_invocation": (
+                Path(settings.artifact_volume_path) / ARTIFACT_DIR / ARTIFACT_NAME
+            ).exists(),
+        },
+        {
+            "run_id": "9f2",
+            "status": "ARTIFACT_CHECKPOINT_FAILURE",
+            "reason": "DATABRICKS_VOLUME_IO_ERROR",
+            "preflight_status": "PASS",
+            "contract_cases_executed": 0,
+            "source": "USER_REPORTED_TRACEBACK_AND_VERIFIED_EXECUTION_ORDER",
+            "artifact_reported_present": True,
+            "artifact_present_at_corrected_invocation": (
+                Path(settings.artifact_volume_path)
+                / ARTIFACT_DIR
+                / "phase9_contract_validation__9f2.json"
+            ).exists(),
+        },
+    ]
 
     def local():
         health = check_environment(repo, REQUIREMENTS, settings.config_dir)
@@ -1070,5 +1185,5 @@ def run_databricks_validation(
         prepare_runtime=live,
         run_id=run_id,
         resolve_revision=lambda: revision_identity(repo, commit_sha),
-        prior_attempt=prior_attempt,
+        prior_attempts=prior_attempts,
     )
