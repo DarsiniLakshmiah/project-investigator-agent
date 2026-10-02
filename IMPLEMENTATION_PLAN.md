@@ -18,7 +18,8 @@ still open. Updated at the end of every phase.
 | 6 | Databricks platformization and governed Delta foundation | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 7 | Deterministic Gold intelligence layer | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings, AI Search index and notebook 07 Steps 4–7 and 07b staged experiments (incl. CrossEncoder) validated in Databricks (2026-10-01). Selected direction: adaptive reranking (trigger policy not yet implemented or evaluated)** |
-| 9–13 | See §3 (roadmap from Claude.md §36) | Not started |
+| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D first stop (development only) awaiting review**; 9E–9F not started |
+| 10–13 | See §3 (roadmap from Claude.md §36) | Not started |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
 passed (unit); `pytest -m integration` → 18 passed (5 Bronze + 7 Silver + 6 parsed, real
@@ -1452,3 +1453,329 @@ Weakest categories: finance (R@10 0.60, 5 questions), ratings (0.67, 3), and pro
 - **Abstention threshold:** experimental only (−2.834, computed on the k20 run; the score ranges overlap). `min_rerank_score` stays `null`.
 - **Notebook-token authentication:** AI Search used a notebook token ("development only"). A service principal is required before production use.
 - **Latency:** the always-rerank latency was measured on serverless CPU only.
+
+### Phase 9 — Structured tools + intelligent routing (in progress)
+
+**Approved decisions (user, 2026-10-01)**
+1. **Retriever split:** approved as an integration refactor only. `retrieve()` stays as a backward-compatible wrapper. A golden regression test must pass before Phase 9 uses the split.
+2. **Adaptive reranking:** no X%/Y% production thresholds. 9E is a diagnostic experiment (P0 NEVER, P1 ALWAYS, P2–P6) that reports a quality-versus-rerank-rate frontier. `retrieval.yaml` `production` stays null until the evidence is reviewed and acceptance criteria are approved.
+3. **Procurement:** `get_procurement_awards` is deferred. Procurement-award coverage exists only for P130544 (IPF); the two PforR projects are outside the dataset; no Phase 9 evaluation requirement justifies a dedicated tool.
+4. **Derived arithmetic:** no sixth provenance class. A derived value keeps the most conservative class of its inputs, plus derivation metadata:
+   - FACT-only arithmetic stays FACT;
+   - any DOCUMENTED_FINDING input keeps DOCUMENTED_FINDING;
+   - deriving from a signal stays SYSTEM_DERIVED_SIGNAL;
+   - an UNKNOWN input produces UNKNOWN;
+   - arithmetic over facts or findings is never promoted to a signal.
+5. **Routing labels:** start as DRAFT. Human review comes before any label becomes REVIEWED or the test split is frozen (9C).
+
+**Additional requirements recorded:**
+- **Retrieved passages:** DOCUMENTED_FINDING with `relevance_verified=false`. Retrieval establishes source provenance, not truth or relevance.
+- **Fallback:** STRUCTURED → DOCUMENT fallback is allowlisted per intent (9B); generic fallback is impossible.
+- **Sufficiency:** mechanical sufficiency (Phase 9) is separate from semantic sufficiency (Phase 10).
+- **P179039 is not tuned:** q28 stays DOCUMENT and label-review; q29, q30 (pending human labelling of programme-size semantics), q35 and q36 stay DOCUMENT.
+
+**Checkpoints:**
+- 9A: tools and Retriever split;
+- 9B: query understanding and deterministic routing;
+- 9C: draft routing set, then HUMAN REVIEW;
+- 9D: bounded semantic classifier;
+- 9E: adaptive-rerank diagnostic;
+- 9F: Databricks end-to-end validation and closure.
+
+#### Checkpoint 9A — tool layer and Retriever split (local; awaiting review)
+
+**Retriever split** (`retrieval/retriever.py`):
+- `retrieve()` is now exactly `finish(first_stage(...))`.
+- `FirstStage` holds the processed query, scope, guarded and de-duplicated candidates, and the start time.
+- `finish` reranks or not, selects `final_k`, applies the abstention threshold and the scope check, and builds evidence. It never mutates the first stage, so one stage can be finished both ways.
+- No other Phase 8 code, configuration, label, index or artifact changed.
+
+**Golden regression:** `tests/support/retrieval_golden.py` holds a verbatim copy of the Phase 8 `retrieve` (git `351b5a0`). Results are compared on everything except wall-clock latency: evidence ids and order, scope, metadata, citations, statuses, notes, and retrieval and rerank scores.
+- **Synthetic corpus:** 2,160 comparisons:
+  - 2 strategies × {lexical, dense, hybrid} × {none, CrossEncoder} × k {3, 10, 50} × type filters on/off;
+  - × 10 questions × 3 projects (two approved, one unknown);
+  - plus an abstention threshold, and every status and error path (OK, INSUFFICIENT_EVIDENCE, ScopeViolation, ValueError).
+- **Mutation check:** two deliberate regressions (one fewer evidence item; reversed first-stage order) were both caught.
+- **Real parsed corpus:** all 49 questions × {fixed, structure, parent_child} × 5 configurations, including the two measured bounds (hybrid/none/k10 and hybrid/CrossEncoder/k50): 735 comparisons, all equal. Foreign-project questions fail identically.
+- **Local stand-ins:** dense retrieval and the CrossEncoder are deterministic local stand-ins here. The same comparison against the real index and CrossEncoder is a 9F Databricks step.
+
+**Tool layer** (`src/worldbank_copilot/tools/`):
+- **`models`:**
+  - the five-class vocabulary, identical to Gold `PROVENANCE_CLASSES`;
+  - `Fact` (NULL → UNKNOWN with a reason), `Derivation` and `derive()` (Decision 4);
+  - the `ToolResult` envelope: status, items, filters, argument candidates, `data_snapshot`, mechanical findings, `semantic_sufficiency=NOT_ASSESSED`, caveats, notices. Only OK carries items; AI_INTERPRETATION is rejected.
+- **`reader`:**
+  - an allowlist of 10 governed tables (5 Gold, 5 Silver);
+  - columns are validated against the contracts;
+  - the `project_id` predicate is mandatory and every returned row is re-checked;
+  - results are bounded (2,000 rows).
+  - `SparkTableReader` uses the DataFrame API, pins one Delta version per table per request with `DESCRIBE HISTORY` and `VERSION AS OF`, and records it in `data_snapshot`.
+  - `InMemoryReader` has identical semantics, for tests.
+- **`executor`:**
+  - allowlist, then Pydantic arguments, then scope (approved, authorised, equal to the request scope) before any read;
+  - explicit statuses: SCOPE_REFUSED, DATA_INTEGRITY_ERROR, TIMEOUT (cooperative deadline before each read), ERROR (recorded and logged);
+  - no fallback path: one call runs exactly one tool.
+- **The 8 tools:**
+
+  | Tool | Sources |
+  |---|---|
+  | `get_project_overview` | gold.project_360, silver.projects |
+  | `get_project_timeline` | gold.project_timeline |
+  | `get_rating_history` | silver.isr_snapshots |
+  | `get_financial_status` | gold.project_360, silver.loans, silver.isr_loan_disbursements, silver.project_events |
+  | `get_results_progress` | gold.result_progress |
+  | `get_risk_register` | gold.risk_register |
+  | `get_attention_signals` | gold.attention_signals |
+  | `search_project_documents` | Phase 8 retriever, via `retrieval/rerank_policy.py` |
+
+  `rerank_policy.py` contains only the measured NEVER and ALWAYS bounds; there is no default policy. `DocumentSearchConfig` must be passed explicitly because `production` is null.
+- **Not built (by design):** a free-form SQL tool, write tools, the procurement tool, the router, notebooks.
+
+**Verification (local, 2026-10-01):**
+- **Unit tests:** `pytest` 656 passed, including 6 golden, 18 model and derivation, 23 reader and executor, 24 structured-tool and 7 document-tool tests.
+- **Integration tests:** `pytest -m integration` 38 passed. This includes the real-corpus golden; the Spark tests are skipped in the main environment.
+- **Spark tests:** `.venv-spark` `pytest tests/spark -m spark`: 37 passed. This includes 12 new tool tests on the real Silver export plus locally built Gold:
+  - `SparkTableReader` output equals `InMemoryReader` output for every tool and project;
+  - tool totals reconcile with Gold: timeline 74, results 837, risk register 116, signals 69;
+  - the validated Phase 7 facts reproduce: P130544 `days_extended` 1765 (DOCUMENTED_FINDING); latest ISR sequences 24 / 8 / 3; P179039 ratings ordered by sequence 1–8;
+  - every signal is SYSTEM_DERIVED_SIGNAL;
+  - DLI-layout observations never get a progress value.
+- **Lint:** `ruff check` and `ruff format --check` are clean.
+
+**Corrected while testing (my test assumptions, not tool defects):**
+- The Phase 7 "no DLI progress" invariant applies to `layout == "DLI"`, not to `indicator_type == "DLI"`.
+- Gold gives `EXTRACTION_NOT_EXACT` precedence over `DLI_LAYOUT_NOT_EVALUATED`.
+
+**Not yet validated in Databricks:** Delta version pinning and the tools on the governed tables; the Retriever split against the real AI Search index and CrossEncoder. Both are 9F.
+
+#### Checkpoint 9A — approved by the user (2026-10-01); not committed
+
+#### Checkpoint 9B — query understanding and deterministic routing (local; awaiting review)
+
+**Package** `src/worldbank_copilot/routing/`:
+- `models`: typed, frozen state for every stage;
+- `config`: loaders and validation;
+- `entities`: input and project resolution;
+- `temporal`, `intents`, `requirements`;
+- `router`: the decision table;
+- `service`: the harness.
+
+**Configuration** (reviewable, `configs/routing/`):
+- `routing.yaml`: router version, input limits, injection flags;
+- `intents.yaml`: 25 rules in 5 precedence groups, plus a document-type lexicon;
+- `requirements.yaml`: intent → route, tools, default time and supported time, plus investigation plans; no fallback key;
+- `project_aliases.yaml`: 11 aliases. `reviewed_by: null`, so it is pending human review.
+
+**Behaviour:**
+- **Entities resolve deterministically:** P-ids, corpus document ids (by project prefix), manifest report numbers, registry loan numbers, and reviewed aliases.
+- **Scope is never switched:** a foreign reference of any kind is CONFLICT; two or more projects is MULTI; unknown entities are UNSUPPORTED.
+- **Temporal:**
+  - the grammar covers LATEST, ISR (single, set, range), APPRAISAL, YEAR, DATE, DATE_RANGE, HISTORY and EVENT_ANCHORED;
+  - event anchors resolve only against source-stated timeline dates, and an ambiguous anchor gives CLARIFY with candidates;
+  - relative periods and invalid dates are UNRESOLVED; the wall clock is never used.
+- **Intent:** rules plus a fixed combination order. Unresolved questions are SEMANTIC_CLASSIFICATION_REQUIRED (left for 9D).
+- **Execution:**
+  - STRUCTURED runs only the requirement calls;
+  - DOCUMENT runs search only after scope passes, with an explicitly supplied policy;
+  - INVESTIGATION returns a dry-run-validated plan and executes nothing;
+  - there is no structured → document fallback;
+  - `semantic_sufficiency` stays NOT_ASSESSED.
+
+**Verification (local, 2026-10-01):**
+- **Unit tests:** `pytest` 1,014 passed. 358 are new routing tests: config 5, entities 83, temporal 44, intents 57, service 169.
+- **Integration tests:** `pytest -m integration` 38 passed (18 Spark tests skipped in the main environment).
+- **Lint and whitespace:** `ruff check`, `ruff format --check` and `git diff --check` are clean.
+- **Spark suite:** not re-run in 9B because no Spark-path code changed; it was 37 passed at 9A.
+
+**Not done:** semantic classifier (9D), routing evaluation set (9C), adaptive reranking (9E), Databricks validation (9F), Phase 10.
+
+#### Checkpoint 9B — approved by the user (2026-10-01); not committed
+
+#### Checkpoint 9C — routing evaluation dataset (DRAFT; awaiting human label review)
+
+**Files:**
+- `evaluation/routing_cases.yaml`: 80 cases, all `label_status: DRAFT`. Human expected labels only.
+- `evaluation/routing_baseline_9b.yaml`: the current 9B router output, generated and kept separate from the human labels.
+- `evaluation/routing_review_9c.md`: the review artifact.
+- `routing/evaluation.py`: dataset schema, baseline and comparison.
+- `routing/review.py`: renders the review artifact.
+- `scripts/routing_review_9c.py`: local-Spark rehearsal; real Gold is built in memory, nothing is persisted, and DOCUMENT routes are recorded but not executed.
+- `tests/unit/test_routing_dataset.py`: structure only.
+
+**Composition:**
+- 28 cases derived from Phase 8 and 52 newly written.
+- Expected routes: STRUCTURED 27, DOCUMENT 21, REFUSE 19, INVESTIGATION 8, CLARIFY 5.
+- Proposed split, not frozen: 27 dev / 53 test, in families.
+
+**9B baseline** (DRAFT labels; this is not the routing accuracy):
+
+| Metric | Value |
+|---|---|
+| Deterministic coverage | 0.825 |
+| Exact route agreement | 0.725 (0.879 on cases the router resolved) |
+| Semantic classification required | 0.175 |
+| Project-resolution agreement | 0.988 |
+| Temporal exact match | 0.867 (60 cases) |
+| Isolation cases that executed nothing | 14 of 15 |
+
+The exception is r073 ("the other Karnataka program"). It is an implicit foreign reference: 9B answered from the active scope P130544 and read no other project's data, but it answered the wrong question.
+
+**Unchanged:** the router, its rules and its configuration (no tuning); the Phase 8 retrieval labels; the aliases (`reviewed_by: null`).
+
+**Tests:** `pytest` 1,026 passed; `pytest -m integration` 38 passed; `ruff check` and `ruff format --check` clean.
+
+#### Checkpoint 9C — human review round 1 applied (2026-10-01; labels still DRAFT)
+
+**Decisions recorded** (`human_decision`):
+- r001/q09, r003/q16, r004/q17, r005/q32, r011/q33 → STRUCTURED.
+- r008/q44, r009/q46, r010/q22 → DOCUMENT_CONTENT.
+- r007/q43 → CLARIFY TIME_REQUIRED.
+- q03, q05, q07 → DOCUMENT/EXPLANATION; q37 → INVESTIGATION.
+- P179039 q28, q29, q30, q35, q36 → DOCUMENT. q30 means the total program size, not the IBRD principal. q28 stays LABEL_REVIEW.
+- The routing principle for document references and the WHY principle are written into the label rationales.
+
+**r005 verification:**
+- `silver.appraisal_risks` and the locally rebuilt `gold.risk_register` (via `get_risk_register`) hold a P179039 FORMAL_RISK_RATING row: 'Overall', 'Moderate', APPRAISAL_DOCUMENT page 8, EXACT/DOCLING_TABLE.
+- A Spark test asserts this row.
+
+**r073 fix** (approved project-resolution correctness fix; router 9B.2):
+- Relative project references ("the other … program", "another project", "both/all projects", …) are configured in `routing.yaml` and are not aliases.
+- An unresolvable reference → CLARIFY `AMBIGUOUS_PROJECT_REFERENCE`, decided at the project stage before any read. The active project is never substituted and no foreign project is selected.
+- If the active scope leaves exactly one other authorised project, the referent is unique and foreign → REFUSE `CROSS_PROJECT`. This case is tested explicitly.
+- Explicit foreign references (CONFLICT/MULTI) and NOT_AUTHORIZED keep precedence.
+
+**Split:** the `overview` and `ood-weather` families moved from test to dev, giving 29 dev / 51 test, with 4 P506272 cases in dev. Leakage checks pass (highest dev/test token similarity 0.67).
+
+**Baselines:**
+- The original 9B.1 baseline is kept unchanged in `routing_baseline_9B.1.yaml`.
+- The new baseline is `routing_baseline_9B.2.yaml`.
+- Isolation zero-execution went from 14/15 to 15/15, and project resolution from 0.988 to 1.0. No other rule changed.
+
+**Still open:** 12 labels without a decision, the alias confirmation, freezing the split, and marking labels REVIEWED.
+
+#### Checkpoint 9C — final human review applied; labels REVIEWED, split FROZEN (2026-10-01)
+
+**Dataset** (`evaluation/routing_cases.yaml`):
+- 80 cases, all `label_status: REVIEWED`; `review_status: REVIEWED`; `reviewed_on: 2026-10-01`.
+- `split_status: FROZEN`, 29 dev / 51 test, with families never crossing the split. The dev list is pinned in a test.
+- Labelled routes: STRUCTURED 28, DOCUMENT 21, REFUSE 18, INVESTIGATION 8, CLARIFY 5.
+- Projects: P130544 43, P179039 19, P506272 15, plus 3 with no valid scope.
+- **Dev** (29): P130544 16, P179039 8, P506272 4, 1 with no scope. Routes: STRUCTURED 11, DOCUMENT 8, REFUSE 6, INVESTIGATION 3, CLARIFY 1.
+- **Test** (51): P130544 27, P179039 11, P506272 11, 2 with no or an invalid scope. Routes: STRUCTURED 17, DOCUMENT 13, REFUSE 12, INVESTIGATION 5, CLARIFY 4.
+
+**Human semantic routing rules** (recorded in the dataset):
+1. Named/source-document wording that asks what the document says → DOCUMENT.
+2. A governed factual value that can be answered deterministically → STRUCTURED.
+3. Documented rationale of an already uniquely identified event or change → DOCUMENT / EXPLANATION.
+4. A "why" question where the change, state or event must first be established → INVESTIGATION.
+5. Ambiguous project, entity or time references are resolved or clarified before execution, never guessed.
+6. Broad current-state questions default to PROJECT_OVERVIEW; attention signals are not equivalent to project status.
+7. Relative time scopes use a governed, reproducible as-of date, never the wall clock.
+
+**Final decisions:**
+- r018/q06 → TIMELINE_EVENTS (deterministic month arithmetic).
+- r020/q10 → DOCUMENT_CONTENT.
+- r044 → RISKS (extracted ESSA findings; differs from r008/q44).
+- r046 → STRUCTURED with `get_project_overview` only. Verified: it holds `project_status`, `disbursed_usd` and `financial_snapshot_date`.
+- r050 → EXPLANATION.
+- r051, r052, r058, r056 → INVESTIGATION.
+- r057 → CLARIFY AMBIGUOUS_TIME.
+- r060 → STRUCTURED with a RELATIVE time scope: as-of 2026-08-31 (loan-statement snapshot, End of Period), resolved interval 2025-09-01 to 2026-08-31.
+- r061 → PROJECT_OVERVIEW.
+
+**Aliases:** exactly the 11 reported aliases, approved (`reviewed_by: phase-9c-human-review-2026-10-01`); none added.
+
+**Baselines:**
+- `routing_baseline_9B.1.yaml` is kept unchanged as the before-fix baseline.
+- `routing_baseline_9B.2.yaml` is router 9B.2 (r073 fix only) against the reviewed labels:
+
+| Metric | Value |
+|---|---|
+| Deterministic coverage | 0.825 |
+| Exact route agreement | 0.725 (0.879 on resolved cases) |
+| Semantic classification required | 0.175 |
+| CLARIFY rate | 0.075 |
+| REFUSE rate | 0.225 |
+| Project resolution | 1.0 |
+| Temporal exact match | 0.867 (60 cases) |
+| Isolation cases that executed nothing | 15 of 15 |
+
+**Remaining mismatches** (measured baseline errors or semantic-classification gaps; deliberately not tuned):
+- **Semantic classification required** (14):
+  - human DOCUMENT: r015, r021, r022, r023, r024, r026, r047, r048, r049;
+  - human STRUCTURED: r018, r046, r061;
+  - human CLARIFY: r041, r057.
+- **Route differs:**
+  - document-referenced values: r003, r011, r044 (9B DOCUMENT, human STRUCTURED) and r008 (9B STRUCTURED, human DOCUMENT);
+  - r027 (9B DOCUMENT, human INVESTIGATION);
+  - r055 (event-anchor grammar → CLARIFY, human INVESTIGATION);
+  - r033 and r060 (9B CLARIFY, human STRUCTURED). These are implementation limitations: the rating tool has no date filter, and relative periods have no governed as-of resolution in 9B.2.
+- **Temporal differs:** r002 ("current value"), r007, r025 ("trends"), r053, r056.
+- **Tool arguments differ:** r040 (an extra RESTRUCTURING event type).
+
+**No semantic tuning was performed against the frozen test labels.** The router changed only by the approved r073 project-resolution fix (9B.2), which was made before labels were finalised. No 9D or classifier code exists. Phase 8 retrieval labels are unchanged.
+
+#### Checkpoint 9C — APPROVED AND CLOSED (user, 2026-10-01)
+
+The following are ground truth and frozen:
+- the 80 REVIEWED labels;
+- the 29 dev / 51 test split and its families;
+- the 11 reviewed aliases;
+- the Phase 8 retrieval labels;
+- the 9B.1 historical baseline;
+- the 9B.2 deterministic behaviour.
+
+#### Checkpoint 9D — bounded semantic routing: first stop (DEVELOPMENT only; TEST not evaluated)
+
+**Contract and boundary** (`routing/semantic.py`, `routing/service.py`, `routing/models.py`):
+- The fallback runs only when the rules return SEMANTIC_CLASSIFICATION_REQUIRED, after project scope, authorisation and every pre-execution refusal have been decided.
+- It receives a `SemanticQueryContext`: question, resolved project (audit only), time kind, rule hits.
+- It returns a `SemanticDecision`: one non-refusal intent (route taken from `requirements.yaml`), a confidence, the nearest development examples, or ABSTAIN.
+- Abstention, or any out-of-contract intent, becomes CLARIFY `SEMANTIC_ABSTAIN` with nothing executed.
+- A predicted intent continues through the unchanged deterministic requirements, route and tool stages, so the classifier never selects tools, projects or retrieval.
+- With no classifier configured, 9B.2 behaviour is unchanged.
+
+**Candidate B:**
+- nearest-neighbour classifier over the frozen DEVELOPMENT examples only (22 dev cases with an executable intent);
+- leave-one-family-out evaluation;
+- a pre-registered grid of 108 configurations and a selection rule (`configs/routing/semantic.yaml`: route precision ≥ 0.9 at coverage ≥ 0.3);
+- embedders: `LexicalEmbedder` (deterministic, local) and `ProviderEmbedder` (validated Qwen endpoint, own `routing-question` cache namespace).
+
+**Development results, lexical embedder:**
+- No configuration qualifies.
+- Unthresholded route accuracy 0.23–0.32, against a majority-route baseline of 0.50.
+- Confidence is not predictive: the most confident predictions are wrong.
+- Only 2 dev cases are fallback-eligible under 9B.2 (r015, r048); the hypothetical fallback got 0/2.
+- The lexical candidate is REJECTED.
+
+**Provisional selection:** Candidate A (rules only, fallback disabled).
+- The Qwen embedder must be run on DEVELOPMENT in Databricks (`notebooks/08_semantic_routing_dev.py`) before anything is FROZEN.
+- Candidate C (a bounded schema-constrained model) is proposed, not implemented.
+
+**False deterministic resolutions:** r003, r008, r011, r027, r044. These are rule/harness problems and are not repaired.
+- Capability CLARIFYs: r033 (tool), r055, r060 (time).
+- Analysis and recommendations: `evaluation/semantic_dev_report_9d.md`.
+
+**Guard:** `assert_split_allowed` refuses TEST without a FROZEN configuration and explicit authorisation. The experiment log records `test_evaluated: false`.
+
+**Tests:** 1,135 unit and 38 integration passed. Spark not re-run (no Spark-path changes since 9C, 38 passed then). Ruff and the format check are clean.
+
+#### Checkpoint 9D — approved for Databricks DEV validation (user, 2026-10-01)
+
+Candidate B runs with the real Qwen endpoint, on DEVELOPMENT only. No TEST, no Candidate C, no change to 9B.2; Candidate A stays PROVISIONAL.
+
+**Prepared for the run:**
+- **Freeze manifest** (`evaluation/routing_freeze_9c.json`):
+  - dataset hash `83c5f912…` (SHA-256 of `routing_cases.yaml` with CRLF normalised to LF, because Windows checkouts use CRLF and the Databricks Git folder LF);
+  - the 29 dev / 51 test case ids;
+  - router 9B.2;
+  - the 11 reviewed aliases.
+- **Notebook 08 sequence:**
+  1. Hard guards. Any failure STOPs: hash, split, REVIEWED labels, aliases, router version, no TEST evaluation recorded, DEV-only inputs, no TEST question used as an example.
+  2. Endpoint probe: model, availability, dimension, latency, errors. A mismatch STOPs.
+  3. Similarity-threshold diagnostic: STOP if the registered thresholds are inert on Qwen cosines, so the grid is never changed after seeing results.
+  4. Qwen and lexical runs, with per-family results and latency.
+  5. A selected-for-review or rejection record, written to the Volume only.
+  6. MLflow: case ids and aggregates only, no question text, `test_evaluated=false`.
+
+**Pre-commit inspection:** no credentials, `.env`, Databricks config, caches, model binaries or oversized files among the staged files. The dev log contains no question text.

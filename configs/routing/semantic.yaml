@@ -1,0 +1,22 @@
+# Bounded semantic routing fallback - Phase 9D DEVELOPMENT protocol (pre-registered).
+#
+# Everything here is chosen and evaluated on the frozen DEVELOPMENT split only
+# (evaluation/routing_cases.yaml, split: dev). The frozen TEST split is evaluated once,
+# after a configuration is frozen and explicitly approved; the code refuses otherwise.
+version: 1
+cache_namespace: routing-question      # never the document-chunk embedding cache
+evaluation: leave_one_family_out       # a family never classifies itself (no leakage)
+grid:
+  k: [1, 3, 5]
+  weighting: [similarity, uniform]
+  min_similarity: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+  min_vote_share: [0.0, 0.5, 0.67]
+# Selection rule (fixed BEFORE looking at any result):
+#   1. keep configurations whose route precision among non-abstained predictions is at
+#      least min_route_precision (a wrong route is worse than a clarification);
+#   2. among them maximise coverage (share of examples not abstained);
+#   3. ties: higher intent precision, then fewer/lower thresholds, then smaller k.
+#   If no configuration qualifies, the semantic fallback is NOT adopted (rules + CLARIFY).
+selection:
+  min_route_precision: 0.9
+  min_coverage: 0.3

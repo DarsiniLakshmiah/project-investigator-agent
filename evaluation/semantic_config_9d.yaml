@@ -1,0 +1,18 @@
+status: PROVISIONAL
+selected_candidate: A (rules-only, semantic fallback disabled)
+config: null
+reason: no B-lexical configuration met the pre-registered development rule (route
+  precision >= 0.9 at coverage >= 0.3); abstention -> CLARIFY is preferred to a wrong
+  route
+candidates:
+  A: rules-only 9B.2 (baseline, always available)
+  B-lexical: evaluated on DEVELOPMENT - REJECTED
+  B-qwen: PENDING - run notebooks/08_semantic_routing_dev.py (DEVELOPMENT only) in
+    Databricks against the validated Qwen endpoint
+  C: PROPOSED, not implemented - awaiting approval and an endpoint probe
+freeze_rule: becomes FROZEN only after the B-qwen development run is reviewed; TEST
+  stays blocked until then (assert_split_allowed)
+selected_on: dev (leave-one-family-out)
+test_evaluated: false
+dataset_sha256: 83c5f9123ecef96c74b7c047e8a7a3afc2760d3042c2ee9034fe92214336fab9
+recorded: '2026-10-01T23:32:37.694751+00:00'

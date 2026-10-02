@@ -1,5 +1,6 @@
-"""Typed, read-only analytical tools returning Pydantic models (Phase 9).
+"""Typed, read-only, project-scoped tools returning Pydantic models (Phase 9).
 
-Planned modules: project_tools, finance_tools, results_tools, timeline_tools,
-procurement_tools, document_tools, signal_tools. Not implemented yet.
+Modules: models (envelope, provenance classes, derivation rules), reader (governed
+table access), base, executor, registry, and one module per tool: project, timeline,
+ratings, finance, results, risks, signals, documents. Procurement awards are deferred.
 """

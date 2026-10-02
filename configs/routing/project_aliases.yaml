@@ -1,0 +1,28 @@
+# Project name aliases for deterministic entity resolution (Phase 9B).
+#
+# REVIEWABLE CONFIGURATION. Each alias must identify exactly ONE project of the
+# registry (configs/projects.yaml); the loader rejects an alias that is shared,
+# that is contained in another project's alias, or that is a generic phrase.
+# Aliases are taken from the project names in configs/projects.yaml (verbatim, with
+# the "IN " country prefix optional) and from distinctive multi-word name fragments.
+# Broad phrases ("water project", "rural water", "the Karnataka program") are
+# deliberately NOT aliases: they could refer to several projects.
+#
+# Matching: case-insensitive, whitespace-normalised, whole words.
+version: 1
+reviewed_by: phase-9c-human-review-2026-10-01   # exactly these 11 aliases approved
+aliases:
+  P130544:
+    - IN Karnataka Urban Water Supply Modernization Project
+    - Karnataka Urban Water Supply Modernization Project
+    - Karnataka Urban Water Supply Modernization
+    - Urban Water Supply Modernization Project
+    - Urban Water Supply Modernization
+  P179039:
+    - Karnataka Sustainable Rural Water Supply Program
+    - Sustainable Rural Water Supply Program
+    - Sustainable Rural Water Supply
+  P506272:
+    - Karnataka Water Security and Resilience Program
+    - Water Security and Resilience Program
+    - Water Security and Resilience

@@ -1,0 +1,21 @@
+# Routing harness settings (Phase 9B).
+router_version: "9B.2"  # 9B.2: relative project references (r073 fix)
+input:
+  max_chars: 1000
+  # Recorded as input flags only; they never route anything by themselves. Retrieved
+  # documents are always untrusted evidence regardless of these flags.
+  injection_patterns:
+    - '\b(ignore|disregard|forget) (all |any )?(previous|prior|above|earlier) (instructions|rules|prompts?)\b'
+    - '\b(system prompt|developer message)\b'
+    - '\byou are now\b'
+# Relative project references (Phase 9C human-review fix, case r073). They never select a
+# project by themselves. With an active scope and exactly ONE other authorised project the
+# referent is unique - and foreign - so the request is refused as cross-project; otherwise
+# the reference cannot be resolved and the request is clarified (AMBIGUOUS_PROJECT_REFERENCE).
+# Never resolved by alias, and never silently replaced by the active project.
+relative_project_references:
+  - '\b(the|that|this) other ([a-z-]+ ){0,3}(project|program|programme|operation)s?\b'
+  - '\banother ([a-z-]+ ){0,3}(project|program|programme|operation)\b'
+  - '\bother (projects|programs|programmes|operations)\b'
+  - '\b(a|the) (different|second|previous|former|sister|companion|related|neighbou?ring) (project|program|programme|operation)\b'
+  - '\b(both|all) (the |three |of the )?(projects|programs|programmes|operations)\b'

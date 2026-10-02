@@ -1,0 +1,105 @@
+# Intent -> information requirements (Phase 9B). REVIEWABLE CONFIGURATION.
+#
+# route:          STRUCTURED | DOCUMENT | INVESTIGATION (refusal intents never reach here)
+# tools:          tools the requirement builder may call for this intent
+# default_time:   temporal scope applied when the question states none (recorded as
+#                 defaulted=true); NONE = no temporal restriction
+# supported_time: temporal kinds this intent's tools can honour exactly. Any other
+#                 resolved kind -> CLARIFY (TEMPORAL_NOT_SUPPORTED); never ignored.
+# requires_explicit_time: the question must state a time (no default is safe).
+#
+# There is deliberately NO structured -> document fallback in 9B: a structured tool that
+# returns EMPTY / NOT_FOUND / NOT_COVERED ends as INSUFFICIENT_EVIDENCE.
+version: 1
+intents:
+  PROJECT_OVERVIEW:
+    route: STRUCTURED
+    tools: [get_project_overview]
+    default_time: LATEST
+    supported_time: [LATEST]
+  CURRENT_RATINGS:
+    route: STRUCTURED
+    tools: [get_project_overview]
+    default_time: LATEST
+    supported_time: [LATEST]
+  RATING_HISTORY:
+    route: STRUCTURED
+    tools: [get_rating_history]
+    default_time: HISTORY
+    supported_time: [HISTORY, ISR_SEQUENCE, ISR_RANGE]
+  TIMELINE_EVENTS:
+    route: STRUCTURED
+    tools: [get_project_timeline]
+    default_time: HISTORY
+    supported_time: [HISTORY, ISR_SEQUENCE, ISR_RANGE, YEAR, DATE, DATE_RANGE]
+  FINANCIAL_STATUS:
+    route: STRUCTURED
+    tools: [get_financial_status]
+    default_time: LATEST
+    supported_time: [LATEST, ISR_SEQUENCE]
+  RESULTS_PROGRESS:
+    route: STRUCTURED
+    tools: [get_results_progress]
+    default_time: LATEST
+    supported_time: [LATEST, ISR_SEQUENCE, HISTORY]
+  RISKS:
+    route: STRUCTURED
+    tools: [get_risk_register]
+    default_time: NONE
+    supported_time: [NONE, APPRAISAL, LATEST]
+  ATTENTION:
+    route: STRUCTURED
+    tools: [get_attention_signals]
+    default_time: LATEST
+    supported_time: [LATEST, HISTORY]
+  DOCUMENT_CONTENT:
+    route: DOCUMENT
+    tools: [search_project_documents]
+    default_time: NONE
+    supported_time: [NONE, LATEST, HISTORY, ISR_SEQUENCE, ISR_RANGE, APPRAISAL, YEAR, DATE, DATE_RANGE]
+  EXPLANATION:
+    route: DOCUMENT
+    tools: [search_project_documents]
+    default_time: NONE
+    supported_time: [NONE, LATEST, HISTORY, ISR_SEQUENCE, ISR_RANGE, APPRAISAL, YEAR, DATE, DATE_RANGE]
+  CHANGE_INVESTIGATION:
+    route: INVESTIGATION
+    tools: [get_project_overview, get_project_timeline, get_rating_history, get_financial_status, get_results_progress, get_risk_register, get_attention_signals, search_project_documents]
+    default_time: HISTORY
+    supported_time: [NONE, LATEST, HISTORY, ISR_SEQUENCE, ISR_RANGE, APPRAISAL, YEAR, DATE, DATE_RANGE]
+# Subject-specific intent refinements (applied by routing/intents.py, recorded as hits).
+explicit_time_required:
+  # An overall risk rating without a stated time is ambiguous between the latest ISR and
+  # the appraisal rating: CLARIFY instead of defaulting.
+  - rating_type: OVERALL_RISK
+# Structured calls planned for each investigation kind / structured subject (Phase 10
+# executes them; 9B only builds and dry-run-validates the plan).
+investigation_plans:
+  CHANGE_AND_WHY:
+    - {tool: get_project_overview, args: {}}
+    - {tool: get_project_timeline, args: {}}
+    - {tool: get_attention_signals, args: {status: ALL}}
+  APPRAISAL_RISKS_REALISED:
+    - {tool: get_risk_register, args: {}}
+    - {tool: get_rating_history, args: {}}
+    - {tool: get_attention_signals, args: {status: ALL}}
+  SIGNALS_BEFORE_EVENTS:
+    - {tool: get_project_timeline, args: {}}
+    - {tool: get_attention_signals, args: {status: ALL}}
+  EARLY_SIGNALS_VS_APPRAISAL:
+    - {tool: get_project_overview, args: {}}
+    - {tool: get_risk_register, args: {}}
+    - {tool: get_attention_signals, args: {status: ALL}}
+  ATTENTION_AND_WHY:
+    - {tool: get_attention_signals, args: {status: CURRENT}}
+  RATINGS:
+    - {tool: get_rating_history, args: {}}
+    - {tool: get_attention_signals, args: {status: ALL, categories: [IMPLEMENTATION_RATING]}}
+  FINANCE:
+    - {tool: get_financial_status, args: {as_of_isr: latest, include_events: true}}
+    - {tool: get_attention_signals, args: {status: ALL, categories: [FINANCIAL_EXECUTION]}}
+  RESULTS:
+    - {tool: get_results_progress, args: {history: true}}
+    - {tool: get_attention_signals, args: {status: ALL, categories: [RESULTS]}}
+  ATTENTION:
+    - {tool: get_attention_signals, args: {status: CURRENT}}

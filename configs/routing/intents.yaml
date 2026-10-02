@@ -1,0 +1,214 @@
+# Deterministic intent rules (Phase 9B). REVIEWABLE CONFIGURATION.
+#
+# Rules only RECOGNISE wording; how hits combine into an intent is fixed, documented
+# code (routing/intents.py). Patterns are Python regular expressions applied
+# case-insensitively to the normalised question. When two hits overlap, the longer
+# match wins (e.g. "overall risk rating" suppresses the generic "risk").
+#
+# Groups and precedence (lower number = considered first):
+#   1 refusal        -> OUT_OF_DOMAIN / PREDICTION_REQUEST / WRITE_REQUEST
+#   2 investigation  -> explicit cross-source investigation wording
+#   3 document_scope -> the question asks what a named document says (modifier)
+#   4 explanatory    -> asks for a reason / rationale (modifier)
+#   5 subject        -> what the question is about (ratings, finance, results, ...)
+#
+# There is NO generic "why => INVESTIGATION" rule: a "why" about a documented decision
+# is EXPLANATION (DOCUMENT); a "why" about a structured change is CHANGE_INVESTIGATION.
+# Anything the rules cannot settle is SEMANTIC_CLASSIFICATION_REQUIRED (9D).
+version: 1
+rules:
+  # ---------------------------------------------------------------- 1 refusal
+  - id: WRITE_IMPERATIVE
+    group: refusal
+    intent: WRITE_REQUEST
+    patterns:
+      - '^(please\s+)?(update|modify|delete|remove|edit|overwrite|insert|approve|reject|submit|upload)\b'
+      - '^(please\s+)?(change|set|mark)\s+(the|this|its|a)\b'
+      - '\b(can|could) you (update|modify|delete|edit|change|correct|overwrite)\b'
+  - id: PREDICTION_FUTURE_OUTCOME
+    group: refusal
+    intent: PREDICTION_REQUEST
+    patterns:
+      - '\bwill (it|the project|the program|the programme|this project|this program|they)\s+(fail|succeed|be (successful|completed|delayed|on time|cancelled)|meet|achieve|default|close on time)\b'
+      - '\b(likely|likelihood|probability|chances?|odds)\b.{0,40}\b(fail|failure|succeed|success|delay|default|cancel)'
+      - '\b(predict|prediction|forecast)\w*\b'
+      - '\bis (it|the project|the program|this project|this program) going to (fail|succeed)\b'
+  - id: PREDICTION_SUCCESS_JUDGEMENT
+    group: refusal
+    intent: PREDICTION_REQUEST
+    patterns:
+      - '\b(is|was) (it|the project|the program|this project|this program) (failing|a failure|successful|a success)\b'
+  - id: OUT_OF_DOMAIN_LEXICON
+    group: refusal
+    intent: OUT_OF_DOMAIN
+    patterns:
+      - '\b(weather|temperature forecast|stock price|share price|recipe|football|cricket|movie|horoscope|lottery)\b'
+      - '\bwrite (me )?(a|an) (poem|story|song|joke|essay|email|letter)\b'
+      - '\btell me a joke\b'
+      - '\bcapital (city )?of\b'
+  # ---------------------------------------------------------------- 2 investigation
+  - id: INVESTIGATION_WHAT_CHANGED_AND_WHY
+    group: investigation
+    intent: CHANGE_INVESTIGATION
+    investigation: CHANGE_AND_WHY
+    patterns:
+      - '\bwhat (has )?changed\b.*\band why\b'
+  - id: INVESTIGATION_APPRAISAL_RISKS_MATERIALISED
+    group: investigation
+    intent: CHANGE_INVESTIGATION
+    investigation: APPRAISAL_RISKS_REALISED
+    patterns:
+      - '\b(which|what) (of the )?(appraisal )?risks\b.{0,60}\b(materiali[sz]ed|appeared|emerged|came true|later)\b'
+      - '\brisks anticipated (during|at) appraisal\b'
+  - id: INVESTIGATION_SIGNALS_BEFORE_EVENT
+    group: investigation
+    intent: CHANGE_INVESTIGATION
+    investigation: SIGNALS_BEFORE_EVENTS
+    patterns:
+      - '\bsignals?\b.{0,40}\b(appeared|emerged|preceded)\b.{0,20}\bbefore\b'
+  - id: INVESTIGATION_EARLY_SIGNALS
+    group: investigation
+    intent: CHANGE_INVESTIGATION
+    investigation: EARLY_SIGNALS_VS_APPRAISAL
+    patterns:
+      - '\bearly (implementation )?signals?\b'
+      - '\b(relative|compared) to (the )?appraisal expectations\b'
+  - id: INVESTIGATION_ATTENTION_AND_WHY
+    group: investigation
+    intent: CHANGE_INVESTIGATION
+    investigation: ATTENTION_AND_WHY
+    patterns:
+      - '\bdeserves? (my )?attention\b.*\band why\b'
+  # ---------------------------------------------------------------- 3 document scope
+  # {doc} is replaced by the document-type lexicon below (named groups per type).
+  - id: DOCUMENT_ACCORDING_TO
+    group: document_scope
+    patterns:
+      - '\b(according to|as (stated|reported|described|noted) in|stated in|reported in|described in|mentioned in|cited in) (the )?(\d{4} |latest |most recent |original )?{doc}'
+  - id: DOCUMENT_SAYS
+    group: document_scope
+    patterns:
+      - '\b(what|how) (does|did|do) (the )?(latest |most recent |\d{4} )?{doc} (say|state|report|describe|mention|note)\b'
+      - '\b{doc} (says|said|states|stated|reports|reported|describes|described|mentions|notes)\b'
+  - id: DOCUMENT_IN_NAMED_DOCUMENT
+    group: document_scope
+    non_isr_only: true   # "in the latest ISR" alone does not make a question document-scoped
+    patterns:
+      - '\b(in|from) the (\d{4} |latest |most recent |original )?{doc}'
+  # ---------------------------------------------------------------- 4 explanatory
+  - id: EXPLANATORY_WHY
+    group: explanatory
+    patterns:
+      - '^why\b'
+      - '\bwhy (was|were|did|does|do|is|are|has|have|had)\b'
+      - '\bhow come\b'
+      - '\band why\b'
+  - id: EXPLANATORY_REASON
+    group: explanatory
+    patterns:
+      - '\bwhat (justified|caused|led to|explains|drove|prompted)\b'
+      - '\breasons? (for|why|behind)\b'
+      - '\b(rationale|justification)\b'
+  # ---------------------------------------------------------------- 5 subjects
+  - id: SUBJECT_RATING_PDO
+    group: subject
+    subject: RATINGS
+    rating_type: PDO
+    patterns:
+      - '\b(pdo|do|development objectives?) ratings?\b'
+      - '\bprogress towards? (the )?(achievement of (the )?)?pdo\b'
+  - id: SUBJECT_RATING_IP
+    group: subject
+    subject: RATINGS
+    rating_type: IP
+    patterns:
+      - '\b(overall )?implementation progress( rating)?\b'
+      - '\bip ratings?\b'
+  - id: SUBJECT_RATING_OVERALL_RISK
+    group: subject
+    subject: RATINGS
+    rating_type: OVERALL_RISK
+    patterns:
+      - '\boverall risk ratings?\b'
+  - id: SUBJECT_RATING_GENERIC
+    group: subject
+    subject: RATINGS
+    patterns:
+      - '\bratings?\b'
+      - '\b(rated|downgraded|upgraded|downgrade|upgrade)\b'
+  - id: SUBJECT_FINANCE
+    group: subject
+    subject: FINANCE
+    patterns:
+      - '\b(disburs\w*|undisbursed)\b'
+      - '\b(loan|financing|credit|commitment|principal) amounts?\b'
+      - '\bcommitments?\b'
+      - '\bhow much\b.{0,40}\b(disbursed|cancelled|canceled|committed|lent|financing|funding|money)\b'
+      - '\b(amount|how much) (was |has been )?(cancelled|canceled)\b'
+  - id: SUBJECT_RESULTS
+    group: subject
+    subject: RESULTS
+    patterns:
+      - '\b(results? framework|pdo indicators?|intermediate (results )?indicators?|indicators?)\b'
+      - '\b(baseline|targets?)\b'
+      - '\bprogress (towards?|against) (the )?(targets?|indicators?)\b'
+  - id: SUBJECT_RISK_REGISTER
+    group: subject
+    subject: RISKS
+    patterns:
+      - '\brisks?\b'
+      - '\b(mitigation|mitigations|risk register)\b'
+      - '\bsort (ratings?|categor(y|ies))\b'
+      - '\b(assessment )?findings?\b'
+  - id: SUBJECT_ATTENTION
+    group: subject
+    subject: ATTENTION
+    patterns:
+      - '\b(deserves?|needs?|requires?) (my |our )?attention\b'
+      - '\battention signals?\b'
+      - '\b(red flags?|warning signs?)\b'
+      - '\bwhat should (i|we) (look at|focus on|review|worry about)\b'
+  - id: SUBJECT_OVERVIEW
+    group: subject
+    subject: OVERVIEW
+    patterns:
+      - '\b(overview|summary|key facts|snapshot) of (the |this )?(project|program|programme|operation)\b'
+      - '\b(project|program|programme) (overview|summary|status)\b'
+      - '\b(status|state) of (the |this )?(project|program|programme)\b'
+      - '\bwhere does (the |this )?(project|program|programme) stand\b'
+      - '\b(current|original|revised) closing date\b'
+      - '\bwhen (does|will) (the |this )?(project|program|programme|loan) close\b'
+      - '\b(approval|effectiveness) date\b'
+      - '\b(what is|what was) the (project |program |programme )?development objective\b'
+  - id: SUBJECT_TIMELINE
+    group: subject
+    subject: TIMELINE
+    patterns:
+      - '\btimeline\b'
+      - '\b(milestones?|key (dates|events))\b'
+      - '\bhow many (times|restructurings|extensions)\b'
+      - '\b(restructurings|closing[- ]date (changes|extensions))\b'
+      - '\b(history|list|sequence|chronology) of (the )?(restructurings|events|closing dates|changes)\b'
+      - '\bwhen (was|were|did)\b.{0,60}\b(approved|effective|restructured|signed|cancelled|extended)\b'
+  - id: SUBJECT_DECISION
+    group: subject
+    subject: DECISION
+    patterns:
+      - '\brestructur\w*\b'
+      - '\b(extend|extended|extension)\b'
+      - '\b(cancel|cancelled|canceled|cancellation)\b'
+      - '\badditional financing\b'
+      - '\breallocat\w*\b'
+      - '\bcurrency\b'
+      - '\b(postponed|pushed back)\b'
+      # the disbursement MECHANISM is documented content, not the disbursement status
+      - '\bon what basis\b.{0,60}\bdisburs\w*'
+document_types:
+  RESTRUCTURING_PAPER: ['restructuring paper']
+  APPRAISAL_DOCUMENT: ['project appraisal document', 'program appraisal document', 'appraisal document', 'pad']
+  ESSA: ['essa', 'environmental and social systems assessment']
+  FIDUCIARY_ASSESSMENT: ['fiduciary systems assessment', 'fiduciary assessment']
+  TECHNICAL_ASSESSMENT: ['technical assessment']
+  LOAN_AGREEMENT: ['loan agreement']
+  ADDITIONAL_FINANCING: ['additional financing project paper', 'additional financing paper', 'project paper']
+  ISR: ['implementation status and results report', 'implementation status & results report', 'isr']

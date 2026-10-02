@@ -13,6 +13,11 @@ Order of operations (Claude.md §12, §22):
 6. duplicates (same document, same text) are suppressed; the reranker reorders;
 7. the top ``final_k`` become citation-ready ``Evidence``; nothing qualifying ->
    INSUFFICIENT_EVIDENCE.
+
+Phase 9 integration split (no methodology change): steps 1-6a (up to and including
+de-duplication) are ``first_stage``; reranking and evidence assembly are ``finish``.
+``retrieve`` is exactly ``finish(first_stage(...))``, so a rerank policy can inspect the
+first-stage candidates before deciding whether to rerank.
 """
 
 from __future__ import annotations
@@ -20,6 +25,7 @@ from __future__ import annotations
 import re
 import time
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from worldbank_copilot.retrieval.config import RetrievalSettings
@@ -108,6 +114,21 @@ class ChunkStore:
 
 def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
+
+
+@dataclass(frozen=True)
+class FirstStage:
+    """Scoped, guarded, de-duplicated candidates in retrieval order (before reranking)."""
+
+    question: str
+    project_id: str
+    query: ProcessedQuery
+    scope: RetrievalScope
+    method: str
+    candidate_k: int
+    candidates: tuple[Candidate, ...]
+    started: float  # time.perf_counter() when the request started
+    first_stage_ms: float
 
 
 class Retriever:
@@ -273,12 +294,53 @@ class Retriever:
         final_k: int,
         use_type_filters: bool = False,
     ) -> EvidenceSet:
+        stage = self.first_stage(
+            question,
+            project_id,
+            strategy=strategy,
+            method=method,
+            candidate_k=candidate_k,
+            use_type_filters=use_type_filters,
+        )
+        return self.finish(stage, reranker=reranker, final_k=final_k)
+
+    def first_stage(
+        self,
+        question: str,
+        project_id: str,
+        *,
+        strategy: str,
+        method: str,
+        candidate_k: int,
+        use_type_filters: bool = False,
+    ) -> FirstStage:
+        """Query processing, scope, candidates, guardrails and de-duplication."""
         started = time.perf_counter()
         query = process_query(question, project_id, self.settings.query)
         scope = self.scope_for(query, project_id, strategy, use_type_filters)
-        ranked = self.rerank(
-            query, self.dedupe(self.candidates(query, scope, method, candidate_k)), reranker
+        candidates = self.dedupe(self.candidates(query, scope, method, candidate_k))
+        return FirstStage(
+            question=question,
+            project_id=project_id,
+            query=query,
+            scope=scope,
+            method=method,
+            candidate_k=candidate_k,
+            candidates=tuple(candidates),
+            started=started,
+            first_stage_ms=round((time.perf_counter() - started) * 1000, 1),
         )
+
+    def finish(self, stage: FirstStage, *, reranker: Reranker, final_k: int) -> EvidenceSet:
+        """Rerank (or not), select the top ``final_k`` and build citation-ready evidence."""
+        question, project_id, query = stage.question, stage.project_id, stage.query
+        scope, method, candidate_k, started = (
+            stage.scope,
+            stage.method,
+            stage.candidate_k,
+            stage.started,
+        )
+        ranked = self.rerank(query, list(stage.candidates), reranker)
         top = ranked[:final_k]
         notes: list[str] = []
         status = "OK"
