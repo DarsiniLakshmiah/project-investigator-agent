@@ -46,7 +46,10 @@ class DatabricksModelAdapter:
                 else Failure.MODEL_UNAVAILABLE
             )
         if reply.status != 200:
-            raise NodeError(Failure.MODEL_UNAVAILABLE)
+            # Request rejection is distinct from availability; never retain response bodies.
+            raise NodeError(
+                Failure.MODEL_REQUEST_INVALID if reply.status == 400 else Failure.MODEL_UNAVAILABLE
+            )
         choices = reply.body.get("choices") if isinstance(reply.body, dict) else None
         if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
             raise NodeError(Failure.MODEL_OUTPUT_INVALID)
@@ -84,11 +87,16 @@ class DatabricksModelAdapter:
 
 
 def _strict_schema(value):
+    """Copy the Databricks generation schema; authoritative validation stays unchanged.
+
+    Remove defaults and the proven unsupported pattern keyword only. Preserve
+    all other constraints and the existing strict-object normalization.
+    """
     if isinstance(value, list):
         return [_strict_schema(v) for v in value]
     if not isinstance(value, dict):
         return value
-    result = {k: _strict_schema(v) for k, v in value.items() if k != "default"}
+    result = {k: _strict_schema(v) for k, v in value.items() if k not in ("default", "pattern")}
     if "properties" in result:
         result["required"] = list(result["properties"])
         result["additionalProperties"] = False

@@ -1,6 +1,6 @@
 # Copilot architecture
 
-Status: implemented locally; real Databricks validation and human acceptance pending. Phase 7/8/9/10C are accepted historical components. Phase 10D is unaccepted. Preserve 10d1 (preflight failure), 10d2 (interrupted reservation) and 10d3 (zero completed calls, exact cause unknown). Zero completed rows do not establish model quality or necessarily prove zero attempted invocations.
+Status: implemented locally; real Databricks validation and human acceptance pending. Phase 7/8/9/10C are accepted historical components. Phase 10D is unaccepted. Preserve 10d1 (preflight failure), 10d2 (interrupted reservation), 10d3/10d4 (preflight identity mismatch) and 10d5 (19 failed transport requests). The real diagnosis established unsupported JSON Schema pattern at HTTP 400, before model generation; see [the compatibility revision](PHASE10D_TRANSPORT_COMPATIBILITY.md). No synthesis/critic quality acceptance follows.
 
 ## Audit, reuse and request lifecycle
 

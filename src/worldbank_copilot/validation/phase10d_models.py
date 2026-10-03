@@ -14,6 +14,7 @@ from pathlib import Path
 
 from worldbank_copilot.common.exceptions import ConfigurationError
 from worldbank_copilot.investigation.claims import (
+    PROMPT_VERSION,
     CriticOutput,
     Failure,
     ModelRequest,
@@ -36,7 +37,7 @@ from worldbank_copilot.validation.phase10d_notebook_v3 import notebook_identity
 
 CASE_FILE = "evaluation/phase10d_model_cases.json"
 LOCK_FILE = "evaluation/phase10d_model_lock.json"
-PREVIOUS_LOCK_FILE = "evaluation/phase10d_model_lock_v1.json"
+PREVIOUS_LOCK_FILE = "evaluation/phase10d_model_lock_v2.json"
 NOTEBOOK_FILE = "notebooks/09_phase10d_model_validation.py"
 SOURCE_FILES = (
     "src/worldbank_copilot/investigation/claims.py",
@@ -48,6 +49,7 @@ SOURCE_FILES = (
     "src/worldbank_copilot/validation/phase10d_notebook_v3.py",
     "tests/unit/test_phase10d_notebook_v3.py",
     CASE_FILE,
+    "tests/unit/test_phase10d_transport_compatibility.py",
     "notebooks/_bootstrap.py",
     "requirements-phase10d.txt",
     "requirements-databricks.txt",
@@ -58,7 +60,7 @@ SOURCE_FILES = (
 def build_lock(root):
     files = {name: canonical_sha256(root / name) for name in SOURCE_FILES}
     return {
-        "schema": "phase10d_capability_lock@2",
+        "schema": "phase10d_capability_lock@3",
         "supersedes_lock_sha256_lf": canonical_sha256(root / PREVIOUS_LOCK_FILE),
         "status": "PREREGISTERED",
         "files_sha256_lf": files,
@@ -315,7 +317,7 @@ def run_attempt(
         "tool_calls": 0,
         "retrieval_calls": 0,
         "repair_cycles": 0,
-        "prompt_version": "bounded_synthesis_critic@1",
+        "prompt_version": PROMPT_VERSION,
         "schema_version": "candidate_claims@1",
     }
     writer.write(artifact)

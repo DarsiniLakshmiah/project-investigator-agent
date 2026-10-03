@@ -136,12 +136,12 @@ def test_import_before_bootstrap_and_arbitrary_work_order_remain_sensitive():
 
 
 def test_revised_lock_lineage_sources_and_unchanged_capability_protocol():
-    previous = json.loads((ROOT / h.PREVIOUS_LOCK_FILE).read_text("utf-8"))
-    current = json.loads((ROOT / h.LOCK_FILE).read_text("utf-8"))
-    assert h.canonical_sha256(ROOT / h.PREVIOUS_LOCK_FILE) == (
+    previous = json.loads((ROOT / "evaluation/phase10d_model_lock_v1.json").read_text("utf-8"))
+    current = json.loads((ROOT / "evaluation/phase10d_model_lock_v2.json").read_text("utf-8"))
+    assert h.canonical_sha256(ROOT / "evaluation/phase10d_model_lock_v1.json") == (
         "ef9f5f7c59de938389933d9837252df2e08b2bf001f68a40423af73a999f43e3"
     )
-    assert current == h.build_lock(ROOT)
+    assert json.loads((ROOT / h.LOCK_FILE).read_text("utf-8")) == h.build_lock(ROOT)
     assert current["notebook_semantic_identity"] == EXPECTED
     assert previous["notebook_semantic_identity"] == {
         **EXPECTED,
@@ -166,7 +166,7 @@ def test_revised_lock_lineage_sources_and_unchanged_capability_protocol():
         "src/worldbank_copilot/validation/phase10d_notebook_v3.py",
         "tests/unit/test_phase10d_notebook_v3.py",
     }
-    for name, digest in current["files_sha256_lf"].items():
+    for name, digest in h.build_lock(ROOT)["files_sha256_lf"].items():
         assert h.canonical_sha256(ROOT / name) == digest
 
 

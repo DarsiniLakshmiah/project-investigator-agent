@@ -2,7 +2,7 @@
 
 All steps are user-run. No workspace/model calls or deployment occurred locally. Review and commit the new files yourself, synchronize the exact snapshot, and use its full SHA. Do not reuse the older reviewed revision for new implementation. Preserve every reservation, checkpoint, final artifact and receipt; use only unused IDs.
 
-## 1. Read 10d3 without rerunning
+## 1. Historical diagnostic reader (read-only)
 
 In a separate notebook use existing `%run ./_bootstrap`, then:
 
@@ -15,19 +15,19 @@ spec.loader.exec_module(reader)
 print(json.dumps(reader.read_attempt(settings, "10d3"), indent=2, default=str))
 ```
 
-The reader lists reservation/checkpoint/final/receipt files, verifies completed artifacts and reports error classes for unreadable files. Inspect preflight, failure, revision and persistence in the final or latest verified checkpoint. Return this output for exact diagnosis. Zero completed rows alone cannot identify the gate or exclude an invocation that failed before persistence. The reader performs no reservation, model setup or write.
+The reader lists reservation/checkpoint/final/receipt files, verifies completed artifacts and reports error classes for unreadable files. Inspect preflight, failure, revision and persistence in the final or latest verified checkpoint. The real diagnosis has since identified 10d3/10d4 preflight identity mismatch and 10d5 transport-schema incompatibility; preserve their artifacts. Zero completed rows alone cannot identify the gate or exclude an invocation that failed before persistence. The reader performs no reservation, model setup or write.
 
 ## 2. Existing 10D validation gate
 
-After diagnosis/review run `notebooks/09_phase10d_model_validation.py` with:
+First run the exact zero-model-call clean-room cell in [the compatibility revision](PHASE10D_TRANSPORT_COMPATIBILITY.md). Only after it passes and user review, run `notebooks/09_phase10d_model_validation.py` with:
 
 ```
 commit_sha=<full reviewed committed SHA>
-run_id=10d4  # only if unused; otherwise next unused 10dN
+run_id=10d6  # NOT run here; only after clean-room preflight PASS
 endpoints=databricks-gpt-oss-20b
 ```
 
-Preserve 10d1/2/3. Required: accepted 10C integrity; phase10d_capability_lock@2; databricks_wrapper_ast@3; notebook SHA 754e42ac71c378df721b258b23a2c9b9b1d4aef7c8c97ef2da1d942ad957c349; exact case/schedule identity; environment and endpoint checks; all 19 scheduled calls per endpoint and required repetitions/checks. Preflight PASS alone does not accept GPT-OSS. Workspace Git ambiguity retains accepted USER_DECLARED_REVIEWED_REVISION behavior.
+Preserve 10d1/2/3/4/5. Required: accepted 10C integrity; phase10d_capability_lock@3; databricks_wrapper_ast@3; notebook SHA 754e42ac71c378df721b258b23a2c9b9b1d4aef7c8c97ef2da1d942ad957c349; exact case/schedule identity; environment and endpoint checks; all 19 scheduled calls per endpoint and required repetitions/checks. Preflight PASS alone does not accept GPT-OSS. Workspace Git ambiguity retains accepted USER_DECLARED_REVIEWED_REVISION behavior.
 
 ## 3. Trusted runtime configuration
 
@@ -67,4 +67,4 @@ Create a Databricks App from the reviewed source in workspace UI. Root app.yaml 
 
 Ask one structured, document and investigation question from the fixed cases. Inspect route, project, sources/citations, UNKNOWN/clarification, critic outcome, request ID and actual trace. Change project: old answers must not appear as current evidence. Source follow-ups show previous snapshots; new questions fetch new evidence. Backend validation must reject unsupported projects/unknown tools/project changes/time expansion, stop on budget exhaustion, and expose no chain-of-thought or credentials.
 
-Run notebook 12 against the final reviewed snapshot with NEW e2e1 (or next unused ID). Mechanical PASS plus actual App smoke and human semantic review are required for acceptance. Missing 10D capability PASS, unresolved 10d3 diagnosis, model-quality review, runtime/permissions failures or failed App smoke remain blockers. Preserve failures; never relax checks to claim completion.
+Run notebook 12 against the final reviewed snapshot with NEW e2e1 (or next unused ID). Mechanical PASS plus actual App smoke and human semantic review are required for acceptance. Missing 10D capability PASS,  model-quality review, runtime/permissions failures or failed App smoke remain blockers. Preserve failures; never relax checks to claim completion.

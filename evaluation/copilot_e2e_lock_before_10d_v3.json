@@ -39,7 +39,7 @@
       "sha256": "53aca9a24fb1b2b3f1a2fdf814fb377065e68d2d7a5e84fd47ba072738ad63c6"
     }
   },
-  "phase10d_lock_sha256_lf": "3bf743732a9f8fca8e3d4ce22a7d89720b6c3d2b66b2630d9b7cd9c06423323b",
+  "phase10d_lock_sha256_lf": "ec1b9bfc634592a327e6908f4492635b0e35d6bce2e410908733f3eb2dca08f5",
   "schema": "copilot_e2e_protocol@1",
   "status": "PREREGISTERED"
 }

@@ -48,6 +48,9 @@ must be explicitly labeled INTERPRETATION; UNKNOWN must remain UNCERTAINTY.
 Do not predict project failure or claim a globally atomic snapshot. State insufficient
 evidence when necessary. Return only the requested JSON schema. Do not request,
 expose or include chain-of-thought. Concise conclusions only. No tools or retrieval.
+Generated claim_id must be C followed by 1 to 3 digits: C1, C2, C15, C123.
+Invalid IDs: claim_1, claim1, C1000. Copy project_id exactly from supplied context;
+never invent or alter project_id.
 """
 CRITIC_INSTRUCTIONS = (
     INSTRUCTIONS
@@ -56,6 +59,8 @@ provided evidence. Return exactly one finding per claim ID. Detect unsupported,
 contradicted, overclaimed, invalid citation/provenance and project/temporal violations.
 SUPPORTED means the supplied evidence supports the claim as labeled. Do not rewrite
 claims, add evidence, change scope, publish answers or control execution flow.
+Copy claim_id exactly from candidate_output; never invent, rename, normalize or
+modify a claim_id. Claim IDs are C followed by 1 to 3 digits.
 """
 )
 

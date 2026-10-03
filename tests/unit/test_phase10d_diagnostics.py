@@ -53,9 +53,13 @@ def test_diagnostic_never_writes_reserves_or_invokes(tmp_path, monkeypatch):
     monkeypatch.setattr(h, "Writer", writer)
     monkeypatch.setattr(h.DatabricksModelAdapter, "invoke", invoke)
     report = diagnostic.diagnose(settings(tmp_path), declared_sha=diagnostic.REVIEWED_SHA)
-    assert report["failed_gates"] == []
+    assert report["failed_gates"] == ["reviewed_10d_lock_identity"]
     assert report["acceptance_performed"] is False
     assert report["writes"] == report["model_calls"] == 0
+    identity = next(r for r in report["gates"] if r["check"] == "reviewed_10d_lock_identity")
+    assert identity["expected"] == h.canonical_sha256(ROOT / h.PREVIOUS_LOCK_FILE)
+    assert identity["actual"] == h.canonical_sha256(ROOT / h.LOCK_FILE)
+    assert identity["actual"] != identity["expected"]
     writer.assert_not_called()
     invoke.assert_not_called()
     assert not list(tmp_path.iterdir())
@@ -98,6 +102,6 @@ def test_active_trace_preserved(tmp_path):
         sys.settrace(existing_trace)
         report = diagnostic.diagnose(settings(tmp_path), declared_sha=diagnostic.REVIEWED_SHA)
         assert sys.gettrace() is existing_trace
-        assert report["failed_gates"] == []
+        assert report["failed_gates"] == ["reviewed_10d_lock_identity"]
     finally:
         sys.settrace(previous)

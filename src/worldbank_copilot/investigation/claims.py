@@ -11,12 +11,13 @@ from worldbank_copilot.investigation.policy import BudgetLedger, Contract
 from worldbank_copilot.routing.models import TemporalScope
 from worldbank_copilot.tools.models import ProvenanceClass
 
-PROMPT_VERSION = "bounded_synthesis_critic@1"
+PROMPT_VERSION = "bounded_synthesis_critic@2"
 SCHEMA_VERSION = "candidate_claims@1"
 
 
 class Failure(StrEnum):
     MODEL_UNAVAILABLE = "MODEL_UNAVAILABLE"
+    MODEL_REQUEST_INVALID = "MODEL_REQUEST_INVALID"
     MODEL_TIMEOUT = "MODEL_TIMEOUT"
     MODEL_OUTPUT_INVALID = "MODEL_OUTPUT_INVALID"
     SCHEMA_VALIDATION_FAILED = "SCHEMA_VALIDATION_FAILED"
