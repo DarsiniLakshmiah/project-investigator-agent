@@ -1,0 +1,2 @@
+# Databricks App installation; notebook requirements remain unchanged.
+-r requirements-app.txt

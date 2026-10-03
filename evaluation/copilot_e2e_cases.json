@@ -1,0 +1,38 @@
+[
+  {
+    "case_id": "C01",
+    "question": "What is the current closing date?",
+    "project_id": "P130544",
+    "expected_route": "STRUCTURED"
+  },
+  {
+    "case_id": "C03",
+    "question": "What does the restructuring paper say about the cancellation of part of the Additional Financing?",
+    "project_id": "P130544",
+    "expected_route": "DOCUMENT"
+  },
+  {
+    "case_id": "C06",
+    "question": "What changed and why?",
+    "project_id": "P130544",
+    "expected_route": "INVESTIGATION"
+  },
+  {
+    "case_id": "C08",
+    "question": "Can you explain this situation?",
+    "project_id": "P130544",
+    "expected_route": "SEMANTIC_CLASSIFICATION_REQUIRED"
+  },
+  {
+    "case_id": "C09",
+    "question": "Will the project fail?",
+    "project_id": "P130544",
+    "expected_route": "REFUSE"
+  },
+  {
+    "case_id": "UNSUPPORTED",
+    "question": "What is the current closing date?",
+    "project_id": "P999999",
+    "expected_route": "REFUSE"
+  }
+]
