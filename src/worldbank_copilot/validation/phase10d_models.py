@@ -32,9 +32,11 @@ from worldbank_copilot.routing.semantic_eval import canonical_sha256
 from worldbank_copilot.validation import phase9_contract as prior
 from worldbank_copilot.validation import phase10c_evidence as accepted
 from worldbank_copilot.validation.phase10d_fixtures import draft, fixture
+from worldbank_copilot.validation.phase10d_notebook_v3 import notebook_identity
 
 CASE_FILE = "evaluation/phase10d_model_cases.json"
 LOCK_FILE = "evaluation/phase10d_model_lock.json"
+PREVIOUS_LOCK_FILE = "evaluation/phase10d_model_lock_v1.json"
 NOTEBOOK_FILE = "notebooks/09_phase10d_model_validation.py"
 SOURCE_FILES = (
     "src/worldbank_copilot/investigation/claims.py",
@@ -43,6 +45,8 @@ SOURCE_FILES = (
     "src/worldbank_copilot/validation/phase10d_fixtures.py",
     "src/worldbank_copilot/validation/phase10d_models.py",
     "tests/unit/test_phase10d_models.py",
+    "src/worldbank_copilot/validation/phase10d_notebook_v3.py",
+    "tests/unit/test_phase10d_notebook_v3.py",
     CASE_FILE,
     "notebooks/_bootstrap.py",
     "requirements-phase10d.txt",
@@ -54,13 +58,12 @@ SOURCE_FILES = (
 def build_lock(root):
     files = {name: canonical_sha256(root / name) for name in SOURCE_FILES}
     return {
-        "schema": "phase10d_capability_lock@1",
+        "schema": "phase10d_capability_lock@2",
+        "supersedes_lock_sha256_lf": canonical_sha256(root / PREVIOUS_LOCK_FILE),
         "status": "PREREGISTERED",
         "files_sha256_lf": files,
         "case_set_sha256_lf": files[CASE_FILE],
-        "notebook_semantic_identity": accepted.notebook_identity(
-            (root / NOTEBOOK_FILE).read_text("utf-8")
-        ),
+        "notebook_semantic_identity": notebook_identity((root / NOTEBOOK_FILE).read_text("utf-8")),
         "phase10c_lock_sha256_lf": canonical_sha256(root / accepted.LOCK_FILE),
         "max_endpoints": 2,
         "max_calls_per_endpoint": 19,
