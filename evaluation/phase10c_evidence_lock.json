@@ -181,10 +181,10 @@
     "src/worldbank_copilot/transformations/silver_quality.py": "97607b1cea76c2d5d36c32947772debbcf5e354d50f042b0ad6e08b487db6a32",
     "src/worldbank_copilot/transformations/silver_report.py": "87b8d8d465efa33002efaefdd4c11c1376794bd8c156f8dbda46fbb3d2fb39b4",
     "src/worldbank_copilot/validation/__init__.py": "3b2c612f7e7c429da7c645975150d855b93dd4c57191e2e486fbce48f782181f",
-    "src/worldbank_copilot/validation/phase10c_evidence.py": "bd6848a3987b065e6f111137be90ec248e2b32fe1b81387cbb5b06a25dcf7826",
+    "src/worldbank_copilot/validation/phase10c_evidence.py": "d427bb79ceb52a7c5f4991bb02c7f47e1dfb7e37a77167555f4143e99831ce9d",
     "src/worldbank_copilot/validation/phase9_contract.py": "05def9a06bcb3c5ce5d4bf2f74faa9856a87611c77b5cae2de97858de887fd15",
     "tests/unit/test_investigation_evidence.py": "a797580c4e6e072eba318db1ae4950317c6e4652de48aacbeefe11392cec63cd",
-    "tests/unit/test_phase10c_validation.py": "ee64efe8d17d4bfd721a469dc7ef5a29919b8b682d2359e2cd9c39f0dd63370f"
+    "tests/unit/test_phase10c_validation.py": "01c40233a2b207eb681a026e9c0f4aaf52974b7dc2eb7159077a2dca08cd8ec9"
   },
   "notebook_semantic_identity": {
     "scheme": "databricks_wrapper_ast@2",

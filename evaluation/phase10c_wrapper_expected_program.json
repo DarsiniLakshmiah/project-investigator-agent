@@ -1,0 +1,574 @@
+{
+  "identity": {
+    "scheme": "databricks_wrapper_ast@2",
+    "sha256": "0a30c8873fdd16625774afb33c75bc6acae4ca81a86f1e20f08fbec386ac5fd9"
+  },
+  "program": [
+    {
+      "directive": [
+        "%pip",
+        "install",
+        "-q",
+        "-r",
+        "../requirements-databricks.txt",
+        "-r",
+        "../requirements-retrieval.txt",
+        "-r",
+        "../requirements-reranker.txt",
+        "-c",
+        "../constraints-databricks.txt"
+      ]
+    },
+    {
+      "python_ast": {
+        "fields": {
+          "value": {
+            "fields": {
+              "func": {
+                "fields": {
+                  "attr": "restartPython",
+                  "ctx": {
+                    "fields": {},
+                    "node": "Load"
+                  },
+                  "value": {
+                    "fields": {
+                      "attr": "library",
+                      "ctx": {
+                        "fields": {},
+                        "node": "Load"
+                      },
+                      "value": {
+                        "fields": {
+                          "ctx": {
+                            "fields": {},
+                            "node": "Load"
+                          },
+                          "id": "dbutils"
+                        },
+                        "node": "Name"
+                      }
+                    },
+                    "node": "Attribute"
+                  }
+                },
+                "node": "Attribute"
+              }
+            },
+            "node": "Call"
+          }
+        },
+        "node": "Expr"
+      }
+    },
+    {
+      "directive": [
+        "%run",
+        "./_bootstrap"
+      ]
+    },
+    {
+      "python_ast": {
+        "fields": {
+          "level": 0,
+          "module": "worldbank_copilot.validation.phase10c_evidence",
+          "names": [
+            {
+              "fields": {
+                "name": "run_databricks_validation"
+              },
+              "node": "alias"
+            }
+          ]
+        },
+        "node": "ImportFrom"
+      }
+    },
+    {
+      "python_ast": {
+        "fields": {
+          "value": {
+            "fields": {
+              "args": [
+                {
+                  "fields": {
+                    "value": "commit_sha"
+                  },
+                  "node": "Constant"
+                },
+                {
+                  "fields": {
+                    "value": ""
+                  },
+                  "node": "Constant"
+                },
+                {
+                  "fields": {
+                    "value": "Exact reviewed full committed source SHA"
+                  },
+                  "node": "Constant"
+                }
+              ],
+              "func": {
+                "fields": {
+                  "attr": "text",
+                  "ctx": {
+                    "fields": {},
+                    "node": "Load"
+                  },
+                  "value": {
+                    "fields": {
+                      "attr": "widgets",
+                      "ctx": {
+                        "fields": {},
+                        "node": "Load"
+                      },
+                      "value": {
+                        "fields": {
+                          "ctx": {
+                            "fields": {},
+                            "node": "Load"
+                          },
+                          "id": "dbutils"
+                        },
+                        "node": "Name"
+                      }
+                    },
+                    "node": "Attribute"
+                  }
+                },
+                "node": "Attribute"
+              }
+            },
+            "node": "Call"
+          }
+        },
+        "node": "Expr"
+      }
+    },
+    {
+      "python_ast": {
+        "fields": {
+          "value": {
+            "fields": {
+              "args": [
+                {
+                  "fields": {
+                    "value": "run_id"
+                  },
+                  "node": "Constant"
+                },
+                {
+                  "fields": {
+                    "value": "10c1"
+                  },
+                  "node": "Constant"
+                },
+                {
+                  "fields": {
+                    "value": "New immutable attempt ID"
+                  },
+                  "node": "Constant"
+                }
+              ],
+              "func": {
+                "fields": {
+                  "attr": "text",
+                  "ctx": {
+                    "fields": {},
+                    "node": "Load"
+                  },
+                  "value": {
+                    "fields": {
+                      "attr": "widgets",
+                      "ctx": {
+                        "fields": {},
+                        "node": "Load"
+                      },
+                      "value": {
+                        "fields": {
+                          "ctx": {
+                            "fields": {},
+                            "node": "Load"
+                          },
+                          "id": "dbutils"
+                        },
+                        "node": "Name"
+                      }
+                    },
+                    "node": "Attribute"
+                  }
+                },
+                "node": "Attribute"
+              }
+            },
+            "node": "Call"
+          }
+        },
+        "node": "Expr"
+      }
+    },
+    {
+      "python_ast": {
+        "fields": {
+          "targets": [
+            {
+              "fields": {
+                "ctx": {
+                  "fields": {},
+                  "node": "Store"
+                },
+                "id": "artifact"
+              },
+              "node": "Name"
+            }
+          ],
+          "value": {
+            "fields": {
+              "args": [
+                {
+                  "fields": {
+                    "ctx": {
+                      "fields": {},
+                      "node": "Load"
+                    },
+                    "id": "spark"
+                  },
+                  "node": "Name"
+                },
+                {
+                  "fields": {
+                    "ctx": {
+                      "fields": {},
+                      "node": "Load"
+                    },
+                    "id": "settings"
+                  },
+                  "node": "Name"
+                }
+              ],
+              "func": {
+                "fields": {
+                  "ctx": {
+                    "fields": {},
+                    "node": "Load"
+                  },
+                  "id": "run_databricks_validation"
+                },
+                "node": "Name"
+              },
+              "keywords": [
+                {
+                  "fields": {
+                    "arg": "commit_sha",
+                    "value": {
+                      "fields": {
+                        "func": {
+                          "fields": {
+                            "attr": "strip",
+                            "ctx": {
+                              "fields": {},
+                              "node": "Load"
+                            },
+                            "value": {
+                              "fields": {
+                                "args": [
+                                  {
+                                    "fields": {
+                                      "value": "commit_sha"
+                                    },
+                                    "node": "Constant"
+                                  }
+                                ],
+                                "func": {
+                                  "fields": {
+                                    "attr": "get",
+                                    "ctx": {
+                                      "fields": {},
+                                      "node": "Load"
+                                    },
+                                    "value": {
+                                      "fields": {
+                                        "attr": "widgets",
+                                        "ctx": {
+                                          "fields": {},
+                                          "node": "Load"
+                                        },
+                                        "value": {
+                                          "fields": {
+                                            "ctx": {
+                                              "fields": {},
+                                              "node": "Load"
+                                            },
+                                            "id": "dbutils"
+                                          },
+                                          "node": "Name"
+                                        }
+                                      },
+                                      "node": "Attribute"
+                                    }
+                                  },
+                                  "node": "Attribute"
+                                }
+                              },
+                              "node": "Call"
+                            }
+                          },
+                          "node": "Attribute"
+                        }
+                      },
+                      "node": "Call"
+                    }
+                  },
+                  "node": "keyword"
+                },
+                {
+                  "fields": {
+                    "arg": "run_id",
+                    "value": {
+                      "fields": {
+                        "func": {
+                          "fields": {
+                            "attr": "strip",
+                            "ctx": {
+                              "fields": {},
+                              "node": "Load"
+                            },
+                            "value": {
+                              "fields": {
+                                "args": [
+                                  {
+                                    "fields": {
+                                      "value": "run_id"
+                                    },
+                                    "node": "Constant"
+                                  }
+                                ],
+                                "func": {
+                                  "fields": {
+                                    "attr": "get",
+                                    "ctx": {
+                                      "fields": {},
+                                      "node": "Load"
+                                    },
+                                    "value": {
+                                      "fields": {
+                                        "attr": "widgets",
+                                        "ctx": {
+                                          "fields": {},
+                                          "node": "Load"
+                                        },
+                                        "value": {
+                                          "fields": {
+                                            "ctx": {
+                                              "fields": {},
+                                              "node": "Load"
+                                            },
+                                            "id": "dbutils"
+                                          },
+                                          "node": "Name"
+                                        }
+                                      },
+                                      "node": "Attribute"
+                                    }
+                                  },
+                                  "node": "Attribute"
+                                }
+                              },
+                              "node": "Call"
+                            }
+                          },
+                          "node": "Attribute"
+                        }
+                      },
+                      "node": "Call"
+                    }
+                  },
+                  "node": "keyword"
+                }
+              ]
+            },
+            "node": "Call"
+          }
+        },
+        "node": "Assign"
+      }
+    },
+    {
+      "python_ast": {
+        "fields": {
+          "value": {
+            "fields": {
+              "args": [
+                {
+                  "fields": {
+                    "ctx": {
+                      "fields": {},
+                      "node": "Load"
+                    },
+                    "slice": {
+                      "fields": {
+                        "value": "summary"
+                      },
+                      "node": "Constant"
+                    },
+                    "value": {
+                      "fields": {
+                        "ctx": {
+                          "fields": {},
+                          "node": "Load"
+                        },
+                        "id": "artifact"
+                      },
+                      "node": "Name"
+                    }
+                  },
+                  "node": "Subscript"
+                }
+              ],
+              "func": {
+                "fields": {
+                  "ctx": {
+                    "fields": {},
+                    "node": "Load"
+                  },
+                  "id": "print"
+                },
+                "node": "Name"
+              }
+            },
+            "node": "Call"
+          }
+        },
+        "node": "Expr"
+      }
+    },
+    {
+      "python_ast": {
+        "fields": {
+          "value": {
+            "fields": {
+              "args": [
+                {
+                  "fields": {
+                    "value": "STOP - preserve the artifact and receipt for review; do not rerun this attempt."
+                  },
+                  "node": "Constant"
+                }
+              ],
+              "func": {
+                "fields": {
+                  "ctx": {
+                    "fields": {},
+                    "node": "Load"
+                  },
+                  "id": "print"
+                },
+                "node": "Name"
+              }
+            },
+            "node": "Call"
+          }
+        },
+        "node": "Expr"
+      }
+    },
+    {
+      "python_ast": {
+        "fields": {
+          "body": [
+            {
+              "fields": {
+                "exc": {
+                  "fields": {
+                    "args": [
+                      {
+                        "fields": {
+                          "value": "10C capability validation failed; inspect preserved attempt"
+                        },
+                        "node": "Constant"
+                      }
+                    ],
+                    "func": {
+                      "fields": {
+                        "ctx": {
+                          "fields": {},
+                          "node": "Load"
+                        },
+                        "id": "RuntimeError"
+                      },
+                      "node": "Name"
+                    }
+                  },
+                  "node": "Call"
+                }
+              },
+              "node": "Raise"
+            }
+          ],
+          "test": {
+            "fields": {
+              "comparators": [
+                {
+                  "fields": {
+                    "value": "PASS"
+                  },
+                  "node": "Constant"
+                }
+              ],
+              "left": {
+                "fields": {
+                  "ctx": {
+                    "fields": {},
+                    "node": "Load"
+                  },
+                  "slice": {
+                    "fields": {
+                      "value": "overall_status"
+                    },
+                    "node": "Constant"
+                  },
+                  "value": {
+                    "fields": {
+                      "ctx": {
+                        "fields": {},
+                        "node": "Load"
+                      },
+                      "slice": {
+                        "fields": {
+                          "value": "summary"
+                        },
+                        "node": "Constant"
+                      },
+                      "value": {
+                        "fields": {
+                          "ctx": {
+                            "fields": {},
+                            "node": "Load"
+                          },
+                          "id": "artifact"
+                        },
+                        "node": "Name"
+                      }
+                    },
+                    "node": "Subscript"
+                  }
+                },
+                "node": "Subscript"
+              },
+              "ops": [
+                {
+                  "fields": {},
+                  "node": "NotEq"
+                }
+              ]
+            },
+            "node": "Compare"
+          }
+        },
+        "node": "If"
+      }
+    }
+  ],
+  "role": "DIAGNOSTIC_ONLY_NOT_AN_ACCEPTANCE_INPUT"
+}

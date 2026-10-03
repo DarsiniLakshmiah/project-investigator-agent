@@ -170,6 +170,95 @@ def verify_notebook(repo, expected):
     return actual
 
 
+EXPECTED_PROGRAM_FILE = "evaluation/phase10c_wrapper_expected_program.json"
+
+
+def notebook_diagnostics(repo, *, include_source=True):
+    """Read-only observations using production's reader/canonicalizer, never acceptance.
+
+    The expected fixture is diagnostic-only. Its digest must agree with the lock
+    before it is used for comparison; production verify_notebook never reads it.
+    Source markers describe text, not the backing Workspace/export filesystem.
+    """
+    repo = Path(repo)
+    path = repo / NOTEBOOK_FILE
+    raw = path.read_bytes()
+    source = path.read_text(encoding="utf-8")  # Same reader as verify_notebook.
+    expected = json.loads((repo / LOCK_FILE).read_text(encoding="utf-8"))[
+        "notebook_semantic_identity"
+    ]
+    report = {
+        "read_only_diagnostic": True,
+        "acceptance_performed": False,
+        "notebook_path": str(path.resolve()),
+        "raw_source_byte_length": len(raw),
+        "raw_sha256": hashlib.sha256(raw).hexdigest(),
+        "production_reader": "Path.read_text(encoding='utf-8')",
+        "canonicalizer_module_path": str(Path(__file__).resolve()),
+        "canonicalizer_version": notebook_identity("")["scheme"],
+        "expected_identity": expected,
+        "actual_identity": None,
+        "semantic_matches_lock": False,
+        "canonical_semantic_program": None,
+        "expected_canonical_program": None,
+        "expected_program_fixture_valid": False,
+        "first_canonical_difference": None,
+        "unexpected_or_unsupported_constructs": [],
+        "detected_source_markers": {
+            "databricks_notebook_header": source.startswith("# Databricks notebook source"),
+            "magic_prefix": bool(re.search(r"(?m)^# MAGIC", source)),
+            "raw_magic": bool(re.search(r"(?m)^%", source)),
+            "command_separators": len(re.findall(r"(?m)^# COMMAND -+[ \t]*$", source)),
+            "script_environment_metadata": "# [tool.databricks.environment]" in source,
+        },
+    }
+    report["detected_representation"] = (
+        "DATABRICKS_SOURCE_MARKERS"
+        if any(report["detected_source_markers"].values())
+        else "PYTHON_TEXT_WITHOUT_DATABRICKS_MARKERS"
+    )
+    if include_source:
+        report["source_as_read_by_production"] = source
+    try:
+        fixture = json.loads((repo / EXPECTED_PROGRAM_FILE).read_text(encoding="utf-8"))
+        program = fixture["program"]
+        digest = hashlib.sha256(
+            json.dumps(program, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        if fixture["identity"] != expected or digest != expected["sha256"]:
+            raise ValueError("EXPECTED_PROGRAM_FIXTURE_DIGEST_MISMATCH")
+        report["expected_canonical_program"] = program
+        report["expected_program_fixture_valid"] = True
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        report["expected_program_fixture_error"] = type(exc).__name__
+    try:
+        actual = notebook_identity(source)
+        program = notebook_program(source)
+        report["actual_identity"] = actual
+        report["semantic_matches_lock"] = actual == expected
+        report["canonical_semantic_program"] = program
+        baseline = report["expected_canonical_program"]
+        if baseline is not None:
+            for index in range(max(len(baseline), len(program))):
+                wanted = baseline[index] if index < len(baseline) else None
+                observed = program[index] if index < len(program) else None
+                if wanted != observed:
+                    difference = {"index": index, "expected": wanted, "actual": observed}
+                    if report["first_canonical_difference"] is None:
+                        report["first_canonical_difference"] = difference
+                    report["unexpected_or_unsupported_constructs"].append(difference)
+    except ConfigurationError as exc:
+        report["canonicalization_error"] = {"code": str(exc)}
+        cause = exc.__cause__
+        if isinstance(cause, SyntaxError):
+            report["canonicalization_error"].update(
+                line_in_parsed_cell=cause.lineno, offset=cause.offset, source_line=cause.text
+            )
+        report["unexpected_or_unsupported_constructs"].append(report["canonicalization_error"])
+    report["source_bytes_stable_during_read"] = raw == path.read_bytes()
+    return report
+
+
 class CostAccounting(BaseModel):
     """Cost is not an acceptance criterion; infrastructure cost is not zero."""
 

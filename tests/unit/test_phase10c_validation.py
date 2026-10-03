@@ -743,3 +743,127 @@ def test_required_setup_order_still_strict(tmp_path, order):
     path.write_text("# COMMAND ----------".join(cells[i] for i in order))
     with pytest.raises(ConfigurationError, match="NOTEBOOK_"):
         h.verify_notebook(tmp_path, h.notebook_identity(NOTEBOOK_SOURCE))
+
+
+def diagnostic_repo(tmp_path, source=NOTEBOOK_SOURCE):
+    path = tmp_path / h.NOTEBOOK_FILE
+    path.parent.mkdir(parents=True)
+    path.write_text(source)
+    (tmp_path / h.LOCK_FILE).parent.mkdir(parents=True)
+    (tmp_path / h.LOCK_FILE).write_bytes((REPO_ROOT / h.LOCK_FILE).read_bytes())
+    (tmp_path / h.EXPECTED_PROGRAM_FILE).write_bytes(
+        (REPO_ROOT / h.EXPECTED_PROGRAM_FILE).read_bytes()
+    )
+    return tmp_path
+
+
+def test_diagnostic_calls_same_production_canonicalizer(monkeypatch):
+    identity, program = h.notebook_identity, h.notebook_program
+    identities, programs = [], []
+
+    def count_identity(source):
+        identities.append(source)
+        return identity(source)
+
+    def count_program(source):
+        programs.append(source)
+        return program(source)
+
+    monkeypatch.setattr(h, "notebook_identity", count_identity)
+    monkeypatch.setattr(h, "notebook_program", count_program)
+    result = h.notebook_diagnostics(REPO_ROOT)
+    assert NOTEBOOK_SOURCE in identities and NOTEBOOK_SOURCE in programs
+    assert result["actual_identity"] == identity(NOTEBOOK_SOURCE)
+    assert result["canonical_semantic_program"] == program(NOTEBOOK_SOURCE)
+    assert result["expected_program_fixture_valid"]
+    assert result["first_canonical_difference"] is None
+    assert result["semantic_matches_lock"]
+
+
+def test_diagnostic_read_only_no_execution_or_attempt(monkeypatch, tmp_path):
+    from pathlib import Path
+
+    root = diagnostic_repo(tmp_path)
+    before = {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+    def forbidden(*a, **kw):
+        raise AssertionError("diagnostic attempted mutation or execution")
+
+    for name in ("write_text", "write_bytes", "mkdir", "unlink", "rename", "replace", "touch"):
+        monkeypatch.setattr(Path, name, forbidden)
+    for name in (
+        "prepare",
+        "run_attempt",
+        "execute_case",
+        "run_databricks_validation",
+        "ArtifactWriter",
+    ):
+        monkeypatch.setattr(h, name, forbidden)
+    monkeypatch.setattr(h.EvidenceExecutor, "execute", forbidden)
+    monkeypatch.setattr(h.RecordingTools, "run", forbidden)
+    monkeypatch.setattr(h.RecordingRetrieval, "retrieve", forbidden)
+    report = h.notebook_diagnostics(root)
+    assert report["semantic_matches_lock"]
+    assert not report["acceptance_performed"]
+    assert {p: p.read_bytes() for p in root.rglob("*") if p.is_file()} == before
+
+
+def test_diagnostic_reports_exact_first_difference_and_cannot_fix_failure(tmp_path):
+    source = NOTEBOOK_SOURCE + "\n# COMMAND ----------\nprint('unexpected diagnostic')\n"
+    root = diagnostic_repo(tmp_path, source)
+    expected = h.notebook_identity(NOTEBOOK_SOURCE)
+    with pytest.raises(ConfigurationError):
+        h.verify_notebook(root, expected)
+    report = h.notebook_diagnostics(root)
+    index = len(h.notebook_program(NOTEBOOK_SOURCE))
+    assert report["first_canonical_difference"] == {
+        "index": index,
+        "expected": None,
+        "actual": h.notebook_program(source)[index],
+    }
+    assert not report["semantic_matches_lock"]
+    with pytest.raises(ConfigurationError):
+        h.verify_notebook(root, expected)
+
+
+@pytest.mark.parametrize("source", [NOTEBOOK_SOURCE, SUPPLIED_DATABRICKS_WRAPPER])
+def test_diagnostic_both_reviewed_representations(tmp_path, source):
+    root = diagnostic_repo(tmp_path, source)
+    result = h.notebook_diagnostics(root)
+    assert result["semantic_matches_lock"]
+    assert result["raw_sha256"] == hashlib.sha256((root / h.NOTEBOOK_FILE).read_bytes()).hexdigest()
+    assert result["raw_source_byte_length"] == len((root / h.NOTEBOOK_FILE).read_bytes())
+    assert result["source_as_read_by_production"] == source
+    assert result["canonicalizer_version"] == "databricks_wrapper_ast@2"
+
+
+@pytest.mark.parametrize("extra", ["%sql select 1", "if :", "%pip 'unclosed"])
+def test_diagnostic_reports_parser_rejection_without_weakening_guard(tmp_path, extra):
+    root = diagnostic_repo(tmp_path, NOTEBOOK_SOURCE + "\n# COMMAND ----------\n" + extra)
+    report = h.notebook_diagnostics(root)
+    assert not report["semantic_matches_lock"]
+    assert report["canonicalization_error"]["code"].startswith("NOTEBOOK_")
+    with pytest.raises(ConfigurationError):
+        h.verify_notebook(root, h.notebook_identity(NOTEBOOK_SOURCE))
+
+
+def test_bad_expected_fixture_not_used_to_claim_comparison(tmp_path):
+    root = diagnostic_repo(tmp_path)
+    fixture = json.loads((root / h.EXPECTED_PROGRAM_FILE).read_text())
+    fixture["program"].append({"python_ast": {"node": "unexpected"}})
+    (root / h.EXPECTED_PROGRAM_FILE).write_text(json.dumps(fixture))
+    report = h.notebook_diagnostics(root)
+    assert not report["expected_program_fixture_valid"]
+    assert report["expected_canonical_program"] is None
+    assert report["semantic_matches_lock"]  # Matches original acceptance digest.
+    assert h.verify_notebook(root, h.notebook_identity(NOTEBOOK_SOURCE))
+
+
+def test_diagnostic_fixture_never_participates_in_acceptance(tmp_path):
+    root = diagnostic_repo(tmp_path)
+    (root / h.EXPECTED_PROGRAM_FILE).unlink()
+    report = h.notebook_diagnostics(root, include_source=False)
+    assert not report["expected_program_fixture_valid"]
+    assert "source_as_read_by_production" not in report
+    assert report["semantic_matches_lock"]
+    assert h.verify_notebook(root, h.notebook_identity(NOTEBOOK_SOURCE))
