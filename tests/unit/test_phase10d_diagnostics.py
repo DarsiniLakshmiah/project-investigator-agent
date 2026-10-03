@@ -57,7 +57,9 @@ def test_diagnostic_never_writes_reserves_or_invokes(tmp_path, monkeypatch):
     assert report["acceptance_performed"] is False
     assert report["writes"] == report["model_calls"] == 0
     identity = next(r for r in report["gates"] if r["check"] == "reviewed_10d_lock_identity")
-    assert identity["expected"] == h.canonical_sha256(ROOT / h.PREVIOUS_LOCK_FILE)
+    assert identity["expected"] == h.canonical_sha256(
+        ROOT / "evaluation/phase10d_model_lock_v2.json"
+    )
     assert identity["actual"] == h.canonical_sha256(ROOT / h.LOCK_FILE)
     assert identity["actual"] != identity["expected"]
     writer.assert_not_called()

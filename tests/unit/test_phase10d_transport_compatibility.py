@@ -204,11 +204,14 @@ def test_malformed_success_is_output_invalid(body):
 
 
 def test_lock_lineage_and_unchanged_evaluation():
-    cases, active = h.prepare(ROOT)
-    previous = json.loads((ROOT / h.PREVIOUS_LOCK_FILE).read_text("utf-8"))
-    assert active == h.build_lock(ROOT) == h.build_lock(ROOT)
+    # Archived v2 -> v3 transition; @4 lineage is verified in test_phase10d_unknown_provenance.
+    cases, current = h.prepare(ROOT)
+    assert current == h.build_lock(ROOT) == h.build_lock(ROOT)
+    v2 = ROOT / "evaluation/phase10d_model_lock_v2.json"
+    active = json.loads((ROOT / "evaluation/phase10d_model_lock_v3.json").read_text("utf-8"))
+    previous = json.loads(v2.read_text("utf-8"))
     assert active["schema"] == "phase10d_capability_lock@3"
-    assert h.canonical_sha256(ROOT / h.PREVIOUS_LOCK_FILE) == ARCHIVED_SHA
+    assert h.canonical_sha256(v2) == ARCHIVED_SHA
     assert active["supersedes_lock_sha256_lf"] == ARCHIVED_SHA
     assert h.canonical_sha256(ROOT / h.CASE_FILE) == CASES_SHA
     assert len(cases) == 11 and sum(c["repeats"] for c in cases) == 19

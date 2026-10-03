@@ -277,6 +277,12 @@ def validate_claims(output: SynthesisOutput, context: ApprovedContext, *, max_cl
                 failures.append(Failure.PROVENANCE_VIOLATION)
         elif not c.evidence_ids:
             failures.append(Failure.EVIDENCE_REFERENCE_INVALID)
+        # Authoritative package provenance: UNKNOWN evidence cannot be relabeled by any
+        # claim (including AI_INTERPRETATION or mixed citations); it stays UNKNOWN/UNCERTAINTY.
+        if provenance != ProvenanceClass.UNKNOWN and any(
+            refs[i]["provenance"] == ProvenanceClass.UNKNOWN for i in c.evidence_ids if i in refs
+        ):
+            failures.append(Failure.PROVENANCE_VIOLATION)
         # Narrow policy guard; broader semantic overclaim detection belongs to the critic.
         if re.search(
             r"(?i)\b(will fail|predict.{0,20}fail|globally atomic|"

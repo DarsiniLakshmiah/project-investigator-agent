@@ -2208,3 +2208,13 @@ the immutable 10B history and 10C evidence report. Mechanical validity remains
 separate from model-assessed semantic support. No earlier frozen contract is changed.
 See [PHASE10D_DESIGN.md](PHASE10D_DESIGN.md) for architecture and the review/run gate.
 No real model capability result or production model choice is claimed.
+
+### 10D @4 provenance revision (2026-10-03)
+
+10d6 (@3, `databricks-gpt-oss-20b`) executed 19/19 calls, 14 PASS, overall FAIL: a valid
+historical model-capability result, preserved and not rescored. Forensic review exposed a
+latent deterministic gap (AI_INTERPRETATION claims could relabel UNKNOWN evidence). Lock
+`phase10d_capability_lock@4` makes `validate_claims` reject any non-UNKNOWN label citing
+UNKNOWN package evidence. Cases, budgets, prompts and transport are unchanged. See
+[docs/PHASE10D_UNKNOWN_PROVENANCE.md](docs/PHASE10D_UNKNOWN_PROVENANCE.md). No new attempt
+is authorized until the zero-model-call @4 preflight passes and the user approves.

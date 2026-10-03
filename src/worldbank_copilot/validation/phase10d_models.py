@@ -37,7 +37,7 @@ from worldbank_copilot.validation.phase10d_notebook_v3 import notebook_identity
 
 CASE_FILE = "evaluation/phase10d_model_cases.json"
 LOCK_FILE = "evaluation/phase10d_model_lock.json"
-PREVIOUS_LOCK_FILE = "evaluation/phase10d_model_lock_v2.json"
+PREVIOUS_LOCK_FILE = "evaluation/phase10d_model_lock_v3.json"
 NOTEBOOK_FILE = "notebooks/09_phase10d_model_validation.py"
 SOURCE_FILES = (
     "src/worldbank_copilot/investigation/claims.py",
@@ -50,6 +50,7 @@ SOURCE_FILES = (
     "tests/unit/test_phase10d_notebook_v3.py",
     CASE_FILE,
     "tests/unit/test_phase10d_transport_compatibility.py",
+    "tests/unit/test_phase10d_unknown_provenance.py",
     "notebooks/_bootstrap.py",
     "requirements-phase10d.txt",
     "requirements-databricks.txt",
@@ -60,7 +61,7 @@ SOURCE_FILES = (
 def build_lock(root):
     files = {name: canonical_sha256(root / name) for name in SOURCE_FILES}
     return {
-        "schema": "phase10d_capability_lock@3",
+        "schema": "phase10d_capability_lock@4",
         "supersedes_lock_sha256_lf": canonical_sha256(root / PREVIOUS_LOCK_FILE),
         "status": "PREREGISTERED",
         "files_sha256_lf": files,

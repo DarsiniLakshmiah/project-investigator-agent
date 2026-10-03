@@ -19,15 +19,15 @@ The reader lists reservation/checkpoint/final/receipt files, verifies completed 
 
 ## 2. Existing 10D validation gate
 
-First run the exact zero-model-call clean-room cell in [the compatibility revision](PHASE10D_TRANSPORT_COMPATIBILITY.md). Only after it passes and user review, run `notebooks/09_phase10d_model_validation.py` with:
+First run the exact zero-model-call clean-room cell in [the @4 provenance revision](PHASE10D_UNKNOWN_PROVENANCE.md). Only after it passes and explicit user approval, run `notebooks/09_phase10d_model_validation.py` with:
 
 ```
 commit_sha=<full reviewed committed SHA>
-run_id=10d6  # NOT run here; only after clean-room preflight PASS
-endpoints=databricks-gpt-oss-20b
+run_id=<next unused 10dN, user-assigned>  # NOT run here; only after @4 preflight PASS
+endpoints=<user-approved endpoint>
 ```
 
-Preserve 10d1/2/3/4/5. Required: accepted 10C integrity; phase10d_capability_lock@3; databricks_wrapper_ast@3; notebook SHA 754e42ac71c378df721b258b23a2c9b9b1d4aef7c8c97ef2da1d942ad957c349; exact case/schedule identity; environment and endpoint checks; all 19 scheduled calls per endpoint and required repetitions/checks. Preflight PASS alone does not accept GPT-OSS. Workspace Git ambiguity retains accepted USER_DECLARED_REVIEWED_REVISION behavior.
+Preserve 10d1/2/3/4/5/6 (10d6: valid @3 FAIL, 14/19). Required: accepted 10C integrity; phase10d_capability_lock@4; databricks_wrapper_ast@3; notebook SHA 754e42ac71c378df721b258b23a2c9b9b1d4aef7c8c97ef2da1d942ad957c349; exact case/schedule identity; environment and endpoint checks; all 19 scheduled calls per endpoint and required repetitions/checks. Preflight PASS alone does not accept GPT-OSS. Workspace Git ambiguity retains accepted USER_DECLARED_REVIEWED_REVISION behavior.
 
 ## 3. Trusted runtime configuration
 

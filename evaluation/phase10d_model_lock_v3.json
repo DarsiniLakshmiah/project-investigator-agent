@@ -8,14 +8,13 @@
     "requirements-phase10d.txt": "af0993a3484ccb2d9a37b9d36103e92dfbb6d7fc5a8b5bbfe4eeb0b26857dabf",
     "src/worldbank_copilot/investigation/claims.py": "2432baf1a8a085fbc7d5c295a418115482bbc4ef65e3e7a738ba030566fcc176",
     "src/worldbank_copilot/investigation/model_adapter.py": "729399130f5e4e85e4833ee13cedcc4626f6662c552e1e1afc30d03bead4546d",
-    "src/worldbank_copilot/investigation/synthesis.py": "24b9dca4be8acff90a98e3e015e8dbe586172a60b1a37a28d015256a1d811ee7",
+    "src/worldbank_copilot/investigation/synthesis.py": "f58b6114a347b4b6255f734739716c02674e78b3a9c87f19cbf4962df9d009c8",
     "src/worldbank_copilot/validation/phase10d_fixtures.py": "65e3f6e2e5b4c6e065edd5ed583bd3b219beb98cb0d4c080a1cd33b45689a953",
-    "src/worldbank_copilot/validation/phase10d_models.py": "3dc0390f398beead4e631b3bdc109ab8a73642be63ab895f45e4a2f834ba7bae",
+    "src/worldbank_copilot/validation/phase10d_models.py": "6fe750f61a50e9f76d96239b2d23a5b7bb07d7621a6ba5557161ab9568120e76",
     "src/worldbank_copilot/validation/phase10d_notebook_v3.py": "5ec18b3ed2786dcc042bfde3254b544816964726cf65e7ae449429bd92473e4a",
     "tests/unit/test_phase10d_models.py": "857dfc4960b1d61f4f45f3254b8cbe91cff6eb17b4d578ebdc427d022adf0833",
     "tests/unit/test_phase10d_notebook_v3.py": "fe765641abf7d62d9f2f138a7d87bd8ff5a5322040d16edd02676a7a67f88544",
-    "tests/unit/test_phase10d_transport_compatibility.py": "c66a989b91761fee5cd49bd487983aa2a285049167e22477902a3638b4744b9e",
-    "tests/unit/test_phase10d_unknown_provenance.py": "b499e6af4a199bf794513ed2b4b180646af661510951d5c035fd596531dd5e70"
+    "tests/unit/test_phase10d_transport_compatibility.py": "be418fd534f9e508681c5fe386454b3d59f788a48ac6d25fdcf23b18f861a24f"
   },
   "max_calls_per_endpoint": 19,
   "max_endpoints": 2,
@@ -27,9 +26,9 @@
   "phase10c_lock_sha256_lf": "77601f14674b28f77da04c3f2b638c8633df5c301b84fed081ed3c329244ace6",
   "required_repeatability": "ALL_REPEATS_CONTRACT_STABLE",
   "retries": 0,
-  "schema": "phase10d_capability_lock@4",
+  "schema": "phase10d_capability_lock@3",
   "status": "PREREGISTERED",
-  "supersedes_lock_sha256_lf": "3bf743732a9f8fca8e3d4ce22a7d89720b6c3d2b66b2630d9b7cd9c06423323b",
+  "supersedes_lock_sha256_lf": "ec1b9bfc634592a327e6908f4492635b0e35d6bce2e410908733f3eb2dca08f5",
   "temperature": 0,
   "timeout_seconds": 60
 }
