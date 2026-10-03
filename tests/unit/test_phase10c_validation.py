@@ -439,3 +439,173 @@ def test_databricks_entry_point_requires_only_revision_and_run_id(monkeypatch):
     assert captured["policy"].cost_ceiling is None
     assert captured["policy"].pricing_version is None
     assert result["cost_accounting"]["applicable"] is False
+
+
+NOTEBOOK_SOURCE = (REPO_ROOT / h.NOTEBOOK_FILE).read_text(encoding="utf-8")
+
+
+def test_local_notebook_semantic_identity_is_locked():
+    lock = json.loads((REPO_ROOT / h.LOCK_FILE).read_text())
+    assert h.NOTEBOOK_FILE not in lock["files_sha256_lf"]
+    assert h.notebook_identity(NOTEBOOK_SOURCE) == lock["notebook_semantic_identity"]
+    assert h.verify_notebook(REPO_ROOT, lock["notebook_semantic_identity"])
+
+
+def databricks_representation(source):
+    cells = source.split("# COMMAND ----------")
+    exported = []
+    for cell in cells:
+        if "# MAGIC %" in cell:
+            exported.append(cell)
+        else:
+            exported.append(
+                "\n# MAGIC %python\n"
+                + "\n".join("# MAGIC " + line for line in cell.strip().splitlines())
+            )
+    return "# Databricks notebook source\n" + "\n# COMMAND --------------------\n".join(exported)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        NOTEBOOK_SOURCE,
+        NOTEBOOK_SOURCE.replace("\n", "\r\n"),
+        NOTEBOOK_SOURCE.rstrip() + "\n\n",
+        NOTEBOOK_SOURCE.replace("# ruff: noqa: E501", "# extra serialization comment"),
+        NOTEBOOK_SOURCE.replace(
+            "artifact = run_databricks_validation(",
+            "# COMMAND ----------\nartifact = run_databricks_validation(",
+        ),
+        NOTEBOOK_SOURCE.replace('"commit_sha"', "'commit_sha'"),
+        databricks_representation(NOTEBOOK_SOURCE),
+        databricks_representation(NOTEBOOK_SOURCE).replace("# MAGIC %python\n", "%python\n"),
+        NOTEBOOK_SOURCE.replace("# MAGIC %run", "%run").replace("# MAGIC %pip", "%pip"),
+    ],
+)
+def test_harmless_notebook_representations_match(source):
+    assert h.notebook_identity(source) == h.notebook_identity(NOTEBOOK_SOURCE)
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    [
+        ("import run_databricks_validation", "import another_entrypoint"),
+        ('dbutils.widgets.get("commit_sha").strip()', '"a" * 40'),
+        ('dbutils.widgets.get("run_id").strip()', 'dbutils.widgets.get("other_run_id").strip()'),
+        ("    spark,", "    other_spark,"),
+        ("    settings,", "    other_settings,"),
+        ('!= "PASS"', '== "PASS"'),
+        (
+            'raise RuntimeError("10C capability validation failed; inspect preserved attempt")',
+            "pass",
+        ),
+        ("%run ./_bootstrap", "%run ./other_bootstrap"),
+        ("%pip install -q", "%pip install another-package -q"),
+        ("run_id=dbutils.widgets.get", "another_argument=dbutils.widgets.get"),
+    ],
+)
+def test_meaningful_wrapper_changes_rejected(tmp_path, old, new):
+    assert old in NOTEBOOK_SOURCE
+    path = tmp_path / h.NOTEBOOK_FILE
+    path.parent.mkdir(parents=True)
+    path.write_text(NOTEBOOK_SOURCE.replace(old, new))
+    with pytest.raises(ConfigurationError, match="NOTEBOOK_SEMANTIC_MISMATCH"):
+        h.verify_notebook(tmp_path, h.notebook_identity(NOTEBOOK_SOURCE))
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        'print("run_id widget:", repr(dbutils.widgets.get("run_id")))',
+        'print("commit_sha widget:", repr(dbutils.widgets.get("commit_sha")))',
+        "import hashlib\nimport json\nfrom pathlib import Path",
+        'artifact = {"summary": {"overall_status": "PASS"}}',
+        "run_databricks_validation(spark, settings, commit_sha='x', run_id='10c6')",
+        "# MAGIC %python\n# MAGIC print('extra executable diagnostic')",
+        "%sh echo unapproved",
+    ],
+)
+def test_extra_executable_logic_rejected(tmp_path, extra):
+    path = tmp_path / h.NOTEBOOK_FILE
+    path.parent.mkdir(parents=True)
+    path.write_text(NOTEBOOK_SOURCE + "\n# COMMAND ----------\n" + extra)
+    with pytest.raises(ConfigurationError, match="NOTEBOOK_"):
+        h.verify_notebook(tmp_path, h.notebook_identity(NOTEBOOK_SOURCE))
+
+
+def test_semantic_guard_runs_in_production_preflight(monkeypatch):
+    original = h.verify_notebook
+    seen = []
+
+    def observe(repo, expected):
+        seen.append(repo)
+        return original(repo, expected)
+
+    monkeypatch.setattr(h, "verify_notebook", observe)
+    h.prepare(REPO_ROOT)
+    assert seen == [REPO_ROOT]
+
+
+def test_verified_git_does_not_reintroduce_wrapper_byte_equality(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        prior,
+        "revision_identity",
+        lambda *a: prior.RevisionIdentity(
+            declared_commit_sha="a" * 40,
+            runtime_git_head="a" * 40,
+            runtime_git_status="VERIFIED",
+            commit_sha_source="DECLARED_AND_RUNTIME_VERIFIED",
+            diagnostic="PROJECT_ROOT_ASSOCIATED",
+        ),
+    )
+
+    def git_status(args, **kwargs):
+        assert h.NOTEBOOK_FILE not in args
+        assert h.LOCK_FILE in args
+        assert "src/worldbank_copilot/investigation/evidence.py" in args
+        return b""
+
+    monkeypatch.setattr(h.subprocess, "check_output", git_status)
+    result = h.run_attempt(
+        REPO_ROOT,
+        tmp_path / "run.json",
+        commit_sha="a" * 40,
+        policy=POLICY,
+        prepare_runtime=runtime,
+        offline=True,
+    )
+    assert result["summary"]["overall_status"] == "PASS"
+
+
+def test_bootstrap_order_change_rejected(tmp_path):
+    source = NOTEBOOK_SOURCE.replace("# MAGIC %run ./_bootstrap", "")
+    path = tmp_path / h.NOTEBOOK_FILE
+    path.parent.mkdir(parents=True)
+    path.write_text(source + "\n# COMMAND ----------\n# MAGIC %run ./_bootstrap\n")
+    with pytest.raises(ConfigurationError, match="NOTEBOOK_SEMANTIC_MISMATCH"):
+        h.verify_notebook(tmp_path, h.notebook_identity(NOTEBOOK_SOURCE))
+
+
+def test_bad_wrapper_preflight_stops_before_live_work(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        prior,
+        "revision_identity",
+        lambda *a: prior.RevisionIdentity(
+            declared_commit_sha="a" * 40, runtime_git_status="UNAVAILABLE", diagnostic="NO_GIT"
+        ),
+    )
+    monkeypatch.setattr(
+        h,
+        "notebook_identity",
+        lambda source: {"scheme": "databricks_wrapper_ast@1", "sha256": "0" * 64},
+    )
+    live = Mock()
+    result = h.run_attempt(
+        REPO_ROOT, tmp_path / "run.json", commit_sha="a" * 40, policy=POLICY, prepare_runtime=live
+    )
+    live.assert_not_called()
+    assert result["summary"]["cases_executed"] == 0
+    assert result["preflight"]["status"] == "FAIL"
+    assert result["failure"]["invariant_failures"] == [
+        "NOTEBOOK_SEMANTIC_MISMATCH:" + h.NOTEBOOK_FILE
+    ]

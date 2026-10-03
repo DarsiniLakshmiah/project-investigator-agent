@@ -32,7 +32,6 @@
     "configs/source_snapshot.json": "278c163bf07eb071907cc7cc373ced762c67b598c82bb750860416f9404eaa49",
     "constraints-databricks.txt": "485da056703db240d83b1d0cfbd6ac8e9198feec8d006bca580f93ad64c85e78",
     "evaluation/phase10c_evidence_cases.yaml": "cefcee74fb974308a0e75fff92088723b74e26c15b95ca685b3c093b5ae721ff",
-    "notebooks/09_phase10c_evidence_validation.py": "3ad7c7606ea4a64215413f00d110f9b4e006cea282c80e3bb3e39b7954a62180",
     "requirements-databricks.txt": "9aa7604dd8cc6f30c0e0c6979d630d94bba1f8216973162382892957c7039a25",
     "requirements-reranker.txt": "39d6ab1deecbc4a216115855306a10611a3681196911a7b83a80afe9229c4cb7",
     "requirements-retrieval.txt": "66a516a823d15200dbd372ff29a9ed78550b479b801482b85a6075ae0ad93e98",
@@ -182,10 +181,14 @@
     "src/worldbank_copilot/transformations/silver_quality.py": "97607b1cea76c2d5d36c32947772debbcf5e354d50f042b0ad6e08b487db6a32",
     "src/worldbank_copilot/transformations/silver_report.py": "87b8d8d465efa33002efaefdd4c11c1376794bd8c156f8dbda46fbb3d2fb39b4",
     "src/worldbank_copilot/validation/__init__.py": "3b2c612f7e7c429da7c645975150d855b93dd4c57191e2e486fbce48f782181f",
-    "src/worldbank_copilot/validation/phase10c_evidence.py": "9a141a00b0a026ff8ad7f72c15b44c0efafca1f29c3ba9a8cb8b0ffcb4854f0c",
+    "src/worldbank_copilot/validation/phase10c_evidence.py": "c93dea507eba2fcf8b2918d504c41ade314ce17f1df987f399d67d2136b769ff",
     "src/worldbank_copilot/validation/phase9_contract.py": "05def9a06bcb3c5ce5d4bf2f74faa9856a87611c77b5cae2de97858de887fd15",
     "tests/unit/test_investigation_evidence.py": "a797580c4e6e072eba318db1ae4950317c6e4652de48aacbeefe11392cec63cd",
-    "tests/unit/test_phase10c_validation.py": "e20e3077f8ad6bd4f516a5d10e9884c50ff4e0d392f6357e538147888dc08d6d"
+    "tests/unit/test_phase10c_validation.py": "5364647e0bfa72ced6f648a7502845ce0d5a9b341f4a6eedf1a2761e4eafb949"
+  },
+  "notebook_semantic_identity": {
+    "scheme": "databricks_wrapper_ast@1",
+    "sha256": "bcefbf2ad0ae6805f4dee73132b35625e38713f9f8201bf52029487972996fb1"
   },
   "source_revision": "USER_MUST_SUPPLY_EXACT_REVIEWED_COMMIT_AT_RUN_TIME",
   "status": "FROZEN",

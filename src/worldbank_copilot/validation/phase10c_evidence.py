@@ -6,9 +6,11 @@ Method counters observe adapter calls, not hidden transport attempts or billing.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import re
+import shlex
 import subprocess
 from copy import deepcopy
 from dataclasses import dataclass
@@ -59,6 +61,57 @@ LOCK_FILE = "evaluation/phase10c_evidence_lock.json"
 IDS = tuple(f"D10C-{i:02}" for i in range(1, 5))
 ARTIFACT_DIR = "phase10c_evidence"
 SOURCE_QUESTION = "What changed and why?"
+NOTEBOOK_FILE = "notebooks/09_phase10c_evidence_validation.py"
+
+
+def notebook_identity(source: str) -> dict:
+    """Semantic identity of the thin Python/source notebook, without executing it.
+
+    Ignore markdown, source headers, comments and cell splits between complete
+    statements. Decode Databricks MAGIC Python cells and preserve ordered Python
+    AST nodes and non-Python directives. Arbitrary languages/magics fail closed.
+    This describes representation equivalence, not general Python equivalence.
+    """
+    program = []
+    cells = re.split(r"(?m)^# COMMAND -+[ \t]*$", source.replace("\r\n", "\n"))
+    for cell in cells:
+        lines = [re.sub(r"^# MAGIC ?", "", line) for line in cell.splitlines()]
+        code = "\n".join(lines)
+        significant = [
+            line.strip() for line in lines if line.strip() and not line.lstrip().startswith("#")
+        ]
+        if not significant:
+            continue
+        first = significant[0]
+        if first == "%md" or first.startswith("%md "):
+            continue  # Markdown cells do not execute Python.
+        if first == "%python":
+            lines.remove(next(line for line in lines if line.strip() == "%python"))
+            code = "\n".join(lines)
+        elif first.startswith("%"):
+            if first.split()[0] not in ("%pip", "%run"):
+                raise ConfigurationError("NOTEBOOK_UNAPPROVED_MAGIC")
+            try:
+                program.append({"directive": shlex.split(code, comments=True)})
+            except ValueError as exc:
+                raise ConfigurationError("NOTEBOOK_INVALID_DIRECTIVE") from exc
+            continue
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as exc:
+            raise ConfigurationError("NOTEBOOK_INVALID_PYTHON") from exc
+        program.extend(
+            {"python_ast": ast.dump(node, include_attributes=False)} for node in tree.body
+        )
+    payload = json.dumps(program, sort_keys=True, separators=(",", ":")).encode()
+    return {"scheme": "databricks_wrapper_ast@1", "sha256": hashlib.sha256(payload).hexdigest()}
+
+
+def verify_notebook(repo, expected):
+    actual = notebook_identity((repo / NOTEBOOK_FILE).read_text(encoding="utf-8"))
+    if actual != expected:
+        raise ConfigurationError("NOTEBOOK_SEMANTIC_MISMATCH:" + NOTEBOOK_FILE)
+    return actual
 
 
 class CostAccounting(BaseModel):
@@ -119,6 +172,7 @@ def prepare(repo, *, dependency_ok=True):
     for name, sha in lock["files_sha256_lf"].items():
         if canonical_sha256(repo / name) != sha:
             raise ConfigurationError("CONTENT_MISMATCH:" + name)
+    verify_notebook(repo, lock["notebook_semantic_identity"])
     cases = load_cases(repo)
     old = {c.source_question_id: c for c in protocol.cases.cases if c.retrieval_execution_allowed}
     for case in cases:
@@ -588,7 +642,8 @@ def run_attempt(
         protocol, cases, lock = prepare(repo, dependency_ok=dependency_ok)
         if revision.runtime_git_status == "VERIFIED":
             # HEAD alone does not establish that the reviewed uncommitted work
-            # was subsequently committed. Check only the frozen harness inputs.
+            # was subsequently committed. Ordinary frozen inputs must be clean;
+            # notebook representation differences are checked semantically above.
             dirty = subprocess.check_output(
                 [
                     "git",
