@@ -1,0 +1,30 @@
+# Interview-prototype runtime for copilot.investigate(query, project_id).
+# Separate from the pinned environment/routing/retrieval configs, which stay frozen.
+# Environment overrides: WBC_COPILOT_SYNTHESIZER_ENDPOINT, WBC_COPILOT_CRITIC_ENDPOINT,
+# WBC_COPILOT_CRITIC_ENABLED (true/false).
+
+models:
+  synthesizer_endpoint: databricks-qwen35-122b-a10b
+  critic_endpoint: databricks-qwen35-122b-a10b
+  # Fail-closed when enabled; when disabled, results record critic_status DISABLED.
+  critic_enabled: true
+  max_output_tokens: 2000
+  timeout_seconds: 60
+  # Shown with every model-generated answer; never presented as capability acceptance.
+  capability_note: >-
+    Phase 10D attempt 10d7 (lock @4): databricks-qwen35-122b-a10b passed 12/19 calls
+    (overall FAIL). It is not capability-accepted; deterministic validation is
+    authoritative for every published claim.
+
+projects:
+  allowed: [P130544, P179039, P506272]
+
+policy:
+  overall_deadline_seconds: 180
+  # Optional budget pricing, set together (configured units, not billed cost). Unset follows
+  # the accepted Phase 10C live validation: no pricing gate, billed cost UNAVAILABLE.
+  cost_ceiling: null
+  pricing_version: null
+
+mlflow:
+  experiment: null
