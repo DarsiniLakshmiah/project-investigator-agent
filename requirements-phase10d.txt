@@ -1,0 +1,2 @@
+# Strict structured-output validation; Phase 10D only.
+jsonschema==4.26.0

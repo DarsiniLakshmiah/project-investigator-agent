@@ -4,7 +4,9 @@ Evidence-grounded decision support for World Bank project officers and analysts.
 
 > **Status:** Phases 1-9 are COMPLETE. Phase 9F-C passed real Databricks acceptance
 > in run `9f3`: 10/10 cases, preflight PASS, overall PASS, final artifact and completion
-> receipt verified. Phase 10 is NOT STARTED.
+> receipt verified. Phase 10A/10B are approved; Phase 10C passed real Databricks
+> acceptance in `10c6` (4/4 cases). Phase 10D is
+> IMPLEMENTED_LOCALLY_AWAITING_DATABRICKS_MODEL_VALIDATION. Phase 10E has not started.
 > Adaptive reranking was evaluated diagnostically in 9E; no adaptive policy was promoted,
 > and independent validation is required before any future promotion. See
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the plan and current status.
@@ -602,3 +604,11 @@ USER QUERY
 Sections for Vector Search, FastAPI,
 React, evaluation and known limitations will be added as those phases are
 implemented.
+
+## Bounded synthesis and critique (Phase 10D)
+
+The deterministic evidence executor remains unchanged. Two tool-free model nodes
+propose claims and assess their support; deterministic validators and a finalizer
+control publication. No Investigator, repair loop or production model selection is
+introduced. See [PHASE10D_DESIGN.md](PHASE10D_DESIGN.md) for contracts, limitations
+and the user-run synthetic Databricks capability experiment.

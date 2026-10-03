@@ -18,8 +18,9 @@ still open. Updated at the end of every phase.
 | 6 | Databricks platformization and governed Delta foundation | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 7 | Deterministic Gold intelligence layer | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings, AI Search index and notebook 07 Steps 4–7 and 07b staged experiments (incl. CrossEncoder) validated in Databricks (2026-10-01). Complete. Adaptive reranking evaluated diagnostically in Phase 9E; no adaptive policy promoted; independent validation required before any future promotion** |
-| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D CLOSED** (2026-10-02): Candidate A SELECTED - deterministic routing + targeted clarification; no semantic LLM fallback promoted (Candidate C GPT-OSS-20B DEV REJECTED on quality/repeatability; earlier Candidate C blocks were not quality rejections); **9E CLOSED** (2026-10-02): adaptive-rerank diagnostic VALID offline and live-validated; descriptive only, no adaptive policy promoted, `production` stays null; **9F-A approved, 9F-B approved and committed** (frozen Phase 10 execution contract); **9F-C PASSED real Databricks acceptance** (`9f3`, 10/10 cases, preflight/overall PASS, finalized artifact and receipt verified); **Phase 9 COMPLETE; Phase 10 NOT STARTED** |
-| 10–13 | See §3 (roadmap from Claude.md §36) | Not started |
+| 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D CLOSED** (2026-10-02): Candidate A SELECTED - deterministic routing + targeted clarification; no semantic LLM fallback promoted (Candidate C GPT-OSS-20B DEV REJECTED on quality/repeatability; earlier Candidate C blocks were not quality rejections); **9E CLOSED** (2026-10-02): adaptive-rerank diagnostic VALID offline and live-validated; descriptive only, no adaptive policy promoted, `production` stays null; **9F-A approved, 9F-B approved and committed** (frozen Phase 10 execution contract); **9F-C PASSED real Databricks acceptance** (`9f3`, 10/10 cases, preflight/overall PASS, finalized artifact and receipt verified); **Phase 9 COMPLETE** |
+| 10 | Investigation, evidence, bounded synthesis and critique | 10A/10B approved; 10C real Databricks PASS (`10c6`, 4/4); 10D IMPLEMENTED_LOCALLY_AWAITING_DATABRICKS_MODEL_VALIDATION; 10E not started |
+| 11-13 | Later roadmap | Not started |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
 passed (unit); `pytest -m integration` → 18 passed (5 Bronze + 7 Silver + 6 parsed, real
@@ -2191,3 +2192,19 @@ remains null/unselected and any future promotion requires independent validation
 candidate-generation weakness remains a known limitation. Investigation is plan-only and no
 agents execute in Phase 9. Phase 10 may add agent execution on these frozen contracts, but must
 not rewrite Phase 9 results or bypass its routing, retrieval, scope and provenance boundaries.
+
+## Phase 10D checkpoint (2026-10-03)
+
+Status: **IMPLEMENTED_LOCALLY_AWAITING_DATABRICKS_MODEL_VALIDATION**.
+
+Phase 10C acceptance supplied by the user: `10c6`, reviewed revision
+`e1303f3489e3abd24199d583e3acacfaa8e351bb`, Databricks preflight PASS, 4/4
+cases PASS, overall PASS, finalized receipt; artifact SHA-256
+`d4c52bc6ddf8229c14c443882ebe18325efaf7a68c2def0df8cd2a02bd12206a`.
+This records the accepted result; the remote artifact was not fetched locally.
+
+10D adds fixed synthesis/critic model nodes and deterministic publication beside
+the immutable 10B history and 10C evidence report. Mechanical validity remains
+separate from model-assessed semantic support. No earlier frozen contract is changed.
+See [PHASE10D_DESIGN.md](PHASE10D_DESIGN.md) for architecture and the review/run gate.
+No real model capability result or production model choice is claimed.
