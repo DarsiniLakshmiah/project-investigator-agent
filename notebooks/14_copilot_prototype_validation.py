@@ -9,7 +9,15 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install -q -r ../requirements-databricks.txt -r ../requirements-retrieval.txt -r ../requirements-reranker.txt -r ../requirements-phase10d.txt -r ../requirements-copilot-runtime.txt -c ../constraints-databricks.txt
+# MAGIC %md
+# MAGIC Install exactly the requirement sets already validated on Databricks (Phase 8/10C retrieval +
+# MAGIC CrossEncoder, Phase 10D output validation). MLflow is NOT installed: tracing uses the
+# MAGIC runtime's protected `mlflow-skinny`. Installing `requirements-copilot-runtime.txt`
+# MAGIC (`mlflow>=3.0,<4`) replaces it and fails the dependency-health gate.
+
+# COMMAND ----------
+
+# MAGIC %pip install -q -r ../requirements-databricks.txt -r ../requirements-retrieval.txt -r ../requirements-reranker.txt -r ../requirements-phase10d.txt -c ../constraints-databricks.txt
 
 # COMMAND ----------
 

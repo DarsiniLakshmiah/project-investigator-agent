@@ -78,10 +78,12 @@ def build_copilot(
         registry, load_document_manifest(settings.config_dir / "document_manifest.yaml"), routing
     )
     router = RoutingService(routing, entities, tools, context, documents=search, semantic=None)
-    if tracing and config.mlflow_experiment:
-        import mlflow
+    if tracing:
+        require_tracing_api()
+        if config.mlflow_experiment:
+            import mlflow
 
-        mlflow.set_experiment(config.mlflow_experiment)
+            mlflow.set_experiment(config.mlflow_experiment)
     models = config.models
     return Copilot(
         router=router,
@@ -92,6 +94,23 @@ def build_copilot(
         critic=DatabricksModelAdapter(models.critic_endpoint) if models.critic_enabled else None,
         mlflow_enabled=tracing,
     )
+
+
+def require_tracing_api() -> None:
+    """Fail at build time if the runtime MLflow lacks what ``Recorder`` uses.
+
+    Tracing uses the runtime-provided (protected) ``mlflow-skinny``; nothing installs MLflow.
+    """
+    import mlflow
+    from mlflow.entities import LiveSpan
+
+    missing = [name for name in ("start_span", "set_experiment") if not hasattr(mlflow, name)]
+    missing += [f"LiveSpan.{n}" for n in ("trace_id", "set_attributes") if not hasattr(LiveSpan, n)]
+    if missing:
+        raise ConfigurationError(
+            f"MLFLOW_TRACING_API_UNAVAILABLE (mlflow {getattr(mlflow, '__version__', '?')}): "
+            + ", ".join(missing)
+        )
 
 
 def _require_accepted_index(description: dict, corpus_rows: int, protocol) -> None:

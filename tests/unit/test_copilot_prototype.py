@@ -1,5 +1,7 @@
 """Offline checks for the prototype scenarios, invariant checker and Databricks factory."""
 
+import re
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -89,3 +91,97 @@ def test_index_identity_check_matches_accepted_profile():
     ):
         with pytest.raises(ConfigurationError):
             _require_accepted_index(bad, rows, protocol)
+
+
+# -- dependency plan: never replace the runtime's protected mlflow-skinny -------------
+REPO = Path(__file__).resolve().parents[2]
+MLFLOW_DISTRIBUTIONS = {"mlflow", "mlflow-skinny", "mlflow-tracing"}
+
+
+def pip_plan(notebook):
+    """(requirement files, constraint files) of a notebook's single %pip install line."""
+    lines = [
+        line
+        for line in (REPO / "notebooks" / notebook).read_text(encoding="utf-8").splitlines()
+        if "%pip install" in line
+    ]
+    assert len(lines) == 1, notebook
+    tokens = lines[0].split()
+    files = {flag: [] for flag in ("-r", "-c")}
+    for flag, value in zip(tokens, tokens[1:], strict=False):
+        if flag in files:
+            files[flag].append(value.removeprefix("../"))
+    return set(files["-r"]), set(files["-c"])
+
+
+def requirement_names(path):
+    names = set()
+    for raw in (REPO / path).read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if line:
+            names.add(re.split(r"[<>=!~;\[ ]", line, maxsplit=1)[0].lower().replace("_", "-"))
+    return names
+
+
+def test_prototype_installs_only_databricks_validated_requirement_sets():
+    requirements, constraints = pip_plan("14_copilot_prototype_validation.py")
+    accepted_10c, _ = pip_plan("09_phase10c_evidence_validation.py")
+    accepted_10d, _ = pip_plan("09_phase10d_model_validation.py")
+    assert requirements == accepted_10c | accepted_10d
+    assert "requirements-copilot-runtime.txt" not in requirements
+    assert constraints == {"constraints-databricks.txt"}
+
+
+def test_prototype_requirements_never_name_mlflow():
+    requirements, _ = pip_plan("14_copilot_prototype_validation.py")
+    for path in requirements:
+        assert not requirement_names(path) & MLFLOW_DISTRIBUTIONS, path
+    # The excluded file is exactly what upgrades the protected runtime package.
+    assert "mlflow" in requirement_names("requirements-copilot-runtime.txt")
+
+
+def test_health_check_covers_exactly_what_the_notebook_installs():
+    from worldbank_copilot.copilot.databricks import REQUIREMENT_FILES
+
+    requirements, _ = pip_plan("14_copilot_prototype_validation.py")
+    assert set(REQUIREMENT_FILES) == requirements
+
+
+def test_mlflow_skinny_remains_protected_by_policy():
+    import yaml
+
+    policy = yaml.safe_load((REPO / "configs/environments/dependencies.yaml").read_text("utf-8"))
+    assert "mlflow-skinny" in policy["protected"]
+
+
+def fake_mlflow(monkeypatch, *, span_attrs=("trace_id", "set_attributes"), module_attrs=None):
+    import sys
+
+    live_span = type("LiveSpan", (), {name: None for name in span_attrs})
+    module = SimpleNamespace(
+        __version__="3.12.0",
+        entities=SimpleNamespace(LiveSpan=live_span),
+        **{n: (lambda *a, **k: None) for n in (module_attrs or ("start_span", "set_experiment"))},
+    )
+    monkeypatch.setitem(sys.modules, "mlflow", module)
+    monkeypatch.setitem(sys.modules, "mlflow.entities", module.entities)
+
+
+def test_tracing_api_check_accepts_runtime_api(monkeypatch):
+    from worldbank_copilot.copilot.databricks import require_tracing_api
+
+    fake_mlflow(monkeypatch)
+    require_tracing_api()
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"module_attrs": ("set_experiment",)}, {"span_attrs": ("set_attributes",)}],
+    ids=["no-start_span", "no-trace_id"],
+)
+def test_tracing_api_check_fails_fast(monkeypatch, kwargs):
+    from worldbank_copilot.copilot.databricks import require_tracing_api
+
+    fake_mlflow(monkeypatch, **kwargs)
+    with pytest.raises(ConfigurationError, match="MLFLOW_TRACING_API_UNAVAILABLE"):
+        require_tracing_api()
