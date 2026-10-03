@@ -8,7 +8,8 @@ models:
   critic_endpoint: databricks-qwen35-122b-a10b
   # Fail-closed when enabled; when disabled, results record critic_status DISABLED.
   critic_enabled: true
-  max_output_tokens: 2000
+  # Raised from 2000 after real S2 run: FINISH_REASON_LENGTH (output truncated at the ceiling).
+  max_output_tokens: 5000
   timeout_seconds: 60
   # Shown with every model-generated answer; never presented as capability acceptance.
   capability_note: >-

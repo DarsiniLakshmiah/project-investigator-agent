@@ -493,3 +493,10 @@ def test_pricing_gate_follows_configuration():
     )
     assert priced.pricing_configured
     assert priced.policy().cost_ceiling == Decimal("10")
+
+
+def test_configured_output_ceiling_reaches_every_model_request():
+    assert config().models.max_output_tokens == 5000
+    synthesizer, critic = Synthesizer(), Critic()
+    copilot(synthesizer, critic).investigate(INVESTIGATION, PROJECT)
+    assert [r.max_output_tokens for r in (*synthesizer.requests, *critic.requests)] == [5000, 5000]
