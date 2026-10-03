@@ -74,7 +74,8 @@ V3_SHA = "3bf743732a9f8fca8e3d4ce22a7d89720b6c3d2b66b2630d9b7cd9c06423323b"
 root = Path(settings.repo_root)
 revision = h.prior.revision_identity(root, REVIEWED_SHA)
 assert revision.runtime_git_status != "MISMATCH", "REVIEWED_REVISION_MISMATCH"
-requirements = [*h.prior.REQUIREMENTS, "requirements-phase10d.txt"]
+# Exactly the canonical 10D notebook install set (constraints cap versions, not pins).
+requirements = ["requirements-databricks.txt", "requirements-phase10d.txt"]
 health = check_environment(root, requirements, settings.config_dir)
 assert health.ok, "DEPENDENCY_HEALTH_FAILED"
 h.prior.prepare_protocol(root, dependency_ok=health.ok)
