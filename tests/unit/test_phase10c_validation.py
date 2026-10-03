@@ -597,7 +597,7 @@ def test_bad_wrapper_preflight_stops_before_live_work(monkeypatch, tmp_path):
     monkeypatch.setattr(
         h,
         "notebook_identity",
-        lambda source: {"scheme": "databricks_wrapper_ast@1", "sha256": "0" * 64},
+        lambda source: {"scheme": "databricks_wrapper_ast@2", "sha256": "0" * 64},
     )
     live = Mock()
     result = h.run_attempt(
@@ -609,3 +609,137 @@ def test_bad_wrapper_preflight_stops_before_live_work(monkeypatch, tmp_path):
     assert result["failure"]["invariant_failures"] == [
         "NOTEBOOK_SEMANTIC_MISMATCH:" + h.NOTEBOOK_FILE
     ]
+
+
+SUPPLIED_DATABRICKS_WRAPPER = (
+    "# Databricks notebook source\n# /// script\n# [tool.databricks.envi"
+    'ronment]\n# environment_version = "6"\n# ///\n# MAGIC %md\n# MAGIC # '
+    "ruff: noqa: E501\n# MAGIC %md\n# MAGIC ## Phase 10C evidence capabi"
+    "lity validation\n# MAGIC USER RUN ONLY after reviewing and committ"
+    "ing the implementation AND harness.\n# MAGIC Use serverless enviro"
+    "nment 6 ML, as for 07e. Set the exact reviewed full commit SHA.\n#"
+    " MAGIC Cost is not an acceptance criterion; infrastructure billin"
+    "g is unavailable, not zero.\n# MAGIC Four cases, seven logical ope"
+    "rations, three frozen baseline document retrievals.\n# MAGIC No mo"
+    "dels/agents, warm-up, tuning, case retries or manufactured failur"
+    "es.\n# MAGIC First attempt: run_id=10c1. Preserve every failed fil"
+    "e; later attempts need a new ID.\n# MAGIC A PASS requires the fina"
+    "l JSON AND validated SHA/byte completion receipt.\n\n# COMMAND ----"
+    "------\n\n# MAGIC %pip install -q -r ../requirements-databricks.txt"
+    " -r ../requirements-retrieval.txt -r ../requirements-reranker.txt"
+    " -c ../constraints-databricks.txt\n\n# COMMAND ----------\n\ndbutils."
+    "library.restartPython()  # noqa: F821\n\n# COMMAND ----------\n\n# MA"
+    "GIC %run ./_bootstrap\n\n# COMMAND ----------\n\ndbutils.widgets.text"
+    '("commit_sha", "", "Exact reviewed full committed source SHA")  #'
+    ' noqa: F821\ndbutils.widgets.text("run_id", "10c1", "New immutable'
+    ' attempt ID")  # noqa: F821\n\n# COMMAND ----------\n\nfrom worldbank'
+    "_copilot.validation.phase10c_evidence import run_databricks_valid"
+    "ation  # noqa: E402\nartifact = run_databricks_validation(\n    spa"
+    "rk,  # noqa: F821\n    settings,  # noqa: F821\n    commit_sha=dbut"
+    'ils.widgets.get("commit_sha").strip(),  # noqa: F821\n    run_id=d'
+    'butils.widgets.get("run_id").strip(),  # noqa: F821\n)\nprint(artif'
+    'act["summary"])\nprint("STOP - preserve the artifact and receipt f'
+    'or review; do not rerun this attempt.")\nif artifact["summary"]["o'
+    'verall_status"] != "PASS":\n    raise RuntimeError("10C capability'
+    ' validation failed; inspect preserved attempt")\n'
+)
+
+
+def test_exact_supplied_databricks_wrapper_matches_local_and_lock(tmp_path):
+    lock = json.loads((REPO_ROOT / h.LOCK_FILE).read_text())
+    assert h.notebook_program(SUPPLIED_DATABRICKS_WRAPPER) == h.notebook_program(NOTEBOOK_SOURCE)
+    assert h.notebook_identity(SUPPLIED_DATABRICKS_WRAPPER) == lock["notebook_semantic_identity"]
+    path = tmp_path / h.NOTEBOOK_FILE
+    path.parent.mkdir(parents=True)
+    path.write_text(SUPPLIED_DATABRICKS_WRAPPER)
+    assert h.verify_notebook(tmp_path, lock["notebook_semantic_identity"])
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda s: s.replace("# COMMAND ----------", "# COMMAND --------------------"),
+        lambda s: s.replace("\n", "\r\n"),
+        lambda s: s.replace(
+            '# environment_version = "6"', '# environment_version = "6"\n# comment'
+        ),
+    ],
+)
+def test_supplied_wrapper_serialization_variants(change):
+    assert h.notebook_identity(change(SUPPLIED_DATABRICKS_WRAPPER)) == h.notebook_identity(
+        NOTEBOOK_SOURCE
+    )
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    [
+        ("import run_databricks_validation", "import changed_entrypoint"),
+        ('widgets.get("run_id")', 'widgets.get("changed_id")'),
+        ('widgets.text("commit_sha"', 'widgets.text("changed_sha"'),
+        ("    settings,", "    changed_settings,"),
+        ('!= "PASS"', '== "PASS"'),
+        (
+            'raise RuntimeError("10C capability validation failed; inspect preserved attempt")',
+            "pass",
+        ),
+        ("%run ./_bootstrap", "%run ./changed_bootstrap"),
+    ],
+)
+def test_supplied_wrapper_meaningful_changes_fail(tmp_path, old, new):
+    path = tmp_path / h.NOTEBOOK_FILE
+    path.parent.mkdir(parents=True)
+    path.write_text(SUPPLIED_DATABRICKS_WRAPPER.replace(old, new))
+    with pytest.raises(ConfigurationError, match="NOTEBOOK_"):
+        h.verify_notebook(tmp_path, h.notebook_identity(NOTEBOOK_SOURCE))
+
+
+@pytest.mark.parametrize("extra", ["import hashlib", "print('diagnostic')", "%sql select 1"])
+def test_supplied_wrapper_extra_executable_code_fails(tmp_path, extra):
+    path = tmp_path / h.NOTEBOOK_FILE
+    path.parent.mkdir(parents=True)
+    path.write_text(SUPPLIED_DATABRICKS_WRAPPER + "\n# COMMAND ----------\n" + extra)
+    with pytest.raises(ConfigurationError, match="NOTEBOOK_"):
+        h.verify_notebook(tmp_path, h.notebook_identity(NOTEBOOK_SOURCE))
+
+
+def test_import_cannot_move_across_executable_debug_or_before_bootstrap(tmp_path):
+    changed = SUPPLIED_DATABRICKS_WRAPPER.replace(
+        'dbutils.widgets.text("commit_sha"', 'print("debug")\ndbutils.widgets.text("commit_sha"'
+    )
+    path = tmp_path / h.NOTEBOOK_FILE
+    path.parent.mkdir(parents=True)
+    path.write_text(changed)
+    with pytest.raises(ConfigurationError, match="NOTEBOOK_"):
+        h.verify_notebook(tmp_path, h.notebook_identity(NOTEBOOK_SOURCE))
+
+
+def test_ast_identity_does_not_depend_on_ast_dump_defaults(monkeypatch):
+    monkeypatch.setattr(h.ast, "dump", lambda *a, **kw: "Python-version-dependent presentation")
+    assert h.notebook_identity(NOTEBOOK_SOURCE) == h.notebook_identity(SUPPLIED_DATABRICKS_WRAPPER)
+
+
+def test_production_prepare_accepts_exact_supplied_wrapper(monkeypatch):
+    from pathlib import Path
+
+    original = Path.read_text
+
+    def runtime_source(path, *args, **kwargs):
+        if path == REPO_ROOT / h.NOTEBOOK_FILE:
+            return SUPPLIED_DATABRICKS_WRAPPER
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", runtime_source)
+    assert h.prepare(REPO_ROOT)[2]["notebook_semantic_identity"] == h.notebook_identity(
+        SUPPLIED_DATABRICKS_WRAPPER
+    )
+
+
+@pytest.mark.parametrize("order", [(0, 2, 1, 3, 4), (0, 1, 3, 2, 4)])
+def test_required_setup_order_still_strict(tmp_path, order):
+    cells = NOTEBOOK_SOURCE.split("# COMMAND ----------")
+    path = tmp_path / h.NOTEBOOK_FILE
+    path.parent.mkdir(parents=True)
+    path.write_text("# COMMAND ----------".join(cells[i] for i in order))
+    with pytest.raises(ConfigurationError, match="NOTEBOOK_"):
+        h.verify_notebook(tmp_path, h.notebook_identity(NOTEBOOK_SOURCE))

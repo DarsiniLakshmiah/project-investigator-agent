@@ -64,7 +64,39 @@ SOURCE_QUESTION = "What changed and why?"
 NOTEBOOK_FILE = "notebooks/09_phase10c_evidence_validation.py"
 
 
-def notebook_identity(source: str) -> dict:
+def _ast_semantics(value):
+    """Explicit AST data, independent of Python-version ast.dump presentation."""
+    if isinstance(value, ast.AST):
+        return {
+            "node": type(value).__name__,
+            "fields": {
+                name: _ast_semantics(child)
+                for name, child in ast.iter_fields(value)
+                if child is not None and not (isinstance(child, list) and not child)
+            },
+        }
+    if isinstance(value, list):
+        return [_ast_semantics(child) for child in value]
+    return value
+
+
+def _widget_declaration(node):
+    if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
+        return None
+    call = node.value
+    target = ast.parse("dbutils.widgets.text").body[0].value
+    if (
+        _ast_semantics(call.func) == _ast_semantics(target)
+        and call.args
+        and isinstance(call.args[0], ast.Constant)
+        and call.args[0].value in ("commit_sha", "run_id")
+    ):
+        return call.args[0].value
+    return None
+
+
+def notebook_program(source: str) -> list:
+    """Canonical wrapper program; only the approved import/widget commute is allowed."""
     """Semantic identity of the thin Python/source notebook, without executing it.
 
     Ignore markdown, source headers, comments and cell splits between complete
@@ -73,6 +105,7 @@ def notebook_identity(source: str) -> dict:
     This describes representation equivalence, not general Python equivalence.
     """
     program = []
+    nodes = []
     cells = re.split(r"(?m)^# COMMAND -+[ \t]*$", source.replace("\r\n", "\n"))
     for cell in cells:
         lines = [re.sub(r"^# MAGIC ?", "", line) for line in cell.splitlines()]
@@ -93,6 +126,7 @@ def notebook_identity(source: str) -> dict:
                 raise ConfigurationError("NOTEBOOK_UNAPPROVED_MAGIC")
             try:
                 program.append({"directive": shlex.split(code, comments=True)})
+                nodes.append(None)
             except ValueError as exc:
                 raise ConfigurationError("NOTEBOOK_INVALID_DIRECTIVE") from exc
             continue
@@ -100,11 +134,33 @@ def notebook_identity(source: str) -> dict:
             tree = ast.parse(code)
         except SyntaxError as exc:
             raise ConfigurationError("NOTEBOOK_INVALID_PYTHON") from exc
-        program.extend(
-            {"python_ast": ast.dump(node, include_attributes=False)} for node in tree.body
-        )
+        program.extend({"python_ast": _ast_semantics(node)} for node in tree.body)
+        nodes.extend(tree.body)
+    approved_import = ast.parse(
+        "from worldbank_copilot.validation.phase10c_evidence import run_databricks_validation"
+    ).body[0]
+    for index in range(1, len(program) - 2):
+        if program[index - 1] != {"directive": ["%run", "./_bootstrap"]}:
+            continue
+        block = nodes[index : index + 3]
+        imports = [
+            i
+            for i, node in enumerate(block)
+            if _ast_semantics(node) == _ast_semantics(approved_import)
+        ]
+        widgets = [_widget_declaration(node) for node in block]
+        if len(imports) == 1 and [name for name in widgets if name] == ["commit_sha", "run_id"]:
+            # Import and these declarations are independent. Move only this import
+            # across these adjacent declarations AFTER bootstrap, never across work.
+            order = [imports[0]] + [i for i in range(3) if i != imports[0]]
+            program[index : index + 3] = [program[index + i] for i in order]
+    return program
+
+
+def notebook_identity(source: str) -> dict:
+    program = notebook_program(source)
     payload = json.dumps(program, sort_keys=True, separators=(",", ":")).encode()
-    return {"scheme": "databricks_wrapper_ast@1", "sha256": hashlib.sha256(payload).hexdigest()}
+    return {"scheme": "databricks_wrapper_ast@2", "sha256": hashlib.sha256(payload).hexdigest()}
 
 
 def verify_notebook(repo, expected):
