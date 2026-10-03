@@ -41,61 +41,47 @@ def config(**models):
     return base.model_copy(update={"models": base.models.model_copy(update=models)})
 
 
-def covering_claims(context, **changes):
-    """One mechanically valid claim per required requirement, over its first evidence.
+def covering_claims(payload, **changes):
+    """One semantic claim per required requirement, citing its first local evidence handle.
 
-    ``changes`` mutate the first claim; a callable value receives the context.
+    ``changes`` mutate the first claim; a callable value receives the model payload.
     """
-    refs = {e["evidence_id"]: e for e in context["evidence"]}
-    claims = []
-    for requirement in context["requirements"]:
-        supplied = [i for i in requirement["evidence_ids"] if i in refs]
-        if not requirement["required"] or not supplied:
-            continue
-        entry = refs[supplied[0]]
-        claims.append(
-            {
-                "claim_id": f"C{len(claims) + 1}",
-                "claim_text": "The supplied record reports this implementation fact.",
-                "claim_type": TYPES.get(entry["provenance"], "ASSERTION"),
-                "provenance_label": entry["provenance"],
-                "evidence_ids": [entry["evidence_id"]],
-                "requirement_ids": [requirement["requirement_id"]],
-                "citations": [
-                    {
-                        "evidence_id": entry["evidence_id"],
-                        "source_identity": entry["source_identity"],
-                    }
-                ],
-                "project_id": context["project_id"],
-                "temporal_scope": context["temporal_scope"],
-                "status": "CANDIDATE",
-            }
-        )
-    claims[0].update({k: v(context) if callable(v) else v for k, v in changes.items()})
+    claims = [
+        {
+            "text": "The supplied record reports this implementation fact.",
+            "evidence": [requirement["evidence"][0]],
+            "interpretation": False,
+        }
+        for requirement in payload["requirements"]
+        if requirement["required"] and requirement["evidence"]
+    ]
+    claims[0].update({k: v(payload) if callable(v) else v for k, v in changes.items()})
     return claims
 
 
+def handles_by_provenance(payload):
+    groups = {}
+    for entry in payload["evidence"]:
+        groups.setdefault(entry["provenance"], []).append(entry["handle"])
+    return groups
+
+
 class Synthesizer:
-    def __init__(self, abstain=False, text=None, error=None, **changes):
-        self.abstain, self.text, self.error, self.changes = abstain, text, error, changes
+    """Fake endpoint returning the semantic contract built from the handle projection."""
+
+    def __init__(self, abstain=False, raw=None, error=None, **changes):
+        self.abstain, self.raw, self.error, self.changes = abstain, raw, error, changes
         self.requests = []
 
     def invoke(self, request):
         self.requests.append(request)
         if self.error:
             raise self.error
-        context = json.loads(request.context_json)
-        claims = [] if self.abstain else covering_claims(context, **self.changes)
-        output = {
-            "schema_version": "candidate_claims@1",
-            "candidate_claims": claims,
-            "insufficient_evidence": self.abstain,
-            "limitations": [],
-            "summary_claim_ids": [c["claim_id"] for c in claims],
-        }
+        payload = json.loads(request.context_json)
+        claims = [] if self.abstain else covering_claims(payload, **self.changes)
+        output = {"claims": claims, "insufficient_evidence": self.abstain, "limitations": []}
         return ModelReply(
-            text=self.text or json.dumps(output),
+            text=self.raw or json.dumps(output),
             model_identity="offline-fake",
             input_tokens=10,
             output_tokens=5,
@@ -110,14 +96,9 @@ class Critic:
         self.requests.append(request)
         if self.error:
             raise self.error
-        claims = json.loads(request.context_json)["candidate_output"]["candidate_claims"]
+        claims = json.loads(request.context_json)["candidate_claims"]
         findings = [
-            {
-                "claim_id": c["claim_id"],
-                "code": self.code,
-                "evidence_ids": c["evidence_ids"],
-                "concise_rationale": "Offline fake finding.",
-            }
+            {"claim": c["claim"], "code": self.code, "rationale": "Offline fake finding."}
             for c in claims
         ]
         return ModelReply(
@@ -156,6 +137,7 @@ def test_supported_answer_is_cited_validated_and_critic_reviewed():
         "attention",
         "evidence_execution",
         "synthesis",
+        "enrichment",
         "deterministic_validation",
         "critic",
         "finalization",
@@ -179,47 +161,73 @@ def test_uncovered_required_requirement_abstains_without_model_calls():
     assert any(note.startswith("No evidence found for required") for note in result.limitations)
 
 
+def mixed_provenance(payload):
+    groups = handles_by_provenance(payload)
+    assert len(groups) >= 2, "offline package needs two provenance types"
+    return [handles[0] for handles in list(groups.values())[:2]]
+
+
+def duplicate_handle(payload):
+    return [payload["evidence"][0]["handle"]] * 2
+
+
 @pytest.mark.parametrize(
     ("changes", "failure"),
     [
-        ({"evidence_ids": ["ev_fabricated"]}, Failure.EVIDENCE_REFERENCE_INVALID),
-        ({"citations": [{"evidence_id": "ev_x", "source_identity": "c"}]}, None),
-        ({"project_id": "P179039"}, Failure.PROJECT_ISOLATION_VIOLATION),
-        ({"provenance_label": "UNKNOWN", "claim_type": "UNCERTAINTY"}, None),
-        (
-            {"temporal_scope": lambda c: {**c["temporal_scope"], "date_to": "2099-01-01"}},
-            Failure.TEMPORAL_SCOPE_VIOLATION,
-        ),
+        ({"evidence": ["E99"]}, Failure.EVIDENCE_REFERENCE_INVALID),
+        ({"evidence": duplicate_handle}, Failure.EVIDENCE_REFERENCE_INVALID),
+        ({"evidence": ["ev_" + "a" * 64]}, Failure.SCHEMA_VALIDATION_FAILED),
+        ({"project_id": "P179039"}, Failure.SCHEMA_VALIDATION_FAILED),
+        ({"temporal_scope": {"kind": "LATEST"}}, Failure.SCHEMA_VALIDATION_FAILED),
+        ({"requirement_ids": ["R1"]}, Failure.SCHEMA_VALIDATION_FAILED),
+        ({"text": "Unlike P179039, a delay was observed."}, Failure.PROJECT_ISOLATION_VIOLATION),
+        ({"evidence": mixed_provenance}, Failure.PROVENANCE_VIOLATION),
     ],
-    ids=["fabricated-evidence", "invalid-citation", "project", "provenance", "temporal"],
+    ids=[
+        "unknown-handle",
+        "duplicate-handle",
+        "canonical-hash-instead-of-handle",
+        "model-supplied-project",
+        "model-supplied-temporal-scope",
+        "model-supplied-requirement",
+        "foreign-project-in-text",
+        "mixed-provenance-assertion",
+    ],
 )
-def test_mechanical_violation_fails_closed_before_critic(changes, failure):
+def test_invalid_selection_fails_closed_before_critic(changes, failure):
     critic = Critic()
     result = copilot(Synthesizer(**changes), critic).investigate(INVESTIGATION, PROJECT)
     assert result.status == ResultStatus.FAIL_CLOSED
     assert not result.claims and not critic.requests
     assert result.validation.mechanical_validity == "INVALID"
-    if failure is not None:
-        assert failure.value in result.validation.failures
-    else:
-        assert result.validation.failures
+    assert result.validation.failures == (failure.value,)
+    assert [c.role for c in result.model_calls] == ["SYNTHESIZER"]
 
 
-def test_unknown_evidence_cannot_be_relabeled_as_interpretation():
-    critic = Critic()
-    app = copilot(Synthesizer(), critic)
-    result = app.investigate(INVESTIGATION, PROJECT)
-    evidence = {e.evidence_id: e.provenance[0] for e in result.evidence}
-    unknown = [i for i, p in evidence.items() if p == "UNKNOWN"]
-    if not unknown:
-        pytest.skip("offline fixture package carries no UNKNOWN evidence")
-    relabel = Synthesizer(
-        evidence_ids=unknown[:1],
-        provenance_label="AI_INTERPRETATION",
-        claim_type="INTERPRETATION",
-    )
-    result = copilot(relabel, Critic()).investigate(INVESTIGATION, PROJECT)
-    assert result.status == ResultStatus.FAIL_CLOSED
+def test_interpretation_across_provenance_types_is_allowed():
+    synthesizer = Synthesizer(evidence=mixed_provenance, interpretation=True)
+    result = copilot(synthesizer, Critic()).investigate(INVESTIGATION, PROJECT)
+    assert result.status == ResultStatus.ANSWER, result.validation
+    assert result.claims[0].provenance == "AI_INTERPRETATION"
+    assert result.claims[0].claim_type == "INTERPRETATION"
+    assert len(result.claims[0].evidence_ids) == 2
+
+
+def test_model_never_receives_or_returns_canonical_identities():
+    synthesizer, critic = Synthesizer(), Critic()
+    result = copilot(synthesizer, critic).investigate(INVESTIGATION, PROJECT)
+    assert result.status == ResultStatus.ANSWER
+    for request in (*synthesizer.requests, *critic.requests):
+        sent = request.context_json
+        # Governed evidence content may mention its own project; identity fields may not.
+        assert {"project_id", "temporal_scope"}.isdisjoint(json.loads(sent))
+        for canonical in {e.evidence_id for e in result.evidence}:
+            assert canonical not in sent
+        assert "req_" not in sent and '"temporal_scope"' not in sent
+        schema = json.dumps(request.output_schema)
+        for owned in ("project_id", "temporal_scope", "requirement_ids", "citations"):
+            assert owned not in schema
+    assert all(c.citations and c.evidence_ids for c in result.claims)
 
 
 def test_critic_rejection_publishes_nothing():
@@ -262,8 +270,8 @@ def test_disabled_critic_is_recorded_and_never_presented_as_review():
 
 @pytest.mark.parametrize(
     "changes",
-    [{"project_id": "P179039"}, {"evidence_ids": ["ev_fabricated"]}],
-    ids=["project", "fabricated-evidence"],
+    [{"text": "As in P179039, a delay was observed."}, {"evidence": ["E99"]}],
+    ids=["foreign-project", "unknown-handle"],
 )
 def test_disabled_critic_keeps_deterministic_validation_authoritative(changes):
     result = copilot(Synthesizer(**changes), Critic(), critic_enabled=False).investigate(
@@ -334,7 +342,7 @@ def test_finalize_without_critic_matches_existing_rules_when_no_semantic_objecti
     [
         Synthesizer(error=NodeError(Failure.MODEL_UNAVAILABLE)),
         Synthesizer(error=TimeoutError()),
-        Synthesizer(text="not JSON"),
+        Synthesizer(raw="not JSON"),
     ],
     ids=["unavailable", "timeout", "malformed"],
 )
@@ -444,9 +452,12 @@ def traced(monkeypatch):
     return spans
 
 
+SECRET = "SECRET-CLAIM-TEXT-51ab"
+
+
 def test_trace_has_named_stages_and_allowlisted_metadata(monkeypatch):
     spans = traced(monkeypatch)
-    app = copilot(Synthesizer(), Critic())
+    app = copilot(Synthesizer(text=SECRET), Critic())
     app.mlflow_enabled = True
     result = app.investigate(INVESTIGATION, PROJECT)
     assert result.trace_id == "trace-1"
@@ -456,6 +467,7 @@ def test_trace_has_named_stages_and_allowlisted_metadata(monkeypatch):
         "attention",
         "evidence_execution",
         "synthesis",
+        "enrichment",
         "deterministic_validation",
         "critic",
         "finalization",
@@ -463,15 +475,35 @@ def test_trace_has_named_stages_and_allowlisted_metadata(monkeypatch):
     root = spans[0].attributes
     assert root["project_id"] == PROJECT and root["route"] == "INVESTIGATION"
     assert root["status"] == "ANSWER" and root["critic_status"] == "SUPPORTED"
+    assert root["disposition"] == "PUBLISH_WITH_LIMITATIONS"
     assert root["model_call_count"] == 2 and root["input_tokens"] == 10
     assert root["citation_count"] == len(result.claims)
     assert root["model_endpoints"] == "databricks-qwen35-122b-a10b"
     assert spans[3].attributes["evidence_count"] == len(result.evidence)
     assert spans[4].attributes["outcome"] == "COMPLETED"
+    enrichment = spans[5].attributes
+    assert enrichment["semantic_claims"] == enrichment["enriched_claims"] == len(result.claims)
+    assert enrichment["handles_selected"] == enrichment["handles_resolved"] >= 1
+    assert enrichment["handles_failed"] == 0 and "failure" not in enrichment
+    assert enrichment["local_requirements"] >= 1 and enrichment["local_evidence_handles"] >= 1
+    assert result.claims[0].text == SECRET  # published to the user, never to the trace
     serialized = json.dumps([s.attributes for s in spans])
-    for forbidden in ("context_json", "payload", "chunk_text", "claim_text", "system"):
+    assert SECRET not in serialized
+    for forbidden in ("context_json", "payload", "content", "chunk_text", "claim_text", "system"):
         assert forbidden not in serialized
     assert all(isinstance(v, (str, int, float, bool)) for s in spans for v in s.attributes.values())
+
+
+def test_trace_records_handle_failures_structurally(monkeypatch):
+    spans = traced(monkeypatch)
+    app = copilot(Synthesizer(evidence=["E98", "E99"], text=SECRET), Critic())
+    app.mlflow_enabled = True
+    app.investigate(INVESTIGATION, PROJECT)
+    enrichment = next(s for s in spans if s.name == "enrichment").attributes
+    assert enrichment["handles_selected"] >= 2 and enrichment["handles_failed"] == 2
+    assert enrichment["failure"] == "EVIDENCE_REFERENCE_INVALID"
+    assert "critic" not in [s.name for s in spans]
+    assert SECRET not in json.dumps([s.attributes for s in spans])
 
 
 def test_trace_of_refusal_has_no_model_stages(monkeypatch):
@@ -500,3 +532,38 @@ def test_configured_output_ceiling_reaches_every_model_request():
     synthesizer, critic = Synthesizer(), Critic()
     copilot(synthesizer, critic).investigate(INVESTIGATION, PROJECT)
     assert [r.max_output_tokens for r in (*synthesizer.requests, *critic.requests)] == [5000, 5000]
+
+
+def test_shared_evidence_fails_closed_end_to_end_without_critic(monkeypatch):
+    from worldbank_copilot.copilot import service
+
+    original = service.build_context
+
+    def share_first_evidence(report, **kwargs):
+        context = original(report, **kwargs)
+        data = context.model_dump(mode="json")
+        first = data["evidence"][0]["evidence_id"]
+        for requirement in data["requirements"]:
+            if first not in requirement["evidence_ids"]:
+                requirement["evidence_ids"].append(first)
+        return type(context).model_validate(data)
+
+    monkeypatch.setattr(service, "build_context", share_first_evidence)
+    spans = traced(monkeypatch)
+    shared = Synthesizer(
+        evidence=lambda p: [next(e["handle"] for e in p["evidence"] if len(e["supports"]) > 1)]
+    )
+    critic = Critic()
+    app = copilot(shared, critic)
+    app.mlflow_enabled = True
+    result = app.investigate(INVESTIGATION, PROJECT)
+    assert result.status == ResultStatus.FAIL_CLOSED
+    assert result.validation.failures == (Failure.REQUIREMENT_REFERENCE_INVALID.value,)
+    assert not result.claims and sum(len(c.citations) for c in result.claims) == 0
+    assert not critic.requests and [c.role for c in result.model_calls] == ["SYNTHESIZER"]
+    enrichment = next(s for s in spans if s.name == "enrichment").attributes
+    assert type(enrichment["ambiguous_evidence"]) is int and enrichment["ambiguous_evidence"] >= 1
+    assert enrichment["failure"] == "REQUIREMENT_REFERENCE_INVALID"
+    serialized = json.dumps([s.attributes for s in spans])
+    assert "ev_" not in serialized and "req_" not in serialized
+    assert "critic" not in [s.name for s in spans]

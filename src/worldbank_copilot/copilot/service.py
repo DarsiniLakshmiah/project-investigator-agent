@@ -2,7 +2,8 @@
 
 query -> Phase 9 routing -> deterministic tools / Phase 8 retrieval
       -> Phase 10C EvidencePackage (investigation route only)
-      -> Synthesizer -> deterministic claim validation -> optional Critic
+      -> Synthesizer (local handles) -> deterministic enrichment
+      -> deterministic claim validation -> optional Critic
       -> deterministic finalization -> InvestigationResult
 
 Routing, tools, retrieval, evidence execution and claim validation are reused unchanged.
@@ -36,6 +37,16 @@ from worldbank_copilot.copilot.contracts import (
     Validation,
 )
 from worldbank_copilot.copilot.model_diagnostics import PARSE_REASONS, DiagnosticReason
+from worldbank_copilot.copilot.semantic import (
+    CRITIC_INSTRUCTIONS,
+    SYNTHESIS_INSTRUCTIONS,
+    SemanticReview,
+    SemanticSynthesis,
+    critic_payload,
+    enrich,
+    enrich_review,
+    project,
+)
 from worldbank_copilot.investigation.claims import (
     CriticCode,
     CriticOutput,
@@ -51,8 +62,6 @@ from worldbank_copilot.investigation.evidence import EvidenceExecutor, _owned
 from worldbank_copilot.investigation.gate import AdmissionContext, AdmissionOutcome, admit
 from worldbank_copilot.investigation.planning import PlanningOutcome, template_plan
 from worldbank_copilot.investigation.synthesis import (
-    CRITIC_INSTRUCTIONS,
-    INSTRUCTIONS,
     ApprovedContext,
     build_context,
     finalize,
@@ -291,11 +300,19 @@ class _Request:
         return self._final_result(final, critic_status, context, evidence, common)
 
     def _synthesize_and_review(self, context: ApprovedContext):
-        """Synthesizer -> deterministic validation -> optional Critic -> finalizer."""
-        payload = context.model_dump(mode="json")
+        """Synthesizer -> handle enrichment -> deterministic validation -> optional Critic
+        -> finalizer. The model reasons over local handles; code owns identity and scope."""
+        projection = project(context)
         with self.recorder.span("synthesis") as span:
-            output, failure = self._call("SYNTHESIZER", payload, SynthesisOutput, span)
+            semantic, failure = self._call(
+                "SYNTHESIZER", SYNTHESIS_INSTRUCTIONS, projection.payload, SemanticSynthesis, span
+            )
         if failure is not None:
+            return self._finalize(None, None, context, (failure,)), CriticStatus.NOT_REQUIRED
+        with self.recorder.span("enrichment") as span:
+            output, failure, stats = enrich(semantic, projection, context)
+            _annotate(span, **stats.attributes(projection), failure=failure and failure.value)
+        if failure is not None:  # unknown/duplicate handle, mixed-provenance assertion, ...
             return self._finalize(None, None, context, (failure,)), CriticStatus.NOT_REQUIRED
         with self.recorder.span("deterministic_validation") as span:
             errors = validate_claims(
@@ -316,14 +333,16 @@ class _Request:
                 final = _finalize_without_critic(output, context)
             return final, CriticStatus.DISABLED
         with self.recorder.span("critic") as span:
-            review, failure = self._call(
+            semantic_review, failure = self._call(
                 "CRITIC",
-                {**payload, "candidate_output": output.model_dump(mode="json")},
-                CriticOutput,
+                CRITIC_INSTRUCTIONS,
+                critic_payload(projection, output),
+                SemanticReview,
                 span,
             )
         if failure is not None:
             return self._finalize(output, None, context, (failure,)), CriticStatus.FAILED
+        review = enrich_review(semantic_review, output)
         final = self._finalize(output, review, context)
         if final.disposition == Disposition.FAIL_CLOSED:
             return final, CriticStatus.FAILED
@@ -334,7 +353,7 @@ class _Request:
         with self.recorder.span("finalization"):
             return finalize(output, review, context, failures=failures)
 
-    def _call(self, role: str, payload: dict, schema, span):
+    def _call(self, role: str, system: str, payload: dict, schema, span):
         """One bounded model call; returns (parsed output, None) or (None, Failure)."""
         models = self.config.models
         adapter = self.copilot.synthesizer if role == "SYNTHESIZER" else self.copilot.critic
@@ -348,7 +367,7 @@ class _Request:
         else:
             request = ModelRequest(
                 role=role,
-                system=INSTRUCTIONS if role == "SYNTHESIZER" else CRITIC_INSTRUCTIONS,
+                system=system,
                 context_json=json.dumps(payload, sort_keys=True, separators=(",", ":")),
                 output_schema=schema.model_json_schema(),
                 max_output_tokens=models.max_output_tokens,
@@ -493,6 +512,7 @@ def _request_attributes(result: InvestigationResult, config: CopilotConfig) -> d
         "citation_count": sum(len(c.citations) for c in result.claims),
         "signal_count": len(result.attention_signals),
         "critic_status": result.validation.critic_status.value,
+        "disposition": result.validation.disposition,
         "critic_enabled": config.models.critic_enabled,
         "validation_failures": ",".join(result.validation.failures),
         "model_call_count": len(calls),
