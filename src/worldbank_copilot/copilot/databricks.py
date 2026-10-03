@@ -2,7 +2,8 @@
 
 Composes the same constructors as the accepted live wiring (Phase 9 protocol gate,
 Spark table reader, Phase 8 hybrid retrieval with the accepted Vector Search index and
-CrossEncoder profile, governed tool catalog, DatabricksModelAdapter). Nothing is
+CrossEncoder profile, governed tool catalog, DatabricksModelAdapter wrapped only to record
+sanitized failure reason codes). Nothing is
 reimplemented here; this module only connects them for the prototype runtime.
 """
 
@@ -14,10 +15,10 @@ from worldbank_copilot.common import load_project_registry
 from worldbank_copilot.common.dependency_health import check_environment
 from worldbank_copilot.common.exceptions import ConfigurationError
 from worldbank_copilot.copilot.config import CopilotConfig, load_copilot_config
+from worldbank_copilot.copilot.model_diagnostics import DiagnosedModelAdapter
 from worldbank_copilot.copilot.service import Copilot
 from worldbank_copilot.ingestion.documents import load_document_manifest
 from worldbank_copilot.intelligence.rules import load_rules, load_scales
-from worldbank_copilot.investigation.model_adapter import DatabricksModelAdapter
 from worldbank_copilot.retrieval import pipeline as rp
 from worldbank_copilot.retrieval.contract import DocumentRetrieval, build_document_search
 from worldbank_copilot.retrieval.embeddings import embedding_provider
@@ -90,8 +91,8 @@ def build_copilot(
         documents=DocumentRetrieval(profile, search, tools),
         config=config,
         config_dir=settings.config_dir,
-        synthesizer=DatabricksModelAdapter(models.synthesizer_endpoint),
-        critic=DatabricksModelAdapter(models.critic_endpoint) if models.critic_enabled else None,
+        synthesizer=DiagnosedModelAdapter(models.synthesizer_endpoint),
+        critic=DiagnosedModelAdapter(models.critic_endpoint) if models.critic_enabled else None,
         mlflow_enabled=tracing,
     )
 

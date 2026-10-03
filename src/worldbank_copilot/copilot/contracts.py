@@ -81,7 +81,8 @@ class ModelCall(_Result):
     latency_ms: float = Field(ge=0)
     input_tokens: int | None = None
     output_tokens: int | None = None
-    outcome: str  # COMPLETED or a Failure category
+    outcome: str  # COMPLETED or the authoritative Failure category
+    diagnostic_reason: str | None = None  # bounded code explaining a failure; never model text
 
 
 class Validation(_Result):

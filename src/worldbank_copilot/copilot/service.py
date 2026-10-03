@@ -35,6 +35,7 @@ from worldbank_copilot.copilot.contracts import (
     ResultStatus,
     Validation,
 )
+from worldbank_copilot.copilot.model_diagnostics import PARSE_REASONS, DiagnosticReason
 from worldbank_copilot.investigation.claims import (
     CriticCode,
     CriticOutput,
@@ -341,7 +342,7 @@ class _Request:
             raise ValueError(f"{role.lower()} model not configured")
         endpoint = models.synthesizer_endpoint if role == "SYNTHESIZER" else models.critic_endpoint
         remaining = self.started + self.config.overall_deadline_seconds - time.monotonic()
-        called, reply, failure, parsed = time.monotonic(), None, None, None
+        called, reply, failure, parsed, reason = time.monotonic(), None, None, None, None
         if remaining <= 0:
             failure = Failure.BUDGET_EXHAUSTED
         else:
@@ -355,11 +356,15 @@ class _Request:
             )
             try:
                 reply = adapter.invoke(request)
-                parsed = parse_output(reply.text, schema)
-            except NodeError as exc:
-                failure = exc.category
+            except NodeError as exc:  # envelope/transport: reason from a diagnosed adapter
+                failure, reason = exc.category, getattr(adapter, "last_reason", None)
             except TimeoutError:
-                failure = Failure.MODEL_TIMEOUT
+                failure, reason = Failure.MODEL_TIMEOUT, DiagnosticReason.NO_RESPONSE
+            else:
+                try:
+                    parsed = parse_output(reply.text, schema)
+                except NodeError as exc:  # valid envelope, invalid output content
+                    failure, reason = exc.category, PARSE_REASONS.get(exc.category)
         call = ModelCall(
             role=role,
             endpoint=endpoint,
@@ -368,6 +373,7 @@ class _Request:
             input_tokens=reply.input_tokens if reply else None,
             output_tokens=reply.output_tokens if reply else None,
             outcome=failure.value if failure else "COMPLETED",
+            diagnostic_reason=reason.value if reason else None,
         )
         self.model_calls.append(call)
         _annotate(span, **call.model_dump(mode="json", exclude={"role"}))
@@ -491,6 +497,9 @@ def _request_attributes(result: InvestigationResult, config: CopilotConfig) -> d
         "validation_failures": ",".join(result.validation.failures),
         "model_call_count": len(calls),
         "model_endpoints": ",".join(sorted({c.endpoint for c in calls if c.endpoint})),
+        "model_diagnostic_reasons": ",".join(
+            c.diagnostic_reason for c in calls if c.diagnostic_reason
+        ),
         "input_tokens": sum(c.input_tokens or 0 for c in calls),
         "output_tokens": sum(c.output_tokens or 0 for c in calls),
         "latency_ms": round(result.latency_ms, 1),
