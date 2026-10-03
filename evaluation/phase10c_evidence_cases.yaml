@@ -1,0 +1,121 @@
+version: 1
+status: FROZEN
+acceptance:
+- Exactly four primary cases PASS
+- Project isolation and original source/provenance/citations preserved
+- Fingerprints deterministic; logical budgets exact; zero model calls and repair cycles
+- Frozen baseline only; source plan executed=False; no semantic SATISFIED
+- Cross-source atomicity NOT_ESTABLISHED
+- Final immutable artifact and SHA-256/byte completion receipt verified
+cases:
+- case_id: D10C-01
+  project_id: P130544
+  source_question: What changed and why?
+  objective: Establish governed project context
+  structured_call:
+    tool: get_project_overview
+    arguments:
+      project_id: P130544
+    purpose: Establish governed project context
+  document_retrieval: null
+  source_question_id: null
+  temporal_scope:
+    kind: HISTORY
+    status: DEFAULTED
+    explicit: false
+    defaulted: true
+    detail: no time stated; intent default HISTORY applied
+  expected_operation_types:
+  - STRUCTURED
+  expected_statuses:
+  - OK
+  expected_profile: phase8_quality_baseline@1
+  purpose_code: ESTABLISH
+  rationale: Frozen capability fixture; no semantic answer-quality judgment.
+- case_id: D10C-02
+  project_id: P130544
+  source_question: What changed and why?
+  objective: Establish governed project context and join reviewed document evidence
+  structured_call:
+    tool: get_project_overview
+    arguments:
+      project_id: P130544
+    purpose: Establish governed project context
+  document_retrieval:
+    query: What does the restructuring paper say about the cancellation of part of
+      the Additional Financing?
+    document_type_hints: []
+    purpose: Retrieve reviewed capability evidence
+  source_question_id: q04
+  temporal_scope:
+    kind: HISTORY
+    status: DEFAULTED
+    explicit: false
+    defaulted: true
+    detail: no time stated; intent default HISTORY applied
+  expected_operation_types:
+  - STRUCTURED
+  - DOCUMENT
+  expected_statuses:
+  - OK
+  - OK
+  expected_profile: phase8_quality_baseline@1
+  purpose_code: ESTABLISH
+  rationale: Frozen capability fixture; no semantic answer-quality judgment.
+- case_id: D10C-03
+  project_id: P179039
+  source_question: What changed and why?
+  objective: Establish governed project context and join reviewed document evidence
+  structured_call:
+    tool: get_project_overview
+    arguments:
+      project_id: P179039
+    purpose: Establish governed project context
+  document_retrieval:
+    query: What did the latest ISR say about the Program's standing at mid-term?
+    document_type_hints: []
+    purpose: Retrieve reviewed capability evidence
+  source_question_id: q26
+  temporal_scope:
+    kind: LATEST
+    status: RESOLVED
+    explicit: false
+    defaulted: false
+  expected_operation_types:
+  - STRUCTURED
+  - DOCUMENT
+  expected_statuses:
+  - OK
+  - OK
+  expected_profile: phase8_quality_baseline@1
+  purpose_code: ESTABLISH
+  rationale: Frozen capability fixture; no semantic answer-quality judgment.
+- case_id: D10C-04
+  project_id: P506272
+  source_question: What changed and why?
+  objective: Establish governed project context and join reviewed document evidence
+  structured_call:
+    tool: get_project_overview
+    arguments:
+      project_id: P506272
+    purpose: Establish governed project context
+  document_retrieval:
+    query: What is the closing date stated in the loan agreement?
+    document_type_hints: []
+    purpose: Retrieve reviewed capability evidence
+  source_question_id: q46
+  temporal_scope:
+    kind: HISTORY
+    status: DEFAULTED
+    explicit: false
+    defaulted: true
+    detail: no time stated; intent default HISTORY applied
+  expected_operation_types:
+  - STRUCTURED
+  - DOCUMENT
+  expected_statuses:
+  - OK
+  - OK
+  expected_profile: phase8_quality_baseline@1
+  purpose_code: ESTABLISH
+  rationale: Frozen capability fixture; no semantic answer-quality judgment.
