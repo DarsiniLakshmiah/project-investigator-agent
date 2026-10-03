@@ -489,8 +489,10 @@ def test_trace_has_named_stages_and_allowlisted_metadata(monkeypatch):
     assert result.claims[0].text == SECRET  # published to the user, never to the trace
     serialized = json.dumps([s.attributes for s in spans])
     assert SECRET not in serialized
+    keys = {key for s in spans for key in s.attributes}
+    values = json.dumps([list(s.attributes.values()) for s in spans])
     for forbidden in ("context_json", "payload", "content", "chunk_text", "claim_text", "system"):
-        assert forbidden not in serialized
+        assert forbidden not in keys and forbidden not in values
     assert all(isinstance(v, (str, int, float, bool)) for s in spans for v in s.attributes.values())
 
 
@@ -567,3 +569,25 @@ def test_shared_evidence_fails_closed_end_to_end_without_critic(monkeypatch):
     serialized = json.dumps([s.attributes for s in spans])
     assert "ev_" not in serialized and "req_" not in serialized
     assert "critic" not in [s.name for s in spans]
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        INVESTIGATION + " PLANTEDQUERYMARKER",
+        "What deserves my attention? PLANTEDQUERYMARKER",
+        "Will the project fail? PLANTEDQUERYMARKER",
+    ],
+    ids=["investigation", "structured", "refusal"],
+)
+def test_user_query_text_never_reaches_trace_attributes(monkeypatch, question):
+    spans = traced(monkeypatch)
+    app = copilot(Synthesizer(), Critic())
+    app.mlflow_enabled = True
+    result = app.investigate(question, PROJECT)
+    assert result.query == question  # still returned to the caller, unchanged
+    assert spans and "query" not in spans[0].attributes
+    serialized = json.dumps([s.attributes for s in spans])
+    assert "PLANTEDQUERYMARKER" not in serialized and question not in serialized
+    assert spans[0].attributes["request_id"] == result.request_id
+    assert spans[0].attributes["status"] == result.status.value

@@ -36,6 +36,7 @@ from worldbank_copilot.copilot.contracts import (
     ResultStatus,
     Validation,
 )
+from worldbank_copilot.copilot.finalization_trace import finalization_attributes
 from worldbank_copilot.copilot.model_diagnostics import PARSE_REASONS, DiagnosticReason
 from worldbank_copilot.copilot.semantic import (
     CRITIC_INSTRUCTIONS,
@@ -329,9 +330,9 @@ class _Request:
             empty = CriticOutput(findings=())
             return self._finalize(output, empty, context), CriticStatus.NOT_REQUIRED
         if not self.config.models.critic_enabled:
-            with self.recorder.span("finalization"):
-                final = _finalize_without_critic(output, context)
-            return final, CriticStatus.DISABLED
+            return self._finalize(
+                output, None, context, critic_disabled=True
+            ), CriticStatus.DISABLED
         with self.recorder.span("critic") as span:
             semantic_review, failure = self._call(
                 "CRITIC",
@@ -349,9 +350,23 @@ class _Request:
         supported = all(f.code == CriticCode.SUPPORTED for f in review.findings)
         return final, CriticStatus.SUPPORTED if supported else CriticStatus.REJECTED
 
-    def _finalize(self, output, review, context, failures=()) -> FinalResponse:
-        with self.recorder.span("finalization"):
-            return finalize(output, review, context, failures=failures)
+    def _finalize(
+        self, output, review, context, failures=(), *, critic_disabled=False
+    ) -> FinalResponse:
+        """Authoritative finalization; the span only explains the returned disposition."""
+        with self.recorder.span("finalization") as span:
+            final = (
+                _finalize_without_critic(output, context)
+                if critic_disabled
+                else finalize(output, review, context, failures=failures)
+            )
+            _annotate(
+                span,
+                **finalization_attributes(
+                    final, output, review, context, failures, critic_disabled=critic_disabled
+                ),
+            )
+            return final
 
     def _call(self, role: str, system: str, payload: dict, schema, span):
         """One bounded model call; returns (parsed output, None) or (None, Failure)."""
@@ -496,12 +511,14 @@ def _annotate(span, **attributes) -> None:
 
 
 def _request_attributes(result: InvestigationResult, config: CopilotConfig) -> dict:
-    """Request-level trace metadata: identifiers, outcomes and counts, never documents."""
+    """Request-level trace metadata: identifiers, outcomes and counts.
+
+    Never user query text, documents, prompts or model output.
+    """
     calls = result.model_calls
     return {
         "request_id": result.request_id,
         "project_id": result.project_id,
-        "query": result.query,
         "route": result.route,
         "intent": result.intent,
         "status": result.status.value,
