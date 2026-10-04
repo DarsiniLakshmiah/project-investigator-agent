@@ -1,8 +1,0 @@
-command: ["streamlit", "run", "frontend/app.py", "--server.address", "0.0.0.0"]
-env:
-  - name: WBC_APP_JOB_ID
-    valueFrom: copilot-job
-  - name: WBC_APP_ALLOWED_PROJECTS
-    value: "P130544,P179039,P506272"
-  - name: STREAMLIT_GATHER_USAGE_STATS
-    value: "false"

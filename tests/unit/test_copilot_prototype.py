@@ -133,12 +133,17 @@ def requirement_names(path):
     return names
 
 
+VALIDATED_REQUIREMENTS = {
+    "requirements-databricks.txt",
+    "requirements-retrieval.txt",
+    "requirements-reranker.txt",
+    "requirements-phase10d.txt",
+}
+
+
 def test_prototype_installs_only_databricks_validated_requirement_sets():
     requirements, constraints = pip_plan("14_copilot_prototype_validation.py")
-    accepted_10c, _ = pip_plan("09_phase10c_evidence_validation.py")
-    accepted_10d, _ = pip_plan("09_phase10d_model_validation.py")
-    assert requirements == accepted_10c | accepted_10d
-    assert "requirements-copilot-runtime.txt" not in requirements
+    assert requirements == VALIDATED_REQUIREMENTS
     assert constraints == {"constraints-databricks.txt"}
 
 
@@ -146,8 +151,6 @@ def test_prototype_requirements_never_name_mlflow():
     requirements, _ = pip_plan("14_copilot_prototype_validation.py")
     for path in requirements:
         assert not requirement_names(path) & MLFLOW_DISTRIBUTIONS, path
-    # The excluded file is exactly what upgrades the protected runtime package.
-    assert "mlflow" in requirement_names("requirements-copilot-runtime.txt")
 
 
 def test_health_check_covers_exactly_what_the_notebook_installs():

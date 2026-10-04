@@ -1,2 +1,0 @@
-# Notebook runtime additions; retain all existing notebook requirement files/constraints.
-mlflow>=3.0,<4

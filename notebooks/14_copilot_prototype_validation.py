@@ -12,8 +12,7 @@
 # MAGIC %md
 # MAGIC Install exactly the requirement sets already validated on Databricks (Phase 8/10C retrieval +
 # MAGIC CrossEncoder, Phase 10D output validation). MLflow is NOT installed: tracing uses the
-# MAGIC runtime's protected `mlflow-skinny`. Installing `requirements-copilot-runtime.txt`
-# MAGIC (`mlflow>=3.0,<4`) replaces it and fails the dependency-health gate.
+# MAGIC runtime's protected `mlflow-skinny`; installing another MLflow fails the health gate.
 
 # COMMAND ----------
 

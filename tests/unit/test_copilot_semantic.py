@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
-from tests.unit.test_phase10d_unknown_provenance import entry
+from tests.support.evidence_builders import entry
 
 from worldbank_copilot.copilot.finalizer import (
     CONTRADICTION_NOTE,
