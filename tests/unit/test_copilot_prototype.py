@@ -65,6 +65,16 @@ def test_invariants_detect_leakage_and_unsupported_publication():
     assert not checks["route"] and not checks["status_allowed"]
 
 
+def test_s2_with_a_failed_critic_holds_invariants_but_never_as_reviewed():
+    from worldbank_copilot.investigation.claims import Failure, NodeError
+
+    failing = Critic(error=NodeError(Failure.MODEL_OUTPUT_INVALID))
+    report = run_scenario(copilot(Synthesizer(), failing), "S2")
+    assert report["invariants"] == "PASS", report["failed_invariants"]
+    assert report["result"]["validation"]["critic_status"] == "FAILED"
+    assert report["result"]["status"] == "ANSWER"
+
+
 def test_factory_requires_databricks():
     settings = SimpleNamespace(environment=SimpleNamespace(value="local"))
     with pytest.raises(ConfigurationError):

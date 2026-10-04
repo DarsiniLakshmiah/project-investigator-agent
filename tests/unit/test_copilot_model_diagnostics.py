@@ -202,3 +202,43 @@ def test_timeout_raised_by_transport_is_no_response():
     call = result.model_calls[-1]
     assert call.role == "SYNTHESIZER"
     assert (call.outcome, call.diagnostic_reason) == (Failure.MODEL_TIMEOUT.value, "NO_RESPONSE")
+
+
+def test_critic_length_limit_degrades_to_answer_and_stays_diagnosable(monkeypatch):
+    # The live D3B failure: Critic envelope finish_reason "length".
+    spans = []
+
+    class Span:
+        def __init__(self, name):
+            self.name, self.attributes, self.trace_id = name, {}, "trace-1"
+            spans.append(self)
+
+        def set_attributes(self, attributes):
+            self.attributes.update(attributes)
+
+    @contextmanager
+    def start_span(name):
+        yield Span(name)
+
+    monkeypatch.setitem(__import__("sys").modules, "mlflow", SimpleNamespace(start_span=start_span))
+    critic = DiagnosedModelAdapter(
+        "critic-endpoint", transport=FakeTransport(body=choice("length", content=SECRET))
+    )
+    app = copilot(Synthesizer(), critic)
+    app.mlflow_enabled = True
+    result = app.investigate(INVESTIGATION, PROJECT)
+    assert result.status == ResultStatus.ANSWER and result.claims
+    assert {c.support for c in result.claims} == {"NOT_ASSESSED"}
+    assert result.validation.critic_status == "FAILED"
+    call = result.model_calls[-1]
+    assert (call.role, call.outcome, call.diagnostic_reason) == (
+        "CRITIC",
+        "MODEL_OUTPUT_INVALID",
+        "FINISH_REASON_LENGTH",
+    )
+    critic_span = next(s for s in spans if s.name == "critic")
+    assert critic_span.attributes["diagnostic_reason"] == "FINISH_REASON_LENGTH"
+    root = spans[0].attributes
+    assert root["critic_status"] == "FAILED" and root["status"] == "ANSWER"
+    assert "FINISH_REASON_LENGTH" in root["model_diagnostic_reasons"]
+    assert SECRET not in json.dumps([s.attributes for s in spans])

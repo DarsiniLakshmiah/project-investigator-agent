@@ -107,12 +107,19 @@ def check_invariants(
     }
     if result.status == ResultStatus.ANSWER:
         checks["answer_mechanically_valid"] = result.validation.mechanical_validity == "VALID"
-        checks["answer_critic_status"] = result.validation.critic_status == (
-            CriticStatus.REVIEWED if critic_enabled else CriticStatus.DISABLED
+        critic = result.validation.critic_status
+        checks["answer_critic_status"] = (
+            critic in (CriticStatus.REVIEWED, CriticStatus.FAILED)
+            if critic_enabled
+            else critic == CriticStatus.DISABLED
         )
         checks["published_claims_graded"] = all(
             c.support
-            in (("SUPPORTED", "PARTIALLY_SUPPORTED") if critic_enabled else ("NOT_ASSESSED",))
+            in (
+                ("SUPPORTED", "PARTIALLY_SUPPORTED")
+                if critic == CriticStatus.REVIEWED
+                else ("NOT_ASSESSED",)
+            )
             for c in result.claims
         )
     return checks

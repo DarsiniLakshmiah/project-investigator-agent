@@ -4,7 +4,10 @@ Integrity is objective and deterministic: each claim is checked alone with the u
 ``validate_claims``. Scope/identity/citation violations fail the whole response; any other
 integrity failure removes only that claim. Semantic support is the Critic's judgment, per
 claim: SUPPORTED keeps, PARTIALLY_SUPPORTED keeps with its qualifier, UNSUPPORTED and
-CONTRADICTED remove. INSUFFICIENT_EVIDENCE only when no publishable claim remains.
+CONTRADICTED remove. If the Critic itself fails (call, parse or schema), it is a secondary
+reviewer, not a gate: integrity-valid claims publish as NOT_ASSESSED with a limitation, and
+are never shown as critic-approved. INSUFFICIENT_EVIDENCE only when no publishable claim
+remains.
 """
 
 from __future__ import annotations
@@ -34,6 +37,10 @@ PARTIAL_ANSWER_NOTE = "The evidence answers the question only in part."
 CRITIC_DISABLED_NOTE = (
     "Semantic critic review was disabled by configuration: claims passed deterministic "
     "integrity checks only and are not critic-validated."
+)
+CRITIC_UNAVAILABLE_NOTE = (
+    "Secondary semantic review was unavailable; published claims passed deterministic "
+    "evidence and citation validation only and are not critic-validated."
 )
 
 
@@ -85,6 +92,7 @@ def finalize(
     review: SemanticReview | None,
     *,
     critic_enabled: bool,
+    critic_failed: bool = False,
     model_insufficient: bool,
     limitations: tuple[str, ...],
     removed_before: dict[str, int] | None = None,
@@ -102,7 +110,7 @@ def finalize(
         if claim.provenance_label == ProvenanceClass.UNKNOWN:
             removed["UNKNOWN_VALUE"] += 1  # never authoritative; others still publish
             continue
-        if not critic_enabled:
+        if not critic_enabled or critic_failed:  # no judgment exists: never "SUPPORTED"
             published.append(PublishedClaim(claim, "NOT_ASSESSED"))
             continue
         finding = findings.get(claim.claim_id)
@@ -122,6 +130,8 @@ def finalize(
         notes.append(PARTIAL_ANSWER_NOTE)
     if not critic_enabled and published:
         notes.append(CRITIC_DISABLED_NOTE)
+    elif critic_failed and published:
+        notes.append(CRITIC_UNAVAILABLE_NOTE)
     return Finalized(
         "PUBLISH_WITH_LIMITATIONS" if published else "INSUFFICIENT_EVIDENCE",
         tuple(published),

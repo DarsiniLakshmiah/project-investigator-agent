@@ -16,7 +16,11 @@ from tests.unit.test_phase10c_validation import runtime
 
 from worldbank_copilot.common.exceptions import ConfigurationError
 from worldbank_copilot.copilot import Copilot, CriticStatus, ResultStatus, load_copilot_config
-from worldbank_copilot.copilot.finalizer import CONTRADICTION_NOTE, CRITIC_DISABLED_NOTE
+from worldbank_copilot.copilot.finalizer import (
+    CONTRADICTION_NOTE,
+    CRITIC_DISABLED_NOTE,
+    CRITIC_UNAVAILABLE_NOTE,
+)
 from worldbank_copilot.investigation.claims import Failure, ModelReply, NodeError
 
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs"
@@ -643,15 +647,82 @@ def test_model_failure_fails_closed(part):
     assert result.model_calls[-1].outcome != "COMPLETED"
 
 
+# -- a failed Critic is a missing secondary review, not a gate ------------------------
+INVALID_FINDING = {"findings": [{"claim": "C1", "support": "MAYBE", "rationale": None}]}
+
+
 @pytest.mark.parametrize(
-    "critic",
-    [Critic(error=NodeError(Failure.MODEL_OUTPUT_INVALID)), Critic(raw="not JSON")],
-    ids=["unavailable", "malformed"],
+    ("critic", "outcome"),
+    [
+        (Critic(error=NodeError(Failure.MODEL_UNAVAILABLE)), "MODEL_UNAVAILABLE"),
+        (Critic(error=TimeoutError()), "MODEL_TIMEOUT"),
+        (Critic(raw="not JSON"), "MODEL_OUTPUT_INVALID"),
+        (Critic(raw=json.dumps(INVALID_FINDING)), "SCHEMA_VALIDATION_FAILED"),
+    ],
+    ids=["call-failed", "timeout", "parse-failed", "schema-invalid"],
 )
-def test_enabled_critic_failure_fails_closed(critic):
+def test_critic_failure_after_valid_integrity_degrades_to_answer(critic, outcome):
     _, result = run(synthesizer=Synthesizer(), critic=critic)
-    assert result.status == ResultStatus.FAIL_CLOSED and not result.claims
+    assert result.status == ResultStatus.ANSWER and len(result.claims) == 2
+    assert {c.support for c in result.claims} == {"NOT_ASSESSED"}  # never "approved"
     assert result.validation.critic_status == CriticStatus.FAILED
+    assert result.validation.semantic_support == "NOT_ASSESSED"
+    assert result.validation.mechanical_validity == "VALID"
+    assert CRITIC_UNAVAILABLE_NOTE in result.limitations
+    assert "semantic review unavailable" in result.message
+    call = result.model_calls[-1]
+    assert call.role == "CRITIC" and call.outcome == outcome
+
+
+def test_critic_failure_never_bypasses_deterministic_integrity():
+    # Security failure: fails closed before the (failing) Critic is ever called.
+    critic = Critic(error=NodeError(Failure.MODEL_UNAVAILABLE))
+    _, result = run(synthesizer=Synthesizer(text="Unlike P179039, delays occurred."), critic=critic)
+    assert result.status == ResultStatus.FAIL_CLOSED and not result.claims
+    assert result.validation.failures == ("PROJECT_ISOLATION_VIOLATION",)
+    assert not critic.requests
+    # Claim-level integrity removals still apply when the Critic then fails.
+    for synthesizer, removed in (
+        (Synthesizer(text="The project will fail."), "OVERCLAIMED"),
+        (Synthesizer(temporal_relation="BEFORE"), "TEMPORAL_RELATION_UNVERIFIED"),
+        (Synthesizer(evidence=mixed), "PROVENANCE_VIOLATION"),
+    ):
+        _, result = run(synthesizer=synthesizer, critic=Critic(raw="not JSON"))
+        assert result.validation.claims_removed == {removed: 1} and len(result.claims) == 1
+        assert result.validation.critic_status == CriticStatus.FAILED
+
+
+def test_no_valid_claims_left_is_not_an_answer_even_if_the_critic_fails():
+    critic = Critic(raw="not JSON")
+    _, result = run(synthesizer=Synthesizer(text="The project will fail.", count=1), critic=critic)
+    assert result.status == ResultStatus.INSUFFICIENT_EVIDENCE and not result.claims
+    assert not critic.requests  # nothing left to review
+
+
+def test_successful_critic_judgments_still_control_publication():
+    # UNSUPPORTED and CONTRADICTED are judgments, not failures: never degraded to publish.
+    _, result = run(synthesizer=Synthesizer(), critic=Critic(("UNSUPPORTED", "CONTRADICTED")))
+    assert result.status == ResultStatus.INSUFFICIENT_EVIDENCE and not result.claims
+    assert result.validation.critic_status == CriticStatus.REVIEWED
+    assert result.validation.claims_removed == {"UNSUPPORTED": 1, "CONTRADICTED": 1}
+    assert CONTRADICTION_NOTE in result.limitations and CRITIC_UNAVAILABLE_NOTE not in str(
+        result.limitations
+    )
+
+
+def test_critic_sees_only_cited_evidence_and_may_omit_rationale():
+    critic = Critic(raw=json.dumps({"findings": [
+        {"claim": "C1", "support": "SUPPORTED", "rationale": None},
+        {"claim": "C2", "support": "SUPPORTED", "rationale": None},
+    ]}))  # fmt: skip
+    synthesizer = Synthesizer()
+    _, result = run(synthesizer=synthesizer, critic=critic)
+    assert result.status == ResultStatus.ANSWER and len(result.claims) == 2
+    shown = json.loads(synthesizer.requests[0].context_json)["evidence"]
+    reviewed = json.loads(critic.requests[0].context_json)
+    cited = {h for c in reviewed["candidate_claims"] for h in c["evidence"]}
+    assert {e["handle"] for e in reviewed["evidence"]} == cited
+    assert len(reviewed["evidence"]) < len(shown)
 
 
 def test_critic_missing_a_finding_removes_that_claim_only():

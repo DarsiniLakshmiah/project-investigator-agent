@@ -458,14 +458,15 @@ class _Request:
                     SemanticReview,
                     span,
                 )
-            if failure is not None:  # fail closed: no claim is published as reviewed
-                return self._fail(failure, objective, evidence, common, critic=True)
-            critic_status = CriticStatus.REVIEWED
+            # A failed Critic is not a judgment: integrity-valid claims still publish, as
+            # NOT_ASSESSED; the failure stays in model-call diagnostics and the trace.
+            critic_status = CriticStatus.REVIEWED if failure is None else CriticStatus.FAILED
         with self.recorder.span("finalization") as span:
             final = finalize(
                 integrity,
                 review,
                 critic_enabled=critic_enabled,
+                critic_failed=critic_status == CriticStatus.FAILED,
                 model_insufficient=output.insufficient_evidence,
                 limitations=(*context.limitations, *output.limitations),
                 removed_before=dropped,
@@ -473,6 +474,7 @@ class _Request:
             _annotate(
                 span,
                 disposition=final.disposition,
+                critic_status=critic_status.value,
                 published=len(final.published),
                 partially_supported=sum(
                     p.support == "PARTIALLY_SUPPORTED" for p in final.published
@@ -483,6 +485,11 @@ class _Request:
         claims = tuple(_claim(p, cited) for p in final.published)
         if final.disposition == "FAIL_CLOSED":
             status, message = ResultStatus.FAIL_CLOSED, "No answer published: integrity failure."
+        elif claims and critic_status == CriticStatus.FAILED:
+            status, message = (
+                ResultStatus.ANSWER,
+                "Cited claims that passed deterministic validation (semantic review unavailable).",
+            )
         elif claims:
             status, message = ResultStatus.ANSWER, "Validated, cited claims."
         else:
@@ -552,7 +559,7 @@ class _Request:
             gathered=gathered,
         )
 
-    def _fail(self, failure, objective, evidence, common, *, critic=False):
+    def _fail(self, failure, objective, evidence, common):
         return self._result(
             ResultStatus.FAIL_CLOSED,
             "No answer published: a model step failed.",
@@ -562,7 +569,6 @@ class _Request:
                 disposition="FAIL_CLOSED",
                 mechanical_validity="INVALID",
                 failures=(failure.value,),
-                critic_status=CriticStatus.FAILED if critic else CriticStatus.NOT_REQUIRED,
             ),
             **common,
         )

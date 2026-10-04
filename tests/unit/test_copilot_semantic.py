@@ -11,6 +11,7 @@ from tests.unit.test_phase10d_unknown_provenance import entry
 
 from worldbank_copilot.copilot.finalizer import (
     CONTRADICTION_NOTE,
+    CRITIC_UNAVAILABLE_NOTE,
     UNKNOWN_NOTE,
     check_integrity,
     finalize,
@@ -580,3 +581,20 @@ def test_nothing_publishable_is_insufficient_and_model_flag_is_only_a_limitation
     partial = finalize(integrity, review("SUPPORTED"), critic_enabled=True,
                        model_insufficient=True, limitations=())  # fmt: skip
     assert partial.disposition == "PUBLISH_WITH_LIMITATIONS" and partial.limitations
+
+
+def test_failed_critic_publishes_valid_claims_unassessed_but_never_unknowns():
+    output, context = draft(("Known.", ["E1"], False), ("Missing.", ["E3"], False))
+    final = finalize(
+        check_integrity(output, context), None, critic_enabled=True, critic_failed=True,
+        model_insufficient=False, limitations=(),
+    )  # fmt: skip
+    assert [(p.claim.claim_id, p.support) for p in final.published] == [("C1", "NOT_ASSESSED")]
+    assert CRITIC_UNAVAILABLE_NOTE in final.limitations
+    output, context = draft(("Missing.", ["E3"], False))
+    none = finalize(
+        check_integrity(output, context), None, critic_enabled=True, critic_failed=True,
+        model_insufficient=False, limitations=(),
+    )  # fmt: skip
+    assert none.disposition == "INSUFFICIENT_EVIDENCE" and not none.published
+    assert CRITIC_UNAVAILABLE_NOTE not in none.limitations
