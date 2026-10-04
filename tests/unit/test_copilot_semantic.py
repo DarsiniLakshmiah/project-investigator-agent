@@ -29,6 +29,9 @@ from worldbank_copilot.copilot.governed import (
     resolve_anchor,
 )
 from worldbank_copilot.copilot.investigator import (
+    INSTRUCTIONS as INVESTIGATOR_INSTRUCTIONS,
+)
+from worldbank_copilot.copilot.investigator import (
     Action,
     ActionTool,
     InvestigatorDecision,
@@ -731,3 +734,102 @@ def test_synthesis_contract_discourages_chronology_and_reasoning():
     assert "Return the few claims needed to answer it, not one per record." in text
     assert "do not list every record or retell the project chronology" in text
     assert "Do not explain your reasoning." in text
+
+
+# -- D4: comparison relation ---------------------------------------------------------
+def test_investigator_contract_and_prompt_offer_a_comparison_relation():
+    # Case 1: the Investigator chooses the relation semantically; COMPARE keeps both sides.
+    assert TemporalAnchor(relation="COMPARE", event_type="RESTRUCTURING").relation == "COMPARE"
+    text = " ".join(INVESTIGATOR_INSTRUCTIONS.split())
+    assert "COMPARE when it asks whether something changed" in text
+    assert "COMPARE keeps evidence from both sides" in text
+
+
+def test_period_labels_do_not_depend_on_the_relation():
+    # Case 4: BEFORE/AFTER/EVENT/UNDATED come from source dates only.
+    refs = [
+        ref(record="b", document_date="2019-01-01"),
+        ref(record="e", document_date="2020-06-01"),
+        ref(record="a", document_date="2021-01-01"),
+        ref(record="u", document_date=None),
+    ]
+    labels = {
+        relation: anchor(gathered(refs), WHEN, relation)[1]
+        for relation in ("BEFORE", "AFTER", "COMPARE")
+    }
+    assert labels["BEFORE"] == labels["AFTER"] == labels["COMPARE"]
+    assert sorted(labels["COMPARE"].values()) == ["AFTER", "BEFORE", "EVENT", "UNDATED"]
+    kept, _, dropped = anchor(gathered(refs), WHEN, "COMPARE")
+    assert dropped == 0 and len(kept) == 4  # case 3: neither side is filtered
+
+
+def across_case():
+    """E1 BEFORE, E2 AFTER, E3 UNDATED, E4 EVENT."""
+    refs = (
+        ref(record="d1", document_date="2019-01-01"),
+        ref(record="d2", document_date="2021-01-01"),
+        ref(record="d3", document_date=None),
+        ref(record="d4", document_date="2020-06-01"),
+    )
+    context = context_for(*refs)
+    _, periods, _ = anchor(gathered(list(refs)), WHEN, "COMPARE")
+    projection = project(context, objective="o", periods=periods, anchor={"relation": "COMPARE"})
+    return context, projection
+
+
+def test_across_claim_needs_source_dated_evidence_from_both_sides():
+    # Cases 6-8 (structural part): only the cited periods decide; text never does.
+    context, projection = across_case()
+    output, dropped, _ = enrich(
+        related(
+            ("Staffing gaps persisted across the restructuring.", ["E1", "E2"], "ACROSS"),
+            ("Progress improved after the restructuring.", ["E2"], "ACROSS"),
+            ("A problem before the restructuring improved.", ["E1"], "ACROSS"),
+            ("Changed with undated support.", ["E1", "E2", "E3"], "ACROSS"),
+            ("Changed around the event.", ["E1", "E4", "E2"], "ACROSS"),
+            ("Progress improved after the restructuring.", ["E2"], "AFTER"),  # label decides
+        ),
+        projection,
+        context,
+    )
+    assert [c.claim_id for c in output.candidate_claims] == ["C1", "C5", "C6"]
+    assert dropped == {TEMPORAL_RELATION_UNVERIFIED: 3}
+
+
+def test_across_claim_without_a_resolved_anchor_is_removed():
+    context, _ = across_case()
+    output, dropped, _ = enrich(
+        related(("Changed.", ["E1", "E2"], "ACROSS")), project(context, objective="o"), context
+    )
+    assert not output.candidate_claims and dropped == {TEMPORAL_RELATION_UNVERIFIED: 1}
+
+
+def test_comparison_synthesis_compares_the_same_issue():
+    # Case 5 and 6: prompt-driven, no concept mapping in code.
+    text = " ".join(SYNTHESIS_INSTRUCTIONS.split())
+    assert "compare the same issue on both sides" in text
+    assert "never use a different issue or metric on the other side as evidence of change" in text
+    assert "its change cannot be determined" in text
+
+
+def test_no_comparison_keyword_taxonomy_in_code():
+    # Case 10: outside the prompt strings, no change/comparison vocabulary drives behaviour.
+    import ast
+
+    root = Path(__file__).resolve().parents[2] / "src/worldbank_copilot/copilot"
+    words = ("improv", "worsen", "persist", "declin", "increas", "decreas", "better")
+    for name in ("governed.py", "semantic.py", "investigator.py", "finalizer.py", "service.py"):
+        tree = ast.parse((root / name).read_text(encoding="utf-8"))
+        prompts = {
+            id(node.value)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str) and len(node.value.value) > 400
+        }  # fmt: skip
+        literals = [
+            node.value.lower()
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            and id(node) not in prompts
+        ]  # fmt: skip
+        assert not [s for s in literals if any(w in s for w in words)], name

@@ -51,13 +51,18 @@ earlier restructurings) over routine milestones and reports. For a comparison ac
 event, the main condition on one side, the corresponding condition on the other and a
 conclusion those observations support are usually enough.
 When an anchor is given, it is the source-dated event the question is relative to, and its
-relation (BEFORE or AFTER) is what the question asks about. A claim presented because it
-happened on that side of the event states so and sets temporal_relation to that relation;
-it may cite only evidence whose period is that relation. Use NONE for background that does
-not assert timing relative to the event. Evidence periods are BEFORE, AFTER, EVENT (the
-event's own date) or UNDATED; UNDATED evidence can support ordinary facts but never a
-before/after relationship. Without an anchor, every claim uses NONE and none states that
-something happened before or after an event.
+relation (BEFORE, AFTER or COMPARE) is what the question asks about. A claim presented
+because it happened on one side of the event states so and sets temporal_relation to that
+side (BEFORE or AFTER); it may cite only evidence whose period is that side. A claim that an
+issue changed, improved, worsened or persisted across the event sets temporal_relation to
+ACROSS and must cite evidence about that same issue from both sides (BEFORE and AFTER).
+For a comparison, compare the same issue on both sides; never use a different issue or
+metric on the other side as evidence of change. If an issue has evidence on only one side,
+do not claim it changed or persisted: say in limitations that its change cannot be
+determined. Use NONE for background that does not assert timing relative to the event.
+Evidence periods are BEFORE, AFTER, EVENT (the event's own date) or UNDATED; UNDATED evidence
+can support ordinary facts but never a before/after relationship. Without an anchor, every
+claim uses NONE and none states that something happened before or after an event.
 Do not predict project failure. Limitations state only what the supplied evidence does not
 cover; they must be consistent with the evidence and never contradict your claims, and the
 evidence_not_shown count is not a gap you can describe; keep each to one short sentence.
@@ -76,6 +81,9 @@ support it) or CONTRADICTED (the evidence says otherwise).
 Timing is part of a claim: if a claim places something before or after an event and the
 cited evidence does not establish that timing (no anchor, or evidence periods that are
 UNDATED or on the other side), it is at most PARTIALLY_SUPPORTED even if the fact holds.
+A claim of change or persistence across the event (ACROSS, or worded that way) is supported
+only if its BEFORE and AFTER evidence concern the same issue and show the stated direction
+of change; otherwise it is UNSUPPORTED (or CONTRADICTED if the evidence shows the opposite).
 Rationale: null for SUPPORTED; otherwise a few words naming what is not supported.
 For every candidate limitation (L1, L2, ...) return grounded: true only if it is consistent
 with the supplied evidence (cited evidence and the evidence index) and contradicts no
@@ -95,7 +103,7 @@ class SemanticClaim(Contract):
     text: str = Field(min_length=1, max_length=MAX_CLAIM_CHARS)
     evidence: tuple[EvidenceHandle, ...] = Field(min_length=1, max_length=MAX_CLAIM_HANDLES)
     interpretation: bool
-    temporal_relation: Literal["NONE", "BEFORE", "AFTER"]
+    temporal_relation: Literal["NONE", "BEFORE", "AFTER", "ACROSS"]  # ACROSS: change over it
 
 
 class SemanticSynthesis(Contract):
@@ -231,7 +239,8 @@ def enrich(
     Unknown/duplicate handles and mixed-provenance assertions drop only that claim; no
     handle is ever repaired or guessed. A claim asserting BEFORE/AFTER the anchor event is
     dropped unless an anchor was resolved and every cited evidence item is source-dated on
-    that side of it (``TEMPORAL_RELATION_UNVERIFIED``).
+    that side of it; an ACROSS claim (change across the event) needs source-dated evidence
+    from both sides and no undated evidence (``TEMPORAL_RELATION_UNVERIFIED``).
     """
     stats = EnrichmentStats(semantic_claims=len(semantic.claims))
     supplied = {e["evidence_id"]: e for e in context.evidence}
@@ -298,8 +307,17 @@ def enrich(
 
 
 def _relation_established(relation: str, evidence_ids, periods: dict[str, str] | None) -> bool:
-    """Integrity, not interpretation: the timing must follow from governed dates alone."""
-    return periods is not None and all(periods.get(i) == relation for i in evidence_ids)
+    """Integrity, not interpretation: the timing must follow from governed dates alone.
+
+    Only the cited periods are checked; whether both sides concern the same issue is a
+    semantic judgment left to the Critic.
+    """
+    if periods is None:
+        return False
+    cited = [periods.get(i) for i in evidence_ids]
+    if relation == "ACROSS":  # a baseline and a later observation, both source-dated
+        return {"BEFORE", "AFTER"} <= set(cited) <= {"BEFORE", "AFTER", "EVENT"}
+    return all(p == relation for p in cited)
 
 
 def critic_payload(

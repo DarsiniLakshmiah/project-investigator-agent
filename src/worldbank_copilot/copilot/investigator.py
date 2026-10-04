@@ -52,12 +52,15 @@ disposition: INVESTIGATE to run actions; ANSWER_NOW when the supplied evidence i
 CLARIFY only if the question cannot be interpreted even semantically; PREDICTION if the user
 asks for a forecast or probability of success/failure; OUT_OF_SCOPE if unrelated to project
 implementation. Set review_evidence to true only if seeing the results could change what
-else to retrieve. When the question asks what happened before or after an event, set
-temporal_anchor (from the first round on): relation, the event_type from the timeline tool's
-event types, and the year/month/day the question gives for that event (only the parts it
-gives), or event = the event's timeline evidence handle once one is supplied. The application
-confirms the event and its date against the governed timeline; a date in the question is
-never treated as the event's date on its own. Return only the requested JSON; no
+else to retrieve. When the question is relative to an event, set temporal_anchor (from the
+first round on): relation, the event_type from the timeline tool's event types, and the
+year/month/day the question gives for that event (only the parts it gives), or event = the
+event's timeline evidence handle once one is supplied. relation is what the objective needs:
+BEFORE (only what preceded the event), AFTER (only what followed it), or COMPARE when it
+asks whether something changed, improved, worsened or persisted across the event; COMPARE
+keeps evidence from both sides, so plan actions that can show the same issues on each side.
+The application confirms the event and its date against the governed timeline; a date in the
+question is never treated as the event's date on its own. Return only the requested JSON; no
 chain-of-thought.
 """
 
@@ -78,7 +81,7 @@ class TemporalAnchor(Contract):
     """Which event the question is relative to. Identifies a candidate only: the boundary
     date always comes from a confirmed, source-dated governed timeline event."""
 
-    relation: Literal["BEFORE", "AFTER", "COMPARE"]
+    relation: Literal["BEFORE", "AFTER", "COMPARE"]  # COMPARE: both sides are kept
     event: EvidenceHandle | None = None  # a supplied timeline event handle, or
     event_type: EventType | None = None  # the governed timeline event type, and
     year: int | None = Field(default=None, ge=1900, le=2100)  # date parts the question gives

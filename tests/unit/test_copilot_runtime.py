@@ -21,7 +21,7 @@ from worldbank_copilot.copilot.finalizer import (
     CRITIC_DISABLED_NOTE,
     CRITIC_UNAVAILABLE_NOTE,
 )
-from worldbank_copilot.copilot.semantic import SYNTHESIS_INSTRUCTIONS
+from worldbank_copilot.copilot.semantic import CRITIC_INSTRUCTIONS, SYNTHESIS_INSTRUCTIONS
 from worldbank_copilot.investigation.claims import Failure, ModelReply, NodeError
 
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs"
@@ -773,7 +773,7 @@ def test_temporal_question_asks_for_relevant_developments_not_a_chronology():
     text = " ".join(SYNTHESIS_INSTRUCTIONS.split())
     assert "do not list every record or retell the project chronology" in text
     assert "what characterises that period" in text
-    assert "sets temporal_relation to that relation" in text
+    assert "sets temporal_relation to that side" in text
 
 
 def test_ungrounded_model_limitation_is_not_published():
@@ -936,3 +936,105 @@ def test_trace_has_named_stages_and_only_structural_metadata(monkeypatch):
     for leaked in (SECRET, "PLANTEDQUERYMARKER", question, result.objective):
         assert leaked not in serialized
     assert all(isinstance(v, (str, int, float, bool)) for s in spans for v in s.attributes.values())
+
+
+# -- D4: comparison across an authoritative event ------------------------------------
+# Offline evidence for the default plan is dated 2021-05-01 (document) and 2024 (signals),
+# so a source-dated event on 2022-01-01 has governed evidence on both sides.
+MIDPOINT = {"year": 2022, "month": 1, "day": 1}
+D4 = "What were the biggest problems and did they improve after the January 1, 2022 restructuring?"
+
+
+def periods_seen(synthesizer):
+    payload = json.loads(synthesizer.requests[0].context_json)
+    return {e["handle"]: e["period"] for e in payload["evidence"]}
+
+
+def side(period):
+    """Handles of the supplied evidence in one period (as the Synthesizer sees it)."""
+    return lambda payload: [e["handle"] for e in payload["evidence"] if e["period"] == period]
+
+
+def compare(monkeypatch, relation="COMPARE", **synthesizer):
+    governed_timeline(monkeypatch, ("RESTRUCTURING", date(2022, 1, 1)))
+    synth = Synthesizer(**synthesizer)
+    critic = Critic()
+    _, result = run(
+        D4,
+        investigator=Investigator(temporal_anchor=anchor_on(relation, **MIDPOINT)),
+        synthesizer=synth,
+        critic=critic,
+    )
+    return result, synth, critic
+
+
+def test_comparison_keeps_both_sides_with_objective_labels(monkeypatch):
+    # Cases 1-4: the Investigator's COMPARE choice keeps BEFORE and AFTER evidence.
+    result, synth, _ = compare(monkeypatch)
+    assert result.activity.anchor_resolution == "RESOLVED"
+    assert result.activity.temporal_anchor == "COMPARE"
+    assert result.activity.evidence_filtered_by_date == 0
+    assert set(periods_seen(synth).values()) == {"BEFORE", "AFTER"}
+    payload = json.loads(synth.requests[0].context_json)
+    assert payload["anchor"] == {"relation": "COMPARE", "date": "2022-01-01"}
+    for e in payload["evidence"]:  # labels follow source dates, never the relation
+        day = e["content"].get("document_date") or e["content"].get("observed_date")
+        assert e["period"] == ("BEFORE" if day < "2022-01-01" else "AFTER")
+
+
+def test_after_only_relation_still_filters_the_other_side(monkeypatch):
+    # Case 9: an AFTER question keeps its current behaviour (what D4 chose live).
+    result, synth, _ = compare(monkeypatch, "AFTER")
+    assert result.activity.temporal_anchor == "AFTER"
+    assert result.activity.evidence_filtered_by_date > 0
+    assert set(periods_seen(synth).values()) == {"AFTER"}
+
+
+def test_cross_event_claim_with_both_sides_is_published_as_across(monkeypatch):
+    # Case 8: a change claim citing a source-dated baseline and later evidence.
+    both = lambda p: side("BEFORE")(p)[:1] + side("AFTER")(p)[:1]  # noqa: E731
+    result, _, critic = compare(
+        monkeypatch, temporal_relation="ACROSS", evidence=both, interpretation=True, count=1
+    )
+    assert result.status == ResultStatus.ANSWER, result.message
+    assert [c.temporal_relation for c in result.claims] == ["ACROSS"]
+    reviewed = json.loads(critic.requests[0].context_json)
+    assert reviewed["candidate_claims"][0]["temporal_relation"] == "ACROSS"
+    assert {e["period"] for e in reviewed["evidence"]} == {"BEFORE", "AFTER"}
+
+
+@pytest.mark.parametrize(
+    ("relation", "evidence"),
+    [
+        ("COMPARE", side("AFTER")),  # case 6/8: AFTER alone cannot show improvement
+        ("COMPARE", side("BEFORE")),  # a problem with no AFTER evidence is not "improved"
+        ("AFTER", side("AFTER")),  # baseline filtered away: no change can be established
+    ],
+    ids=["after-only", "before-only", "baseline-filtered"],
+)
+def test_cross_event_claim_without_both_sides_is_removed(monkeypatch, relation, evidence):
+    result, _, _ = compare(
+        monkeypatch, relation, temporal_relation="ACROSS", evidence=evidence, count=1
+    )
+    assert not result.claims and result.status == ResultStatus.INSUFFICIENT_EVIDENCE
+    assert result.validation.claims_removed == {"TEMPORAL_RELATION_UNVERIFIED": 1}
+
+
+def test_unrelated_after_evidence_is_left_to_semantic_review(monkeypatch):
+    # Case 7: periods can be right while the issues differ (the live D4 C2/C3 failure).
+    # That is semantic: the Critic is told to require the same issue, and its judgment
+    # removes the claim. Code never maps business concepts.
+    both = lambda p: side("BEFORE")(p)[:1] + side("AFTER")(p)[:1]  # noqa: E731
+    governed_timeline(monkeypatch, ("RESTRUCTURING", date(2022, 1, 1)))
+    critic = Critic(("UNSUPPORTED",))
+    _, result = run(
+        D4,
+        investigator=Investigator(temporal_anchor=anchor_on("COMPARE", **MIDPOINT)),
+        synthesizer=Synthesizer(
+            temporal_relation="ACROSS", evidence=both, interpretation=True, count=1
+        ),
+        critic=critic,
+    )
+    assert critic.requests and not result.claims
+    assert result.validation.claims_removed == {"UNSUPPORTED": 1}
+    assert "concern the same issue" in " ".join(CRITIC_INSTRUCTIONS.split())
