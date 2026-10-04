@@ -407,6 +407,7 @@ def _technical(result) -> tuple[tuple[str, str], ...]:
         ("Model calls", str(len(result.get("model_calls") or ()))),
         ("Investigator rounds", _count(activity.get("decision_rounds"))),
         ("Governed tool calls", _count(activity.get("tool_calls"))),
+        ("Planning failure", activity.get("planning_failure")),
         ("Rejected actions", _count(activity.get("rejected_actions"))),
         (
             "Rejection reasons",

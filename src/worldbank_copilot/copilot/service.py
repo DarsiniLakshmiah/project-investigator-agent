@@ -42,6 +42,7 @@ from worldbank_copilot.copilot.governed import (
     GovernedExecutor,
     anchor,
     approved_context,
+    matching_events,
     pack,
     resolve_anchor,
 )
@@ -78,6 +79,24 @@ from worldbank_copilot.routing.temporal import parse_temporal
 from worldbank_copilot.tools.models import ToolResult, ToolStatus, iter_provenance_classes
 
 log = logging.getLogger(__name__)
+
+# Safe, fixed reason codes for an Investigator round that produced no usable plan.
+PLANNING_FAILURES = {
+    Failure.MODEL_OUTPUT_INVALID: "OUTPUT_PARSE_FAILED",
+    Failure.OUTPUT_BUDGET_EXCEEDED: "OUTPUT_PARSE_FAILED",
+    Failure.SCHEMA_VALIDATION_FAILED: "SCHEMA_INVALID",
+}  # any other failure (unavailable, timeout, rejected request, deadline): MODEL_CALL_FAILED
+
+UNRESOLVED_ANCHOR = {
+    "NO_SOURCE_DATED_EVENT": (
+        "UNKNOWN: the event this question is relative to has no source-stated date in "
+        "the governed timeline, so no before/after relationship can be established."
+    ),
+    "NO_MATCHING_EVENT": (
+        "UNKNOWN: no source-dated event in the governed timeline matches the event this "
+        "question refers to, so no before/after relationship can be established."
+    ),
+}
 
 PREDICTION_MESSAGE = (
     "This Copilot does not have a validated model for predicting project success or failure. "
@@ -223,11 +242,11 @@ class _Request:
             request_id=self.request_id,
         )
         gathered = Gathered()
-        decision, rejected, anchor_choice = None, Counter(), None
+        decision, rejected, anchor_choice, proposed = None, Counter(), None, 0
         for round_number in range(1, bounds.max_decision_rounds + 1):
             remaining = bounds.max_tool_calls - len(gathered.calls)
             with self.recorder.span(f"investigator_{round_number}") as span:
-                decision, failure = self._call(
+                planned, failure = self._call(
                     "INVESTIGATOR",
                     INVESTIGATOR_INSTRUCTIONS,
                     self._investigator_payload(round_number, gathered, remaining, decision),
@@ -235,12 +254,23 @@ class _Request:
                     span,
                 )
             if failure is not None:
-                return self._result(
-                    ResultStatus.FAIL_CLOSED,
-                    "The investigation could not be planned.",
-                    validation=Validation(failures=(failure.value,)),
-                    **common,
+                code = PLANNING_FAILURES.get(failure, "MODEL_CALL_FAILED")
+                self._record(gathered, rejected, planning_failure=code)
+                if decision is None:  # nothing was planned: no evidence, no answer
+                    return self._result(
+                        ResultStatus.FAIL_CLOSED,
+                        f"The investigation could not be planned ({code}).",
+                        validation=Validation(failures=(failure.value,)),
+                        **common,
+                    )
+                # The review round is optional: answer from the evidence already gathered.
+                common["limitations"] = (
+                    *common["limitations"],
+                    f"The Investigator review round failed ({code}); only evidence from "
+                    "the first round was used.",
                 )
+                break
+            decision = planned
             self.activity["decision_rounds"] = round_number
             stop = self._disposition(decision, common)
             if stop is not None:
@@ -248,6 +278,7 @@ class _Request:
             anchor_choice = decision.temporal_anchor or anchor_choice
             if decision.disposition == "ANSWER_NOW" or not decision.actions:
                 break
+            proposed += len(decision.actions)
             with self.recorder.span(f"tools_{round_number}") as span:
                 for action in decision.actions[:remaining]:
                     call, reason = govern(action, self.project_id)
@@ -277,13 +308,28 @@ class _Request:
                 )
             if not decision.review_evidence or len(gathered.calls) >= bounds.max_tool_calls:
                 break
+        if not gathered.refs and "planning_failure" not in self.activity:
+            self.activity["planning_failure"] = (
+                "GOVERNANCE_REJECTED"
+                if proposed and not gathered.calls
+                else "NO_ACTIONS"
+                if not proposed and decision.disposition == "INVESTIGATE"
+                else "UNSUPPORTED_DISPOSITION"  # ANSWER_NOW with nothing to answer from
+                if not proposed
+                else None
+            )
+        self._record(gathered, rejected)
+        return self._answer(decision, gathered, anchor_choice, router, common)
+
+    def _record(self, gathered, rejected, **fields) -> None:
+        """Activity counts so far (also on early exits, so they are never misleading)."""
         self.activity.update(
             tool_calls=len(gathered.calls),
             rejected_actions=sum(rejected.values()),
             rejected_by_reason=dict(rejected),
             evidence_retrieved=len(gathered.refs),
+            **fields,
         )
-        return self._answer(decision, gathered, anchor_choice, router, common)
 
     def _disposition(self, decision, common) -> InvestigationResult | None:
         if decision.disposition == "PREDICTION":
@@ -343,11 +389,10 @@ class _Request:
                 objective=objective,
                 **common,
             )
-        if outcome.status == "NO_SOURCE_DATED_EVENT":  # never assert an unverified before/after
+        if outcome.status in UNRESOLVED_ANCHOR:  # never assert an unverified before/after
             return self._result(
                 ResultStatus.INSUFFICIENT_EVIDENCE,
-                "UNKNOWN: the event this question is relative to has no source-stated date in "
-                "the governed timeline, so no before/after relationship can be established.",
+                UNRESOLVED_ANCHOR[outcome.status],
                 objective=objective,
                 **common,
             )
@@ -471,9 +516,25 @@ class _Request:
             ctx = router.context_factory(self.request_id)
             return router._resolve_anchor(scope, self.project_id, self.access, ctx, [])
 
+        def confirm(identified):  # the governed timeline confirms the identified event
+            arguments = {"project_id": self.project_id}
+            if identified.event_type:
+                arguments["event_types"] = [identified.event_type]
+            result = router.executor.run(
+                "get_project_timeline",
+                arguments,
+                router.context_factory(self.request_id),
+                scope_project_id=self.project_id,
+                authorized_projects=(self.project_id,),
+            )
+            if result.status != ToolStatus.OK:
+                return ()
+            _owned([item.model_dump(mode="json") for item in result.items], self.project_id)
+            return matching_events(result.items, identified)
+
         with self.recorder.span("anchor") as span:
             outcome = resolve_anchor(
-                parse_temporal(self.query), choice, gathered.refs.get(chosen), resolver
+                parse_temporal(self.query), choice, gathered.refs.get(chosen), resolver, confirm
             )
             _annotate(span, status=outcome.status, relation=outcome.relation or "")
         self.activity["anchor_resolution"] = outcome.status
@@ -620,6 +681,8 @@ def _request_attributes(result: InvestigationResult, config: CopilotConfig) -> d
         "validation_failures": ",".join(result.validation.failures),
         "decision_rounds": activity.decision_rounds,
         "tool_calls": activity.tool_calls,
+        "planning_failure": activity.planning_failure or "",
+        "anchor_resolution": activity.anchor_resolution or "",
         "model_call_count": len(calls),
         "model_endpoints": ",".join(sorted({c.endpoint for c in calls if c.endpoint})),
         "model_diagnostic_reasons": ",".join(

@@ -18,6 +18,7 @@ from pydantic import Field, ValidationError
 
 from worldbank_copilot.investigation.policy import Contract
 from worldbank_copilot.tools.registry import TOOL_SPECS
+from worldbank_copilot.tools.timeline import TIMELINE_EVENT_TYPES
 
 SEARCH = "search_documents"
 SPECS = {s.name: s for s in TOOL_SPECS if s.tables}  # governed structured tools only
@@ -35,6 +36,7 @@ class ActionTool(StrEnum):
 
 
 EvidenceHandle = Annotated[str, Field(pattern=r"^E[1-9][0-9]{0,2}$")]
+EventType = Literal[TIMELINE_EVENT_TYPES]  # the governed timeline tool's own event types
 _UNSAFE_QUERY = re.compile(
     r"(?i)(select\s|insert\s|delete\s|drop\s|update\s|https?://|file:|dbfs:|/Volumes/|[A-Z]:\\)"
 )
@@ -50,8 +52,13 @@ disposition: INVESTIGATE to run actions; ANSWER_NOW when the supplied evidence i
 CLARIFY only if the question cannot be interpreted even semantically; PREDICTION if the user
 asks for a forecast or probability of success/failure; OUT_OF_SCOPE if unrelated to project
 implementation. Set review_evidence to true only if seeing the results could change what
-else to retrieve. For "before"/"after" an event, set temporal_anchor to that event's timeline
-evidence handle once it is supplied. Return only the requested JSON; no chain-of-thought.
+else to retrieve. When the question asks what happened before or after an event, set
+temporal_anchor (from the first round on): relation, the event_type from the timeline tool's
+event types, and the year/month/day the question gives for that event (only the parts it
+gives), or event = the event's timeline evidence handle once one is supplied. The application
+confirms the event and its date against the governed timeline; a date in the question is
+never treated as the event's date on its own. Return only the requested JSON; no
+chain-of-thought.
 """
 
 
@@ -68,8 +75,15 @@ class Action(Contract):
 
 
 class TemporalAnchor(Contract):
-    event: EvidenceHandle  # a supplied timeline event; its governed date is used, not text
+    """Which event the question is relative to. Identifies a candidate only: the boundary
+    date always comes from a confirmed, source-dated governed timeline event."""
+
     relation: Literal["BEFORE", "AFTER", "COMPARE"]
+    event: EvidenceHandle | None = None  # a supplied timeline event handle, or
+    event_type: EventType | None = None  # the governed timeline event type, and
+    year: int | None = Field(default=None, ge=1900, le=2100)  # date parts the question gives
+    month: int | None = Field(default=None, ge=1, le=12)
+    day: int | None = Field(default=None, ge=1, le=31)
 
 
 class InvestigatorDecision(Contract):

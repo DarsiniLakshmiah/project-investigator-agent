@@ -31,7 +31,7 @@ from worldbank_copilot.retrieval.contract import (
     RetrievalResult,
     RetrievalStatus,
 )
-from worldbank_copilot.routing.models import TemporalKind, TemporalStatus
+from worldbank_copilot.routing.models import AnchorCandidate, TemporalKind, TemporalStatus
 from worldbank_copilot.tools.executor import ToolExecutor
 from worldbank_copilot.tools.models import ToolResult, ToolStatus
 
@@ -258,6 +258,7 @@ class AnchorOutcome:
     """Whether an event-relative relationship can be established, from governed data only."""
 
     status: str  # NOT_EVENT_RELATIVE | RESOLVED | AMBIGUOUS | NO_SOURCE_DATED_EVENT
+    #              | NO_MATCHING_EVENT (the identified event is not in the governed timeline)
     relation: str | None = None  # BEFORE | AFTER | COMPARE
     when: date | None = None
     event_id: str | None = None  # the Investigator-chosen event record, if it was the anchor
@@ -271,13 +272,41 @@ class AnchorOutcome:
 _DIRECTIONS = {"before": "BEFORE", "until": "BEFORE", "after": "AFTER", "since": "AFTER"}
 
 
-def resolve_anchor(parsed, choice, chosen_event, resolver) -> AnchorOutcome:
-    """The Investigator's semantic choice first; otherwise the existing timeline resolver.
+def matching_events(events, choice) -> tuple[AnchorCandidate, ...]:
+    """Source-dated governed timeline events consistent with what the Investigator identified.
+
+    Exact comparisons only: event type and each date part the question gave. A derived
+    candidate date is never used; an undated event never matches.
+    """
+    wanted = {"year": choice.year, "month": choice.month, "day": choice.day}
+    return tuple(
+        AnchorCandidate(
+            timeline_event_id=e.source.record_id or str(e.event_sequence),
+            event_type=e.event_type,
+            event_date=e.event_date,
+            title=e.event_title,
+        )
+        for e in events
+        if e.event_date is not None
+        and choice.event_type in (None, e.event_type)
+        and all(v is None or getattr(e.event_date, k) == v for k, v in wanted.items())
+    )
+
+
+def _identifies_event(choice) -> bool:
+    return choice is not None and (
+        choice.event_type is not None or any((choice.year, choice.month, choice.day))
+    )
+
+
+def resolve_anchor(parsed, choice, chosen_event, resolver, confirm) -> AnchorOutcome:
+    """The Investigator identifies the event; governed timeline data confirms and dates it.
 
     ``parsed`` is the deterministic temporal parse of the question; ``choice`` the
-    Investigator's TemporalAnchor (or None); ``chosen_event`` the evidence it points at;
-    ``resolver`` resolves an EVENT_ANCHORED scope against source-dated timeline events.
-    The date always comes from a governed record, never from model text.
+    Investigator's TemporalAnchor (or None); ``chosen_event`` the evidence its handle points
+    at; ``confirm`` returns the governed events matching ``choice``; ``resolver`` resolves an
+    EVENT_ANCHORED parse. The boundary date always comes from a governed, source-dated
+    record, never from model or user text.
     """
     expression = next(
         (e for e in parsed.expressions if e.kind == TemporalKind.EVENT_ANCHORED), None
@@ -292,13 +321,20 @@ def resolve_anchor(parsed, choice, chosen_event, resolver) -> AnchorOutcome:
     when = event_date_of(chosen_event)
     if when is not None:
         return AnchorOutcome("RESOLVED", relation, when, event_id=chosen_event.evidence_id)
+    if _identifies_event(choice):
+        return _from_candidates(relation, confirm(choice), missing="NO_MATCHING_EVENT")
     if parsed.kind != TemporalKind.EVENT_ANCHORED or expression is None:
         # The Investigator named an anchor event, but it carries no source-stated date.
         status = "NOT_EVENT_RELATIVE" if choice is None else "NO_SOURCE_DATED_EVENT"
         return AnchorOutcome(status, relation)
     scope = resolver(parsed)
-    candidates = scope.anchor_candidates
-    if scope.status == TemporalStatus.RESOLVED and len(candidates) == 1:
+    if scope.status != TemporalStatus.RESOLVED and len(scope.anchor_candidates) == 1:
+        return AnchorOutcome("NO_SOURCE_DATED_EVENT", relation)
+    return _from_candidates(relation, scope.anchor_candidates, missing="NO_SOURCE_DATED_EVENT")
+
+
+def _from_candidates(relation, candidates, *, missing: str) -> AnchorOutcome:
+    if len(candidates) == 1:
         return AnchorOutcome("RESOLVED", relation, candidates[0].event_date)
     if len(candidates) > 1:
         return AnchorOutcome(
@@ -306,7 +342,7 @@ def resolve_anchor(parsed, choice, chosen_event, resolver) -> AnchorOutcome:
             relation,
             candidates=tuple(f"{c.title} ({c.event_date.isoformat()})" for c in candidates),
         )
-    return AnchorOutcome("NO_SOURCE_DATED_EVENT", relation)
+    return AnchorOutcome(missing, relation)
 
 
 # -- relevance-aware context packing -------------------------------------------------

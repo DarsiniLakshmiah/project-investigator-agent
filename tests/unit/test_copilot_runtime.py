@@ -6,6 +6,7 @@ model quality. No network, endpoint or Databricks access.
 
 import json
 from contextlib import contextmanager
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -321,8 +322,6 @@ def timeline_has(monkeypatch, *dates):
 
 
 def test_one_authoritative_event_date_filters_evidence_and_answers(monkeypatch):
-    from datetime import date
-
     calls = timeline_has(monkeypatch, date(2100, 1, 1))  # every dated record is BEFORE it
     synthesizer = Synthesizer(temporal_relation="BEFORE", count=1)
     _, result = run(BEFORE_RESTRUCTURING, synthesizer=synthesizer, critic=Critic())
@@ -340,8 +339,6 @@ def test_one_authoritative_event_date_filters_evidence_and_answers(monkeypatch):
 
 
 def test_several_authoritative_events_ask_which_one(monkeypatch):
-    from datetime import date
-
     timeline_has(monkeypatch, date(2019, 5, 1), date(2022, 3, 1))
     synthesizer = Synthesizer()
     _, result = run(BEFORE_RESTRUCTURING, synthesizer=synthesizer, critic=Critic())
@@ -361,6 +358,184 @@ def test_event_without_authoritative_date_publishes_no_temporal_answer():
         assert result.status == ResultStatus.INSUFFICIENT_EVIDENCE and not result.claims
         assert result.activity.anchor_resolution == "NO_SOURCE_DATED_EVENT"
     assert not synthesizer.requests
+
+
+# -- a named, dated event (follow-up to an ambiguous anchor) ------------------------------
+JULY_23 = "What happened before the July 23, 2024 restructuring?"
+
+
+def anchor_on(relation="BEFORE", event_type="RESTRUCTURING", year=None, month=None, day=None):
+    """What the Investigator understood: the strict contract requires every key."""
+    return {
+        "relation": relation,
+        "event": None,
+        "event_type": event_type,
+        "year": year,
+        "month": month,
+        "day": day,
+    }
+
+
+def governed_timeline(monkeypatch, *events):
+    """The real governed timeline call, with source-stated (event_type, date) events added."""
+    from worldbank_copilot.tools.executor import ToolExecutor
+
+    original = ToolExecutor.run
+
+    def run(self, tool, arguments, *args, **kwargs):
+        result = original(self, tool, arguments, *args, **kwargs)
+        if tool != "get_project_timeline" or not result.items:
+            return result
+        template = result.items[0]
+        added = [
+            template.model_copy(
+                update={"event_type": kind, "event_date": on, "event_title": kind.title()}
+            )
+            for kind, on in events
+            if kind in (arguments.get("event_types") or (kind,))
+        ]
+        return result.model_copy(update={"items": [*result.items, *added]})
+
+    monkeypatch.setattr(ToolExecutor, "run", run)
+
+
+FOUR = tuple(
+    ("RESTRUCTURING", d)
+    for d in (date(2021, 5, 20), date(2024, 7, 23), date(2024, 12, 10), date(2026, 6, 29))
+)
+FULL_DATE = {"year": 2024, "month": 7, "day": 23}
+MONTH_DAY = {"month": 7, "day": 23}
+
+
+@pytest.mark.parametrize(
+    ("question", "parts"),
+    [
+        (JULY_23, FULL_DATE),
+        ("What happened before the 2024-07-23 restructuring?", FULL_DATE),
+        ("Before the July 23 restructuring, what problems were documented?", MONTH_DAY),
+    ],
+)  # fmt: skip
+def test_named_dated_event_is_confirmed_and_bounds_the_evidence(monkeypatch, question, parts):
+    governed_timeline(monkeypatch, *FOUR)
+    synthesizer = Synthesizer()
+    _, result = run(
+        question,
+        investigator=Investigator(temporal_anchor=anchor_on(**parts)),
+        synthesizer=synthesizer,
+        critic=Critic(),
+    )
+    assert result.status == ResultStatus.ANSWER, result.message
+    assert result.activity.anchor_resolution == "RESOLVED"
+    assert result.activity.temporal_anchor == "BEFORE"
+    payload = json.loads(synthesizer.requests[0].context_json)
+    assert payload["anchor"] == {"relation": "BEFORE", "date": "2024-07-23"}
+
+
+def test_named_dated_event_after_relation(monkeypatch):
+    governed_timeline(monkeypatch, *FOUR)
+    synthesizer = Synthesizer()
+    _, result = run(
+        "What changed after the July 23, 2024 restructuring?",
+        investigator=Investigator(temporal_anchor=anchor_on("AFTER", year=2024, month=7, day=23)),
+        synthesizer=synthesizer,
+        critic=Critic(),
+    )
+    assert result.activity.anchor_resolution == "RESOLVED"
+    assert result.activity.temporal_anchor == "AFTER"
+    payload = json.loads(synthesizer.requests[0].context_json)
+    assert payload["anchor"] == {"relation": "AFTER", "date": "2024-07-23"}
+    assert all(e["period"] in ("AFTER", "EVENT", "UNDATED") for e in payload["evidence"])
+
+
+def test_named_date_with_no_governed_event_is_insufficient(monkeypatch):
+    governed_timeline(monkeypatch, *FOUR)
+    synthesizer = Synthesizer()
+    _, result = run(
+        "What happened before the July 22, 2024 restructuring?",
+        investigator=Investigator(temporal_anchor=anchor_on(year=2024, month=7, day=22)),
+        synthesizer=synthesizer,
+        critic=Critic(),
+    )
+    assert result.status == ResultStatus.INSUFFICIENT_EVIDENCE and not synthesizer.requests
+    assert result.activity.anchor_resolution == "NO_MATCHING_EVENT"
+
+
+def test_same_date_on_several_governed_events_asks_which(monkeypatch):
+    governed_timeline(monkeypatch, *FOUR, ("ISR_REPORT", date(2024, 7, 23)))
+    synthesizer = Synthesizer()
+    _, result = run(
+        "What happened before July 23, 2024?",
+        investigator=Investigator(
+            temporal_anchor=anchor_on(event_type=None, year=2024, month=7, day=23)
+        ),
+        synthesizer=synthesizer,
+        critic=Critic(),
+    )
+    assert result.status == ResultStatus.CLARIFY and not synthesizer.requests
+    assert result.activity.anchor_resolution == "AMBIGUOUS"
+
+
+def test_candidate_date_in_the_question_is_not_authoritative():
+    # Offline fixture: the restructuring has only a derived candidate date (2018-06-01).
+    synthesizer = Synthesizer()
+    _, result = run(
+        "What happened before the June 1, 2018 restructuring?",
+        investigator=Investigator(temporal_anchor=anchor_on(year=2018, month=6, day=1)),
+        synthesizer=synthesizer,
+        critic=Critic(),
+    )
+    assert result.status == ResultStatus.INSUFFICIENT_EVIDENCE and not synthesizer.requests
+    assert result.activity.anchor_resolution == "NO_MATCHING_EVENT"
+    assert result.activity.temporal_anchor is None
+
+
+# -- planning failures are observable ------------------------------------------------
+BAD_ANCHOR = decision(temporal_anchor={**anchor_on(), "event": "2024-07-23"})  # not a handle
+
+
+@pytest.mark.parametrize(
+    ("investigator", "code"),
+    [
+        (lambda: Investigator(raw="not json"), "OUTPUT_PARSE_FAILED"),
+        (lambda: Investigator(raw=BAD_ANCHOR), "SCHEMA_INVALID"),
+        (lambda: Investigator(error=NodeError(Failure.MODEL_UNAVAILABLE)), "MODEL_CALL_FAILED"),
+    ],
+)
+def test_first_round_planning_failure_is_reported_with_a_reason(investigator, code):
+    synthesizer = Synthesizer()
+    _, result = run(JULY_23, investigator=investigator(), synthesizer=synthesizer, critic=Critic())
+    assert result.status == ResultStatus.FAIL_CLOSED and not synthesizer.requests
+    assert result.message == f"The investigation could not be planned ({code})."
+    assert result.activity.planning_failure == code
+
+
+def test_failed_review_round_answers_from_first_round_evidence():
+    # The live D3-follow-up shape: round 1 succeeded and ran tools; round 2 was invalid.
+    _, result = run(
+        JULY_23,
+        investigator=Investigator(round2=BAD_ANCHOR),
+        synthesizer=Synthesizer(),
+        critic=Critic(),
+    )
+    assert result.activity.planning_failure == "SCHEMA_INVALID"
+    assert result.activity.decision_rounds == 1 and result.activity.tool_calls == 2
+    assert result.activity.evidence_retrieved > 0
+    assert result.status == ResultStatus.ANSWER and result.objective
+    assert any("review round failed (SCHEMA_INVALID)" in n for n in result.limitations)
+
+
+@pytest.mark.parametrize(
+    ("first_round", "code"),
+    [
+        ({"actions": [], "review_evidence": False}, "NO_ACTIONS"),
+        ({"disposition": "ANSWER_NOW", "actions": []}, "UNSUPPORTED_DISPOSITION"),
+        ({"actions": [action(tool="search_documents", query="")]}, "GOVERNANCE_REJECTED"),
+    ],
+)
+def test_plans_that_gather_nothing_say_why(first_round, code):
+    _, result = run(investigator=Investigator(**first_round), synthesizer=Synthesizer())
+    assert result.status == ResultStatus.INSUFFICIENT_EVIDENCE
+    assert result.activity.planning_failure == code
 
 
 def test_synthesizer_before_claim_without_anchor_is_removed():

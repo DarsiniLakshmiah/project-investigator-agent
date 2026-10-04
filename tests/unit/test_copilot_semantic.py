@@ -22,6 +22,7 @@ from worldbank_copilot.copilot.governed import (
     GovernedExecutor,
     anchor,
     approved_context,
+    matching_events,
     pack,
     resolve_anchor,
 )
@@ -199,6 +200,10 @@ def scope(*dates):
     )
 
 
+def NONE(choice):  # a governed timeline with no matching event
+    return ()
+
+
 def resolver_of(result):
     calls = []
 
@@ -211,24 +216,26 @@ def resolver_of(result):
 
 
 def test_one_source_dated_event_resolves_the_anchor():
-    outcome = resolve_anchor(BEFORE_RESTRUCTURING, None, None, resolver_of(scope(WHEN)))
+    outcome = resolve_anchor(BEFORE_RESTRUCTURING, None, None, resolver_of(scope(WHEN)), NONE)
     assert outcome.resolved and outcome.when == WHEN and outcome.relation == "BEFORE"
 
 
 def test_several_source_dated_events_are_ambiguous_not_guessed():
     outcome = resolve_anchor(
-        BEFORE_RESTRUCTURING, None, None, resolver_of(scope(WHEN, date(2022, 3, 1)))
+        BEFORE_RESTRUCTURING, None, None, resolver_of(scope(WHEN, date(2022, 3, 1))), NONE
     )
     assert outcome.status == "AMBIGUOUS" and outcome.when is None
     assert outcome.candidates == ("R1 (2020-06-01)", "R2 (2022-03-01)")
 
 
 def test_known_event_without_a_source_stated_date_is_unresolved():
-    outcome = resolve_anchor(BEFORE_RESTRUCTURING, None, None, resolver_of(scope()))
+    outcome = resolve_anchor(BEFORE_RESTRUCTURING, None, None, resolver_of(scope()), NONE)
     assert outcome.status == "NO_SOURCE_DATED_EVENT" and not outcome.resolved
     estimated = ref("FACT", "ev", event_type="RESTRUCTURING", event_date=None)
     choice = TemporalAnchor(event="E1", relation="BEFORE")
-    outcome = resolve_anchor(parse_temporal("What changed?"), choice, estimated, resolver_of(None))
+    outcome = resolve_anchor(
+        parse_temporal("What changed?"), choice, estimated, resolver_of(None), NONE
+    )
     assert outcome.status == "NO_SOURCE_DATED_EVENT"
 
 
@@ -236,15 +243,98 @@ def test_investigator_chosen_dated_event_wins_without_a_timeline_lookup():
     event = ref("FACT", "ev", event_type="RESTRUCTURING", event_date="2020-06-01")
     resolver = resolver_of(scope())
     choice = TemporalAnchor(event="E1", relation="AFTER")
-    outcome = resolve_anchor(BEFORE_RESTRUCTURING, choice, event, resolver)
+    outcome = resolve_anchor(BEFORE_RESTRUCTURING, choice, event, resolver, NONE)
     assert outcome.resolved and outcome.when == WHEN and outcome.relation == "AFTER"
     assert outcome.event_id == event.evidence_id and not resolver.calls
 
 
 def test_question_that_is_not_event_relative_needs_no_anchor():
     resolver = resolver_of(scope())
-    outcome = resolve_anchor(parse_temporal("What changed?"), None, None, resolver)
+    outcome = resolve_anchor(parse_temporal("What changed?"), None, None, resolver, NONE)
     assert outcome.status == "NOT_EVENT_RELATIVE" and not resolver.calls
+
+
+# -- an event identified by the Investigator, confirmed by the governed timeline ----------
+def event(event_type, on, candidate=None, title="Restructuring"):
+    return SimpleNamespace(
+        event_type=event_type,
+        event_date=on,
+        candidate_event_date=candidate,
+        event_title=title,
+        event_sequence=1,
+        source=SimpleNamespace(record_id=f"{event_type}-{on or candidate}"),
+    )
+
+
+TIMELINE = (
+    event("RESTRUCTURING", date(2021, 5, 20)),
+    event("RESTRUCTURING", date(2024, 7, 23)),
+    event("RESTRUCTURING", date(2024, 12, 10)),
+    event("RESTRUCTURING", date(2026, 6, 29)),
+    event("ISR_REPORT", date(2024, 7, 23), title="ISR 9"),
+    event("RESTRUCTURING", None, candidate=date(2018, 6, 1)),  # derived date only
+)
+
+
+def identified(relation="BEFORE", event_type="RESTRUCTURING", **parts):
+    return TemporalAnchor(relation=relation, event_type=event_type, **parts)
+
+
+def confirmed(choice, question="What happened before the July 23, 2024 restructuring?"):
+    calls = []
+
+    def confirm(c):
+        calls.append(c)
+        return matching_events(TIMELINE, c)
+
+    outcome = resolve_anchor(parse_temporal(question), choice, None, resolver_of(None), confirm)
+    return outcome, calls
+
+
+@pytest.mark.parametrize("relation", ["BEFORE", "AFTER"])
+def test_explicit_date_and_named_event_resolve_from_the_governed_timeline(relation):
+    # Cases 1-3: date + named event + BEFORE/AFTER, exactly one governed match.
+    outcome, calls = confirmed(identified(relation, year=2024, month=7, day=23))
+    assert outcome.resolved and outcome.relation == relation
+    assert outcome.when == date(2024, 7, 23) and len(calls) == 1
+
+
+def test_partial_date_matches_only_where_the_governed_timeline_agrees():
+    # "Before the July 23 restructuring": no year, still exactly one governed match.
+    outcome, _ = confirmed(identified(month=7, day=23))
+    assert outcome.resolved and outcome.when == date(2024, 7, 23)
+    outcome, _ = confirmed(identified(year=2024))  # two 2024 restructurings
+    assert outcome.status == "AMBIGUOUS"
+    assert outcome.candidates == ("Restructuring (2024-07-23)", "Restructuring (2024-12-10)")
+
+
+def test_explicit_date_matching_no_governed_event_is_not_resolved():
+    # Case 4.
+    outcome, _ = confirmed(identified(year=2024, month=7, day=22))
+    assert outcome.status == "NO_MATCHING_EVENT" and outcome.when is None
+
+
+def test_same_date_matching_several_governed_events_is_ambiguous():
+    # Case 5: the Investigator did not say which kind of event.
+    outcome, _ = confirmed(identified(event_type=None, year=2024, month=7, day=23))
+    assert outcome.status == "AMBIGUOUS"
+    assert outcome.candidates == ("Restructuring (2024-07-23)", "ISR 9 (2024-07-23)")
+
+
+def test_user_date_is_never_authoritative_without_governed_confirmation():
+    # Case 7: a derived candidate date never confirms an event, and the parsed DATE scope
+    # of the question is never turned into an anchor by itself.
+    outcome, _ = confirmed(identified(year=2018, month=6, day=1))
+    assert outcome.status == "NO_MATCHING_EVENT" and outcome.when is None
+    question = parse_temporal("What happened before the July 23, 2024 restructuring?")
+    assert question.kind == "DATE"  # the parser reads only the date
+    outcome = resolve_anchor(question, None, None, resolver_of(None), NONE)
+    assert outcome.status == "NOT_EVENT_RELATIVE" and not outcome.resolved
+
+
+def test_type_only_anchor_lists_the_governed_choices():
+    outcome, _ = confirmed(identified())
+    assert outcome.status == "AMBIGUOUS" and len(outcome.candidates) == 4
 
 
 def temporal_case():

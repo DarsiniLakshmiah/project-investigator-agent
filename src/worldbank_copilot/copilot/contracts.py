@@ -106,6 +106,9 @@ class InvestigationActivity(_Result):
     evidence_shown: int = 0
     temporal_anchor: str | None = None  # BEFORE | AFTER | COMPARE when applied
     anchor_resolution: str | None = None  # RESOLVED | AMBIGUOUS | NO_SOURCE_DATED_EVENT | ...
+    # MODEL_CALL_FAILED | OUTPUT_PARSE_FAILED | SCHEMA_INVALID | NO_ACTIONS
+    # | UNSUPPORTED_DISPOSITION | GOVERNANCE_REJECTED
+    planning_failure: str | None = None
     evidence_filtered_by_date: int = 0
 
 
