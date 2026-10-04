@@ -1,0 +1,3 @@
+# Presentation layer only: the Copilot runs in the backend job, not in the App.
+streamlit>=1.40,<2
+databricks-sdk>=0.60,<1

@@ -1,0 +1,9 @@
+# Databricks App: interview-demo presentation layer over copilot.investigate().
+# Source code path: <repo>/copilot_app. Bind the backend job (notebooks/15_copilot_app_backend)
+# as an App resource named "copilot-job" with CAN_MANAGE_RUN.
+command: ["streamlit", "run", "app.py", "--server.address", "0.0.0.0"]
+env:
+  - name: WBC_COPILOT_JOB_ID
+    valueFrom: copilot-job
+  - name: STREAMLIT_GATHER_USAGE_STATS
+    value: "false"
