@@ -85,11 +85,27 @@ class _DiagnosticTransport:
     def __init__(self, inner):
         self.inner = inner
         self.last_reason: DiagnosticReason | None = None
+        self.last_usage: dict[str, int] = {}
 
     def post(self, body: dict, timeout: float) -> ChatResponse:
         reply = self.inner.post(body, timeout)
         self.last_reason = classify_envelope(reply.status, reply.body)
+        self.last_usage = usage_counts(reply.body)
         return reply
+
+
+def usage_counts(body: Any) -> dict[str, int]:
+    """Non-negative integer token counts from ``usage`` only; nothing else is read."""
+    usage = body.get("usage") if isinstance(body, dict) else None
+    if not isinstance(usage, dict):
+        return {}
+    details = usage.get("completion_tokens_details")
+    found = {
+        "input_tokens": usage.get("prompt_tokens"),
+        "output_tokens": usage.get("completion_tokens"),
+        "reasoning_tokens": details.get("reasoning_tokens") if isinstance(details, dict) else None,
+    }
+    return {k: v for k, v in found.items() if type(v) is int and v >= 0}
 
 
 class DiagnosedModelAdapter:
@@ -102,10 +118,13 @@ class DiagnosedModelAdapter:
         self._transport = _DiagnosticTransport(transport or DatabricksChatTransport(endpoint))
         self._adapter = DatabricksModelAdapter(endpoint, transport=self._transport)
         self.last_reason: DiagnosticReason | None = None
+        self.last_usage: dict[str, int] = {}
 
     def invoke(self, request: ModelRequest) -> ModelReply:
         self._transport.last_reason = self.last_reason = None
+        self._transport.last_usage = self.last_usage = {}
         try:
             return self._adapter.invoke(request)
         finally:
             self.last_reason = self._transport.last_reason
+            self.last_usage = self._transport.last_usage

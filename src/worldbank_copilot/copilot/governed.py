@@ -352,14 +352,23 @@ def pack(
     *,
     max_bytes: int,
     max_text_chars: int,
+    periods: dict[str, str] | None = None,
 ) -> list[dict]:
     """Round-robin over calls in their returned (ranked) order, trimming long text.
 
     Every call contributes its best evidence first, so one large result cannot crowd
-    out the others; entries stop at the byte budget. Trimming affects only the model
-    view: identity, citation and source fields are unchanged.
+    out the others; entries stop at the byte budget. With anchor periods, each call's
+    evidence is queued per period, so one side of an event cannot crowd out the other.
+    Trimming affects only the model view: identity, citation and source fields are
+    unchanged.
     """
     queues = [[i for i in ids if i in keep] for ids in gathered.by_call]
+    if periods:
+        queues = [
+            [i for i in queue if periods.get(i) == period]
+            for queue in queues
+            for period in dict.fromkeys(periods.get(i) for i in queue)
+        ]
     entries, used, seen = [], 0, set()
     while any(queues):
         for queue in queues:

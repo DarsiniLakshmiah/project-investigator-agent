@@ -3,6 +3,7 @@ per-claim integrity and claim-level finalization. Offline; no models or network.
 
 import json
 from datetime import date
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -37,10 +38,17 @@ from worldbank_copilot.copilot.investigator import (
     tool_catalog,
 )
 from worldbank_copilot.copilot.semantic import (
+    MAX_CLAIM_CHARS,
+    MAX_CLAIM_HANDLES,
+    MAX_CLAIMS,
+    MAX_LIMITATION_CHARS,
+    MAX_LIMITATIONS,
+    SYNTHESIS_INSTRUCTIONS,
     TEMPORAL_RELATION_UNVERIFIED,
     SemanticReview,
     SemanticSynthesis,
     enrich,
+    model_view,
     project,
 )
 from worldbank_copilot.investigation.evidence_models import EvidenceReference
@@ -620,3 +628,106 @@ def test_limitation_publishes_only_when_grounded_and_once():
         model_limitations=("kept", "ungrounded", "ambiguous", "unreviewed"),
     )  # fmt: skip
     assert final.limitations == ("app", "kept") and final.limitations_withheld == 3
+
+
+# -- D4: bounded synthesis input and output --------------------------------------------
+def test_synthesis_input_stays_bounded_with_many_retrieved_records():
+    many = [ref(record=f"d{i}", document_date="2023-01-01", text="w " * 2000) for i in range(200)]
+    g = gathered(many[:100], many[100:])
+    entries = pack(g, set(g.refs), max_bytes=40_000, max_text_chars=1500)
+    context = approved_context(
+        request_id="r", project_id=PROJECT, question="q", objective="o",
+        temporal_scope=fixture().temporal_scope, entries=entries, gathered=g,
+    )  # fmt: skip
+    payload = json.dumps(project(context, objective="o").payload)
+    assert 0 < len(entries) < 200 and len(payload.encode()) <= 40_000
+    assert context.omitted_evidence_ids  # the rest is declared as not shown
+
+
+def test_both_sides_of_an_anchor_survive_packing():
+    # One call returns all BEFORE evidence ranked ahead of all AFTER evidence.
+    before = [ref(record=f"b{i}", document_date="2019-01-01", text="x" * 900) for i in range(10)]
+    after = [ref(record=f"a{i}", document_date="2021-01-01", text="x" * 900) for i in range(10)]
+    g = gathered(before + after)
+    _, periods, _ = anchor(g, WHEN, "COMPARE")
+    entries = pack(g, set(g.refs), max_bytes=6_000, max_text_chars=900, periods=periods)
+    shown = {periods[e["evidence_id"]] for e in entries}
+    assert shown == {"BEFORE", "AFTER"}
+    unaware = pack(g, set(g.refs), max_bytes=6_000, max_text_chars=900)
+    assert {periods[e["evidence_id"]] for e in unaware} == {"BEFORE"}  # what this prevents
+
+
+def test_compaction_keeps_handles_identity_dates_provenance_and_text():
+    r = ref(record="d1", document_date="2019-01-01", text="Procurement was delayed.")
+    context = context_for(r)
+    _, periods, _ = anchor(gathered([r]), WHEN, "COMPARE")
+    projection = project(context, objective="o", periods=periods, anchor={"relation": "BEFORE"})
+    (item,) = projection.payload["evidence"]
+    assert item["handle"] == "E1" and projection.evidence == {"E1": r.evidence_id}
+    assert item["provenance"] == "DOCUMENTED_FINDING" and item["period"] == "BEFORE"
+    assert item["content"]["text"] == "Procurement was delayed."
+    assert item["content"]["document_date"] == "2019-01-01"
+    assert "source" not in item["content"] and "provenance_class" not in item["content"]
+    assert all(v is not None for v in item["content"].values())
+    # identity and citations stay with the governed context and reach the claim
+    output, _, _ = enrich(
+        related(("Procurement was delayed.", ["E1"], "BEFORE")), projection, context
+    )
+    (claim,) = output.candidate_claims
+    assert claim.citations[0].source_identity == context.evidence[0]["source_identity"]
+    assert context.evidence[0]["citation"] == r.model_dump(mode="json")["citation"]
+
+
+def test_compaction_is_structural_not_semantic():
+    payload = {
+        "anything": "kept", "zero": 0, "flag": False, "empty": "", "none": None, "list": [],
+        "nested": {"value": "1", "source": {"table": "t"}, "provenance_class": "FACT"},
+        "source": {"table": "t"}, "provenance_class": "FACT",
+    }  # fmt: skip
+    assert model_view(payload) == {
+        "anything": "kept",
+        "zero": 0,
+        "flag": False,
+        "nested": {"value": "1", "provenance_class": "FACT"},
+    }
+
+
+def test_no_semantic_relevance_taxonomy_in_packing_or_synthesis():
+    from worldbank_copilot.tools.timeline import TIMELINE_EVENT_TYPES
+
+    root = Path(__file__).resolve().parents[2] / "src/worldbank_copilot/copilot"
+    for name in ("governed.py", "semantic.py"):
+        source = (root / name).read_text(encoding="utf-8")
+        assert not [t for t in TIMELINE_EVENT_TYPES if t in source], name
+
+
+def test_synthesis_output_contract_is_bounded():
+    claim = {"text": "x", "evidence": ["E1"], "interpretation": False, "temporal_relation": "NONE"}
+
+    def output(claims=(claim,), limitations=()):
+        return {"claims": list(claims), "insufficient_evidence": False,
+                "limitations": list(limitations)}  # fmt: skip
+
+    SemanticSynthesis.model_validate(output([claim] * MAX_CLAIMS, ["l"] * MAX_LIMITATIONS))
+    for bad in (
+        output([claim] * (MAX_CLAIMS + 1)),
+        output([{**claim, "text": "x" * (MAX_CLAIM_CHARS + 1)}]),
+        output([{**claim, "evidence": [f"E{i}" for i in range(1, MAX_CLAIM_HANDLES + 2)]}]),
+        output(limitations=["l"] * (MAX_LIMITATIONS + 1)),
+        output(limitations=["x" * (MAX_LIMITATION_CHARS + 1)]),
+    ):
+        with pytest.raises(ValidationError):
+            SemanticSynthesis.model_validate(bad)
+    largest = json.dumps(output(
+        [{**claim, "text": "x" * MAX_CLAIM_CHARS,
+          "evidence": [f"E{i}" for i in range(100, 100 + MAX_CLAIM_HANDLES)]}] * MAX_CLAIMS,
+        ["x" * MAX_LIMITATION_CHARS] * MAX_LIMITATIONS,
+    ))  # fmt: skip
+    assert len(largest) < 5_000  # ~1.2k tokens: far below the shared 5000-token output budget
+
+
+def test_synthesis_contract_discourages_chronology_and_reasoning():
+    text = " ".join(SYNTHESIS_INSTRUCTIONS.split())
+    assert "Return the few claims needed to answer it, not one per record." in text
+    assert "do not list every record or retell the project chronology" in text
+    assert "Do not explain your reasoning." in text

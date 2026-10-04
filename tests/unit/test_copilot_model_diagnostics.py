@@ -242,3 +242,32 @@ def test_critic_length_limit_degrades_to_answer_and_stays_diagnosable(monkeypatc
     assert root["critic_status"] == "FAILED" and root["status"] == "ANSWER"
     assert "FINISH_REASON_LENGTH" in root["model_diagnostic_reasons"]
     assert SECRET not in json.dumps([s.attributes for s in spans])
+
+
+def test_synthesizer_length_limit_still_fails_closed_with_usage_counts():
+    body = {**choice("length", content=SECRET), "usage": {
+        "prompt_tokens": 4100, "completion_tokens": 5000,
+        "completion_tokens_details": {"reasoning_tokens": 4700}, "secret": SECRET,
+    }}  # fmt: skip
+    critic = Critic()
+    synthesizer = DiagnosedModelAdapter("synth-endpoint", transport=FakeTransport(body=body))
+    result = copilot(synthesizer, critic).investigate(INVESTIGATION, PROJECT)
+    assert result.status == ResultStatus.FAIL_CLOSED and not result.claims
+    assert not critic.requests  # no candidate claims exist to publish or review
+    call = result.model_calls[-1]
+    assert (call.role, call.outcome, call.diagnostic_reason) == (
+        "SYNTHESIZER",
+        "MODEL_OUTPUT_INVALID",
+        "FINISH_REASON_LENGTH",
+    )
+    assert (call.input_tokens, call.output_tokens, call.reasoning_tokens) == (4100, 5000, 4700)
+    assert SECRET not in result.model_dump_json()
+
+
+def test_usage_counts_are_integers_only():
+    from worldbank_copilot.copilot.model_diagnostics import usage_counts
+
+    assert usage_counts({"usage": {"prompt_tokens": 3, "completion_tokens": "9"}}) == {
+        "input_tokens": 3
+    }
+    assert usage_counts({"usage": None}) == {} and usage_counts(None) == {}

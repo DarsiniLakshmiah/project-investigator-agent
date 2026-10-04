@@ -417,6 +417,7 @@ class _Request:
             keep,
             max_bytes=bounds.context_max_bytes,
             max_text_chars=bounds.evidence_text_chars,
+            periods=periods,
         )
         self.activity["evidence_shown"] = len(entries)
         context = self._context(objective, entries, gathered)
@@ -615,13 +616,16 @@ class _Request:
                     parsed = parse_output(reply.text, schema)
                 except NodeError as exc:  # valid envelope, invalid output content
                     failure, reason = exc.category, PARSE_REASONS.get(exc.category)
+        # Usage counts from the envelope also on failures (a diagnosed adapter keeps them).
+        usage = getattr(adapter, "last_usage", None) or {}
         call = ModelCall(
             role=role,
             endpoint=endpoint,
             model_identity=reply.model_identity if reply else None,
             latency_ms=(time.monotonic() - called) * 1000,
-            input_tokens=reply.input_tokens if reply else None,
-            output_tokens=reply.output_tokens if reply else None,
+            input_tokens=reply.input_tokens if reply else usage.get("input_tokens"),
+            output_tokens=reply.output_tokens if reply else usage.get("output_tokens"),
+            reasoning_tokens=usage.get("reasoning_tokens"),
             outcome=failure.value if failure else "COMPLETED",
             diagnostic_reason=reason.value if reason else None,
         )

@@ -83,6 +83,7 @@ class ModelCall(_Result):
     latency_ms: float = Field(ge=0)
     input_tokens: int | None = None
     output_tokens: int | None = None
+    reasoning_tokens: int | None = None  # only if the endpoint reports it in usage
     outcome: str  # COMPLETED or the authoritative Failure category
     diagnostic_reason: str | None = None  # bounded code explaining a failure; never model text
 
