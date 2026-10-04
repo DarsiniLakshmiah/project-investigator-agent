@@ -433,3 +433,65 @@ def test_capture_wraps_each_adapter_once():
     inner = app.synthesizer
     Capture(app)
     assert app.synthesizer is inner and app.critic is None and first.calls["critic"] == []
+
+
+# -- Volume (FUSE) compatible persistence ------------------------------------------------
+@pytest.fixture
+def no_append(monkeypatch):
+    """Mimic a Unity Catalog Volume: append/seek-dependent modes fail with Errno 29."""
+    import builtins
+    import errno
+
+    real_open, real_path_open = builtins.open, Path.open
+
+    def guard(mode):
+        if "a" in mode or "+" in mode:
+            raise OSError(errno.ESPIPE, "Illegal seek")
+
+    def fake_open(file, mode="r", *args, **kwargs):
+        guard(mode)
+        return real_open(file, mode, *args, **kwargs)
+
+    def fake_path_open(self, mode="r", *args, **kwargs):
+        guard(mode)
+        return real_path_open(self, mode, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", fake_open)
+    monkeypatch.setattr(Path, "open", fake_path_open)
+
+
+def test_append_without_append_mode_preserves_earlier_records(tmp_path, no_append):
+    store = RunStore(tmp_path, "run")
+    store.results.write_text("", encoding="utf-8")  # the state left by the failed append
+    assert store.records() == []
+    for n in range(1, 4):
+        store.append({"case_id": f"APP_00{n}", "attempt": 1}, log=lambda *_: None)
+    assert [r["case_id"] for r in store.records()] == ["APP_001", "APP_002", "APP_003"]
+    store.append({"case_id": "APP_001", "attempt": 2}, log=lambda *_: None)
+    assert len(store.records()) == 4 and store.latest()["APP_001"]["attempt"] == 2
+
+
+def test_runner_resumes_and_reruns_on_a_volume_like_filesystem(cases, tmp_path, no_append):
+    chosen = select_cases(cases, case_ids=["APP_046", "APP_047"])
+    app, store = FakeCopilot(), RunStore(tmp_path, "run")
+    run_cases(app, chosen, store, log=lambda *_: None)
+    run_cases(app, chosen, store, log=lambda *_: None)  # RERUN=False: stored cases skipped
+    assert len(app.calls) == 2 and len(store.records()) == 2
+    run_cases(app, chosen[:1], store, rerun=True, log=lambda *_: None)  # adds an attempt
+    attempts = [(r["case_id"], r["attempt"]) for r in store.records()]
+    assert attempts == [("APP_046", 1), ("APP_047", 1), ("APP_046", 2)]
+
+
+def test_only_a_torn_trailing_line_is_tolerated(tmp_path):
+    store, messages = RunStore(tmp_path, "run"), []
+    good = json.dumps({"case_id": "APP_001", "attempt": 1})
+    store.results.write_text(good + '\n{"case_id": "APP_002", "att', encoding="utf-8")
+    assert [r["case_id"] for r in store.records()] == ["APP_001"]
+    store.append({"case_id": "APP_002", "attempt": 1}, log=messages.append)
+    assert [r["case_id"] for r in store.records()] == ["APP_001", "APP_002"]
+    assert messages and "incomplete trailing line" in messages[0]
+    store.results.write_text(good + "\nnot json\n" + good + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="line 2"):
+        store.records()
+    with pytest.raises(ValueError, match="line 2"):
+        store.append({"case_id": "APP_003", "attempt": 1}, log=messages.append)

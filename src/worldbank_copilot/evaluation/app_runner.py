@@ -92,24 +92,41 @@ def _json(text):
 
 
 class RunStore:
-    """Append-only JSONL store for one evaluation run (never overwrites a line)."""
+    """Attempt-preserving JSONL store for one evaluation run.
+
+    Unity Catalog Volumes (FUSE) support whole-file sequential writes but not append or
+    seek: ``open("a")`` seeks to the end of the file and fails (Errno 29, Illegal seek). A
+    record is therefore added by reading the existing lines and rewriting the whole file
+    with the new line at the end (fine for a sequential, 50-case run). Every earlier
+    attempt is rewritten unchanged; the result is read back and verified.
+    """
 
     def __init__(self, root: Path, run_id: str):
         self.dir = Path(root) / run_id
         self.dir.mkdir(parents=True, exist_ok=True)
         self.results = self.dir / "results.jsonl"
 
-    def records(self) -> list[dict]:
+    def _lines(self) -> tuple[list[str], list[dict], bool]:
+        """Valid lines and records; True if a torn trailing line (interrupted write) exists.
+
+        Only the LAST line may be malformed; a malformed line anywhere else is corruption
+        and raises, so no stored attempt is ever silently ignored.
+        """
         if not self.results.exists():
-            return []
-        out = []
-        for line in self.results.read_text("utf-8").splitlines():
-            if line.strip():
-                try:
-                    out.append(json.loads(line))
-                except ValueError:  # a torn final line from an interrupted write
-                    continue
-        return out
+            return [], [], False
+        lines = [line for line in self.results.read_text("utf-8").splitlines() if line.strip()]
+        records = []
+        for number, line in enumerate(lines, 1):
+            try:
+                records.append(json.loads(line))
+            except ValueError:
+                if number == len(lines):
+                    return lines[:-1], records, True
+                raise ValueError(f"{self.results}: malformed record on line {number}") from None
+        return lines, records, False
+
+    def records(self) -> list[dict]:
+        return self._lines()[1]
 
     def latest(self) -> dict[str, dict]:
         latest: dict[str, dict] = {}
@@ -117,9 +134,16 @@ class RunStore:
             latest[record["case_id"]] = record
         return latest
 
-    def append(self, record: dict) -> None:
-        with self.results.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+    def append(self, record: dict, log=print) -> None:
+        """Add one record; earlier attempts are kept (whole-file rewrite, no append/seek)."""
+        lines, _, torn = self._lines()
+        if torn:  # an interrupted write left a partial last line: it was never a record
+            log(f"{self.results.name}: dropped one incomplete trailing line before writing")
+        content = "".join(f"{line}\n" for line in lines)
+        content += json.dumps(record, ensure_ascii=False, default=str) + "\n"
+        self.results.write_text(content, encoding="utf-8")
+        if self.results.read_text("utf-8") != content:
+            raise OSError(f"{self.results}: read-back differs from the written records")
 
     def write_once(self, name: str, payload: Any) -> None:
         path = self.dir / name
@@ -179,7 +203,7 @@ def run_cases(
             record["error"] = {"type": type(exc).__name__, "message": str(exc)[:500]}
         record["captured"] = capture.snapshot()
         record["elapsed_ms"] = (clock() - started) * 1000
-        store.append(record)
+        store.append(record, log=log)
         written.append(record)
         status = record["result"]["status"] if record["result"] else "ERROR"
         log(f"{case.case_id} [{case.category}] {status} {record['elapsed_ms']:.0f} ms")
