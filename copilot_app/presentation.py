@@ -62,6 +62,7 @@ _INTERNAL_NOTES = re.compile(
     r"NOT_ESTABLISHED|NOT_ASSESSED|^Semantic support requires|^Contextual snapshots|"
     r"^Per-table snapshots|^deferred rule candidate|recorded, not applied as retrieval|"
     r"^Application context projection|^Context omitted evidence|^Synthetic capability|"
+    r"^Evidence was selected by the Investigator|further evidence records were retrieved|"
     r"^SYSTEM_DERIVED_SIGNAL: each item"
 )
 # Record fields never displayed: identifiers, lineage internals, handles.
@@ -88,11 +89,20 @@ class Badge:
     color: str
 
 
+SUPPORT_LABELS = {
+    "SUPPORTED": "Supported by cited evidence",
+    "PARTIALLY_SUPPORTED": "Partially supported",
+    "NOT_ASSESSED": "Not critic-reviewed",
+}
+
+
 @dataclass(frozen=True)
 class ClaimView:
     text: str
     badge: Badge
     sources: tuple[str, ...]
+    support: str = "Not critic-reviewed"
+    qualifier: str | None = None  # what a partially supported claim does not establish
 
 
 @dataclass(frozen=True)
@@ -125,6 +135,7 @@ class SignalView:
 class ResultView:
     status: str
     headline: str | None
+    objective: str | None = None  # the Investigator's interpretation of the question
     claims: tuple[ClaimView, ...] = ()
     governed_notice: str | None = None
     tables: tuple[Table, ...] = ()
@@ -154,6 +165,9 @@ def present(result: dict[str, Any]) -> ResultView:
     return ResultView(
         status=status,
         headline=headline,
+        objective=result.get("objective")
+        if status in ("ANSWER", "INSUFFICIENT_EVIDENCE")
+        else None,
         claims=claims,
         governed_notice=GOVERNED_NOTICE if status == "EVIDENCE_ONLY" else None,
         tables=tables,
@@ -208,6 +222,8 @@ def _claims(result) -> tuple[tuple[ClaimView, ...], int]:
                 text=claim["text"],
                 badge=badge(claim["provenance"]),
                 sources=tuple(dict.fromkeys(_citation(c) for c in claim.get("citations") or ())),
+                support=SUPPORT_LABELS.get(claim.get("support"), SUPPORT_LABELS["NOT_ASSESSED"]),
+                qualifier=claim.get("qualifier"),
             )
         )
     return tuple(views), withheld
@@ -371,7 +387,9 @@ def _document_details(doc_type, date, isr, pages, section) -> tuple[str, ...]:
 # -- technical details ---------------------------------------------------------------
 def _technical(result) -> tuple[tuple[str, str], ...]:
     validation = result.get("validation") or {}
+    activity = result.get("activity") or {}
     claims = result.get("claims") or ()
+    removed = validation.get("claims_removed") or {}
     rows = (
         ("Route", result.get("route")),
         ("Intent", result.get("intent")),
@@ -387,13 +405,27 @@ def _technical(result) -> tuple[tuple[str, str], ...]:
         ("Citations", str(sum(len(c.get("citations") or ()) for c in claims))),
         ("Attention signals", str(len(result.get("attention_signals") or ()))),
         ("Model calls", str(len(result.get("model_calls") or ()))),
+        ("Investigator rounds", _count(activity.get("decision_rounds"))),
+        ("Governed tool calls", _count(activity.get("tool_calls"))),
+        ("Rejected actions", _count(activity.get("rejected_actions"))),
+        (
+            "Evidence shown to models",
+            f"{activity['evidence_shown']} of {activity.get('evidence_retrieved', 0)}"
+            if activity.get("evidence_shown") is not None and activity.get("evidence_retrieved")
+            else None,
+        ),
+        ("Date anchor", activity.get("temporal_anchor")),
+        ("Claims removed", ", ".join(f"{k}: {v}" for k, v in sorted(removed.items())) or None),
         ("Total latency", f"{result.get('latency_ms', 0):,.0f} ms"),
         ("MLflow trace ID", result.get("trace_id")),
         ("Request ID", result.get("request_id")),
-        ("Finalizer branch", "See the MLflow trace (finalization span)"),
         ("Model note", result.get("model_capability_note")),
     )
     return tuple((label, value) for label, value in rows if value)
+
+
+def _count(value) -> str | None:
+    return None if value is None else str(value)
 
 
 def _model_call(call: dict) -> tuple[tuple[str, str], ...]:

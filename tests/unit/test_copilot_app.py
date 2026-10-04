@@ -15,7 +15,14 @@ from unittest.mock import Mock
 
 import pytest
 import yaml
-from tests.unit.test_copilot_runtime import INVESTIGATION, PROJECT, Critic, Synthesizer, copilot
+from tests.unit.test_copilot_runtime import (
+    INVESTIGATION,
+    PROJECT,
+    Critic,
+    Investigator,
+    Synthesizer,
+    copilot,
+)
 
 APP = Path(__file__).resolve().parents[2] / "copilot_app"
 sys.path.insert(0, str(APP))
@@ -23,27 +30,29 @@ sys.path.insert(0, str(APP))
 import backend  # noqa: E402
 import presentation  # noqa: E402
 
+# name: (question, Synthesizer changes, Investigator round-1 changes, Critic supports)
 QUESTIONS = {
-    "ANSWER": (INVESTIGATION, {}),
-    "EVIDENCE_ONLY_TIMELINE": ("Show the timeline of restructurings.", {}),
-    "EVIDENCE_ONLY_ATTENTION": ("What deserves my attention?", {}),
-    "INSUFFICIENT_EVIDENCE": (INVESTIGATION, {"abstain": True}),
-    "CLARIFY": (
-        "What implementation signals appeared before the restructuring, additional "
-        "financing and cancellation events?",
+    "ANSWER": (INVESTIGATION, {}, {}, ("SUPPORTED", "PARTIALLY_SUPPORTED")),
+    "EVIDENCE_ONLY_TIMELINE": ("Show the timeline of restructurings.", {}, {}, ("SUPPORTED",)),
+    "EVIDENCE_ONLY_ATTENTION": ("What deserves my attention?", {}, {}, ("SUPPORTED",)),
+    "INSUFFICIENT_EVIDENCE": (INVESTIGATION, {"abstain": True}, {}, ("SUPPORTED",)),
+    "CLARIFY": ("Tell me about it.", {}, {"disposition": "CLARIFY"}, ("SUPPORTED",)),
+    "REFUSE": ("Will the project fail?", {}, {}, ("SUPPORTED",)),
+    "FAIL_CLOSED": (
+        INVESTIGATION,
+        {"text": "Unlike P179039, delays occurred."},
         {},
+        ("SUPPORTED",),
     ),
-    "REFUSE": ("Will the project fail?", {}),
-    "FAIL_CLOSED": (INVESTIGATION, {"evidence": ["E99"]}),
 }
 
 
 @pytest.fixture(scope="module")
 def results():
     out = {}
-    for name, (question, changes) in QUESTIONS.items():
-        result = copilot(Synthesizer(**changes), Critic()).investigate(question, PROJECT)
-        out[name] = json.loads(result.model_dump_json())
+    for name, (question, changes, investigator, supports) in QUESTIONS.items():
+        app = copilot(Synthesizer(**changes), Critic(supports), Investigator(**investigator))
+        out[name] = json.loads(app.investigate(question, PROJECT).model_dump_json())
     return out
 
 
@@ -127,8 +136,8 @@ def test_non_answer_statuses_render_fixed_user_messages(results, name, message):
 def test_fail_closed_keeps_diagnostics_in_technical_details(results):
     view = presentation.present(results["FAIL_CLOSED"])
     technical = dict(view.technical)
-    assert technical["Validation failures"] == "EVIDENCE_REFERENCE_INVALID"
-    assert "EVIDENCE_REFERENCE_INVALID" not in view.headline
+    assert technical["Validation failures"] == "PROJECT_ISOLATION_VIOLATION"
+    assert "PROJECT_ISOLATION_VIOLATION" not in view.headline
 
 
 @pytest.mark.parametrize("name", list(QUESTIONS))
@@ -172,7 +181,9 @@ def test_technical_details_contain_safe_metadata_only(results, name):
         "Route", "Intent", "Routing reason", "Result status", "Validation disposition",
         "Mechanical validity", "Semantic support", "Critic status", "Validation failures",
         "Evidence records", "Published claims", "Citations", "Attention signals", "Model calls",
-        "Total latency", "MLflow trace ID", "Request ID", "Finalizer branch", "Model note",
+        "Investigator rounds", "Governed tool calls", "Rejected actions",
+        "Evidence shown to models", "Date anchor", "Claims removed",
+        "Total latency", "MLflow trace ID", "Request ID", "Model note",
     }  # fmt: skip
     assert {label for label, _ in view.technical} <= allowed
     technical = json.dumps([view.technical, view.model_calls, view.stage_latency])
@@ -187,8 +198,21 @@ def test_technical_details_contain_safe_metadata_only(results, name):
 
 def test_internal_limitations_move_to_technical_notes(results):
     view = presentation.present(results["ANSWER"])
-    assert not any("NOT_ESTABLISHED" in x or "NOT_ASSESSED" in x for x in view.limitations)
-    assert any("NOT_ESTABLISHED" in x for x in view.technical_notes)
+    assert not any("selected by the Investigator" in x for x in view.limitations)
+    assert any("selected by the Investigator" in x for x in view.technical_notes)
+
+
+def test_claim_support_and_qualifier_are_shown(results):
+    view = presentation.present(results["ANSWER"])
+    assert [c.support for c in view.claims] == [
+        "Supported by cited evidence",
+        "Partially supported",
+    ]
+    assert view.claims[0].qualifier is None and view.claims[1].qualifier
+    assert view.objective == results["ANSWER"]["objective"]
+    technical = dict(view.technical)
+    assert technical["Investigator rounds"] == "2" and technical["Governed tool calls"] == "2"
+    assert view.objective not in json.dumps(view.technical)
 
 
 # -- architecture: the UI never bypasses copilot.investigate -------------------------

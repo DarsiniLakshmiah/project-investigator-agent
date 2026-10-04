@@ -91,6 +91,7 @@ def build_copilot(
         documents=DocumentRetrieval(profile, search, tools),
         config=config,
         config_dir=settings.config_dir,
+        investigator=DiagnosedModelAdapter(models.investigator_endpoint),
         synthesizer=DiagnosedModelAdapter(models.synthesizer_endpoint),
         critic=DiagnosedModelAdapter(models.critic_endpoint) if models.critic_enabled else None,
         mlflow_enabled=tracing,

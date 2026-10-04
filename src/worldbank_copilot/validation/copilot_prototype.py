@@ -43,8 +43,8 @@ SCENARIOS = {
             "r051",
             "P130544",
             "Why did the PDO rating drop to Moderately Unsatisfactory?",
-            "INVESTIGATION",
-            2,
+            "INVESTIGATOR",
+            4,  # Investigator (<= 2 rounds), Synthesizer, Critic
             _SYNTHESIZED,
         ),
         Scenario(
@@ -81,7 +81,10 @@ def check_invariants(
         "route": result.route == scenario.expected_route,
         "status_allowed": result.status in scenario.allowed_statuses,
         "model_call_budget": len(result.model_calls) <= scenario.max_model_calls,
-        "one_call_per_role": all(count <= 1 for count in roles.values()),
+        "bounded_calls_per_role": roles["INVESTIGATOR"] <= 2
+        and roles["SYNTHESIZER"] <= 1
+        and roles["CRITIC"] <= 1,
+        "tool_call_budget": result.activity is None or result.activity.tool_calls <= 6,
         "critic_only_if_enabled": critic_enabled or "CRITIC" not in roles,
         "no_cross_project_data": _owned_by(result, scenario.project_id),
         "evidence_provenance_valid": all(
@@ -105,7 +108,12 @@ def check_invariants(
     if result.status == ResultStatus.ANSWER:
         checks["answer_mechanically_valid"] = result.validation.mechanical_validity == "VALID"
         checks["answer_critic_status"] = result.validation.critic_status == (
-            CriticStatus.SUPPORTED if critic_enabled else CriticStatus.DISABLED
+            CriticStatus.REVIEWED if critic_enabled else CriticStatus.DISABLED
+        )
+        checks["published_claims_graded"] = all(
+            c.support
+            in (("SUPPORTED", "PARTIALLY_SUPPORTED") if critic_enabled else ("NOT_ASSESSED",))
+            for c in result.claims
         )
     return checks
 

@@ -1,14 +1,13 @@
-"""``Copilot.investigate``: one entry point composing the validated pipeline stages.
+"""``Copilot.investigate``: the single online runtime.
 
-query -> Phase 9 routing -> deterministic tools / Phase 8 retrieval
-      -> Phase 10C EvidencePackage (investigation route only)
-      -> Synthesizer (local handles) -> deterministic enrichment
-      -> deterministic claim validation -> optional Critic
-      -> deterministic finalization -> InvestigationResult
+question -> router fast path (deterministic structured answers and every refusal)
+         -> otherwise the Investigator: objective + governed actions (<= 2 rounds, <= 6 calls)
+         -> existing tools / Phase 8 retrieval -> EvidenceReferences -> relevance-aware packing
+         -> Synthesizer -> deterministic per-claim integrity -> claim-level Critic
+         -> claim-level finalization -> InvestigationResult
 
-Routing, tools, retrieval, evidence execution and claim validation are reused unchanged.
-Only the investigation route calls a model; every other route is deterministic.
-Each stage is one traced span (MLflow when enabled) with allowlisted metadata only.
+Semantic decisions (intent, what to retrieve, support) are made by models; identity,
+scope, tool permissions, citations and objective date boundaries are enforced by code.
 """
 
 from __future__ import annotations
@@ -21,9 +20,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from worldbank_copilot.application.guardrails import ScopedTools
 from worldbank_copilot.application.observability import Recorder
-from worldbank_copilot.application.projection import bounded_report
 from worldbank_copilot.copilot.config import CopilotConfig
 from worldbank_copilot.copilot.contracts import (
     AttentionSignal,
@@ -31,12 +28,29 @@ from worldbank_copilot.copilot.contracts import (
     Claim,
     CriticStatus,
     EvidenceItem,
+    InvestigationActivity,
     InvestigationResult,
     ModelCall,
     ResultStatus,
     Validation,
 )
-from worldbank_copilot.copilot.finalization_trace import finalization_attributes
+from worldbank_copilot.copilot.finalizer import check_integrity, finalize
+from worldbank_copilot.copilot.governed import (
+    Gathered,
+    GovernanceViolation,
+    GovernedExecutor,
+    anchor,
+    approved_context,
+    pack,
+)
+from worldbank_copilot.copilot.investigator import (
+    INSTRUCTIONS as INVESTIGATOR_INSTRUCTIONS,
+)
+from worldbank_copilot.copilot.investigator import (
+    InvestigatorDecision,
+    govern,
+    tool_catalog,
+)
 from worldbank_copilot.copilot.model_diagnostics import PARSE_REASONS, DiagnosticReason
 from worldbank_copilot.copilot.semantic import (
     CRITIC_INSTRUCTIONS,
@@ -45,55 +59,28 @@ from worldbank_copilot.copilot.semantic import (
     SemanticSynthesis,
     critic_payload,
     enrich,
-    enrich_review,
     project,
 )
 from worldbank_copilot.investigation.claims import (
-    CriticCode,
-    CriticOutput,
-    Disposition,
     Failure,
-    FinalResponse,
     ModelAdapter,
     ModelRequest,
     NodeError,
-    SynthesisOutput,
 )
-from worldbank_copilot.investigation.evidence import EvidenceExecutor, _owned
-from worldbank_copilot.investigation.gate import AdmissionContext, AdmissionOutcome, admit
-from worldbank_copilot.investigation.planning import PlanningOutcome, template_plan
-from worldbank_copilot.investigation.synthesis import (
-    ApprovedContext,
-    build_context,
-    finalize,
-    parse_output,
-    validate_claims,
-)
+from worldbank_copilot.investigation.evidence import _owned
+from worldbank_copilot.investigation.synthesis import parse_output
 from worldbank_copilot.retrieval.contract import DocumentRetrieval
 from worldbank_copilot.routing.models import AccessContext, ExecutionOutcome, Route, RouteResult
 from worldbank_copilot.routing.service import RoutingService
-from worldbank_copilot.tools.models import (
-    ProvenanceClass,
-    ToolResult,
-    ToolStatus,
-    iter_provenance_classes,
-)
+from worldbank_copilot.routing.temporal import parse_temporal
+from worldbank_copilot.tools.models import ToolResult, ToolStatus, iter_provenance_classes
 
 log = logging.getLogger(__name__)
 
-CRITIC_DISABLED_LIMITATION = (
-    "Semantic critic review was disabled by configuration: claims passed deterministic "
-    "validation only and are not critic-validated."
+PREDICTION_MESSAGE = (
+    "This Copilot does not have a validated model for predicting project success or failure. "
+    "It can show observed implementation signals and documented risks instead."
 )
-_STOP_ROUTES = {
-    Route.REFUSE: ResultStatus.REFUSE,
-    Route.CLARIFY: ResultStatus.CLARIFY,
-    Route.SEMANTIC_CLASSIFICATION_REQUIRED: ResultStatus.CLARIFY,
-}
-_ADMISSION_STOPS = {
-    AdmissionOutcome.CLARIFY: ResultStatus.CLARIFY,
-    AdmissionOutcome.REFUSE: ResultStatus.REFUSE,
-}
 
 
 @dataclass
@@ -102,7 +89,8 @@ class Copilot:
     documents: DocumentRetrieval | None
     config: CopilotConfig
     config_dir: Path
-    synthesizer: ModelAdapter | None = None  # None: investigation returns evidence only
+    investigator: ModelAdapter | None = None
+    synthesizer: ModelAdapter | None = None
     critic: ModelAdapter | None = None
     mlflow_enabled: bool = False
 
@@ -139,12 +127,15 @@ class _Request:
         self.recorder, self.started = recorder, started
         self.access = AccessContext(authorized_projects=(project_id,), active_project_id=project_id)
         self.model_calls: list[ModelCall] = []
+        self.activity: dict[str, Any] = {}
+        self.anchor_handles: dict[str, str] = {}  # round-2 handle -> evidence ID, as shown
+        self.investigated = False  # True once the Investigator owns the request
 
-    # -- stages -----------------------------------------------------------------------
+    # -- entry -------------------------------------------------------------------------
     def run(self) -> InvestigationResult:
         if self.project_id not in self.config.allowed_projects:
             return self._result(ResultStatus.REFUSE, "Unsupported or unauthorized project.")
-        router = self._scoped_router()
+        router = self._fast_path_router()
         with self.recorder.span("routing") as span:
             routed = router.handle(self.query, self.access, request_id=self.request_id)
             _annotate(
@@ -152,7 +143,6 @@ class _Request:
                 route=routed.decision.route.value,
                 reason_code=routed.decision.reason_code,
                 tools=",".join(routed.executed_tools),
-                retrieval_executed=routed.retrieval_executed,
             )
         resolved = routed.understanding.project
         if resolved and resolved.project_id not in (None, self.project_id):
@@ -161,15 +151,16 @@ class _Request:
             signals, signal_notes = self._attention_signals(router, routed)
             _annotate(span, signal_count=len(signals))
         common = dict(routed=routed, attention_signals=signals, limitations=signal_notes)
-        route = routed.decision.route
-        if route in _STOP_ROUTES:
-            return self._result(_STOP_ROUTES[route], routed.decision.detail, **common)
-        if route != Route.INVESTIGATION:
-            return self._deterministic(routed, common)
-        return self._investigation(routed, router, common)
+        decision = routed.decision
+        if decision.route == Route.REFUSE or decision.decided_at_stage == "input":
+            status = ResultStatus.REFUSE if decision.route == Route.REFUSE else ResultStatus.CLARIFY
+            return self._result(status, decision.detail, **common)
+        if decision.route == Route.STRUCTURED and routed.outcome == ExecutionOutcome.EXECUTED:
+            return self._deterministic(routed, common)  # confident fast path, no model call
+        return self._investigate(routed, router, common)
 
-    def _scoped_router(self) -> RoutingService:
-        """Request-scoped tools (document date-hint guard) and the request deadline."""
+    def _fast_path_router(self) -> RoutingService:
+        """Request deadline; no document search inside routing (the Investigator owns it)."""
         deadline = self.started + self.config.overall_deadline_seconds
         factory = self.copilot.router.context_factory
 
@@ -178,11 +169,7 @@ class _Request:
             ctx.deadline = deadline if ctx.deadline is None else min(ctx.deadline, deadline)
             return ctx
 
-        return replace(
-            self.copilot.router,
-            executor=ScopedTools(self.copilot.router.executor),
-            context_factory=context,
-        )
+        return replace(self.copilot.router, context_factory=context, documents=None)
 
     def _attention_signals(self, router, routed: RouteResult):
         """Current Gold attention signals for the side panel; reuses the routed read."""
@@ -201,7 +188,7 @@ class _Request:
         return tuple(_signal(item) for item in result.items), ()
 
     def _deterministic(self, routed: RouteResult, common: dict) -> InvestigationResult:
-        """Structured/document routes: governed records shown as-is, no model call."""
+        """Confident structured route: governed records shown as-is, no model call."""
         items = tuple(
             _tool_evidence(result, item) for result in routed.tool_results for item in result.items
         )
@@ -211,177 +198,301 @@ class _Request:
             for result in routed.tool_results
             for note in (*result.caveats, *(m.detail for m in result.mechanical))
         )
-        if any(r.status == ToolStatus.AMBIGUOUS_ARGUMENT for r in routed.tool_results):
-            status, message = ResultStatus.CLARIFY, "The request needs a more specific scope."
-        elif items and routed.outcome == ExecutionOutcome.EXECUTED:
-            status, message = ResultStatus.EVIDENCE_ONLY, "Governed records (no model used)."
-        else:
-            status, message = (
+        status, message = (
+            (ResultStatus.EVIDENCE_ONLY, "Governed records (no model used).")
+            if items
+            else (
                 ResultStatus.INSUFFICIENT_EVIDENCE,
                 "UNKNOWN: no qualifying governed evidence was found.",
             )
+        )
         common["limitations"] = (*common["limitations"], *notes)
         return self._result(status, message, evidence=items, **common)
 
-    def _investigation(self, routed: RouteResult, router, common: dict) -> InvestigationResult:
-        """Phase 10C evidence package, then synthesis/validation/critic/finalization."""
-        admission = AdmissionContext(
-            self.request_id,
-            self.query,
-            self.access,
-            self.copilot.router.config,
-            self.copilot.router.index,
-            self.copilot.config_dir,
-            self.config.policy(),
-            feature_enabled=True,
+    # -- investigation -------------------------------------------------------------------
+    def _investigate(self, routed: RouteResult, router, common: dict) -> InvestigationResult:
+        self.investigated = True
+        bounds = self.config.investigation
+        executor = GovernedExecutor(
+            tools=self.copilot.router.executor,
+            documents=self.copilot.documents,
+            context_factory=router.context_factory,
+            project_id=self.project_id,
+            request_id=self.request_id,
         )
-        admitted = admit(routed, admission)
-        if admitted.outcome != AdmissionOutcome.ADMITTED:
-            status = _ADMISSION_STOPS.get(admitted.outcome, ResultStatus.FAIL_CLOSED)
+        gathered = Gathered()
+        decision, rejected, anchor_choice = None, 0, None
+        for round_number in range(1, bounds.max_decision_rounds + 1):
+            remaining = bounds.max_tool_calls - len(gathered.calls)
+            with self.recorder.span(f"investigator_{round_number}") as span:
+                decision, failure = self._call(
+                    "INVESTIGATOR",
+                    INVESTIGATOR_INSTRUCTIONS,
+                    self._investigator_payload(round_number, gathered, remaining, decision),
+                    InvestigatorDecision,
+                    span,
+                )
+            if failure is not None:
+                return self._result(
+                    ResultStatus.FAIL_CLOSED,
+                    "The investigation could not be planned.",
+                    validation=Validation(failures=(failure.value,)),
+                    **common,
+                )
+            self.activity["decision_rounds"] = round_number
+            stop = self._disposition(decision, common)
+            if stop is not None:
+                return stop
+            anchor_choice = decision.temporal_anchor or anchor_choice
+            if decision.disposition == "ANSWER_NOW" or not decision.actions:
+                break
+            with self.recorder.span(f"tools_{round_number}") as span:
+                for action in decision.actions[:remaining]:
+                    call = govern(action, self.project_id)
+                    if call is None:
+                        rejected += 1
+                        continue
+                    try:
+                        executor.run(call, gathered)
+                    except GovernanceViolation as exc:  # objective scope/identity failure
+                        return self._result(
+                            ResultStatus.FAIL_CLOSED,
+                            "No answer published: a governed read violated project scope.",
+                            validation=Validation(
+                                disposition="FAIL_CLOSED",
+                                mechanical_validity="INVALID",
+                                failures=(str(exc),),
+                            ),
+                            **common,
+                        )
+                rejected += max(0, len(decision.actions) - remaining)
+                _annotate(span, tool_calls=len(gathered.calls), evidence=len(gathered.refs))
+            if not decision.review_evidence or len(gathered.calls) >= bounds.max_tool_calls:
+                break
+        self.activity.update(
+            tool_calls=len(gathered.calls),
+            rejected_actions=rejected,
+            evidence_retrieved=len(gathered.refs),
+        )
+        return self._answer(decision, gathered, anchor_choice, routed, common)
+
+    def _disposition(self, decision, common) -> InvestigationResult | None:
+        if decision.disposition == "PREDICTION":
+            return self._result(ResultStatus.REFUSE, PREDICTION_MESSAGE, **common)
+        if decision.disposition == "OUT_OF_SCOPE":
             return self._result(
-                status, f"Investigation not admitted ({admitted.reason}).", **common
+                ResultStatus.REFUSE,
+                "This question is outside project implementation intelligence.",
+                **common,
             )
-        planned = template_plan(admitted.state, admission)
-        if planned.outcome != PlanningOutcome.PLANNED:
+        if decision.disposition == "CLARIFY":
             return self._result(
                 ResultStatus.CLARIFY,
-                "Evidence operations cannot enforce the requested scope.",
+                decision.clarification or "Please rephrase the question.",
+                objective=decision.objective,
                 **common,
             )
-        with self.recorder.span("evidence_execution") as span:
-            report = EvidenceExecutor(
-                admission,
-                self.copilot.router.executor,
-                self.copilot.documents,
-                router.context_factory,
-                # Without configured pricing, skip only the executor's pricing gate, as
-                # the accepted Phase 10C live validation did; operations run normally.
-                offline=not self.config.pricing_configured,
-            ).execute(planned.state)
-            operations = report.package.operations
-            _annotate(
-                span,
-                requirement_count=len(report.package.requirement_summaries),
-                structured_operations=sum(o.operation_type == "STRUCTURED" for o in operations),
-                document_operations=sum(o.operation_type == "DOCUMENT" for o in operations),
-                evidence_count=len(report.package.evidence_index),
-                terminal_failure=str(report.terminal_failure or ""),
+        return None
+
+    def _investigator_payload(self, round_number, gathered, remaining, previous) -> dict:
+        payload = {
+            "round": round_number,
+            "question": self.query,
+            "tools": tool_catalog(),
+            "remaining_tool_calls": remaining,
+        }
+        if round_number > 1:
+            entries = pack(
+                gathered,
+                set(gathered.refs),
+                max_bytes=self.config.investigation.context_max_bytes // 2,
+                max_text_chars=self.config.investigation.evidence_text_chars // 2,
             )
-        if report.terminal_failure is not None:
-            return self._result(
-                ResultStatus.FAIL_CLOSED,
-                f"Evidence execution stopped ({report.terminal_failure}).",
-                **common,
+            context = self._context(previous.objective, entries, gathered)
+            shown = project(context, objective=previous.objective)
+            self.anchor_handles = shown.evidence  # an anchor must resolve as the model saw it
+            payload.update(
+                objective=previous.objective,
+                calls_made=[
+                    {"tool": c.tool, "query": c.query, "status": c.status, "evidence": c.evidence}
+                    for c in gathered.calls
+                ],
+                evidence=shown.payload["evidence"],
             )
-        evidence = tuple(_package_evidence(ref) for ref in report.package.evidence_index)
-        if self.copilot.synthesizer is None:
-            return self._result(
-                ResultStatus.EVIDENCE_ONLY if evidence else ResultStatus.INSUFFICIENT_EVIDENCE,
-                "Evidence package only (synthesis not configured).",
-                evidence=evidence,
-                **common,
-            )
-        context = build_context(bounded_report(report))
-        missing = [
-            r["objective"] for r in context.requirements if r["required"] and not r["evidence_ids"]
-        ]
-        if missing:  # the finalizer's coverage rule can never publish here: skip the models
-            common["limitations"] = (
-                *common["limitations"],
-                *(f"No evidence found for required: {objective}" for objective in missing),
-            )
+        return payload
+
+    # -- answer --------------------------------------------------------------------------
+    def _answer(self, decision, gathered, anchor_choice, routed, common) -> InvestigationResult:
+        bounds = self.config.investigation
+        objective = decision.objective
+        if not gathered.refs:
             return self._result(
                 ResultStatus.INSUFFICIENT_EVIDENCE,
-                "UNKNOWN: required evidence is missing, so no answer is synthesized.",
-                evidence=evidence,
-                validation=Validation(disposition=Disposition.INSUFFICIENT_EVIDENCE.value),
+                "UNKNOWN: the investigation found no governed evidence for this question.",
+                objective=objective,
                 **common,
             )
-        final, critic_status = self._synthesize_and_review(context)
-        return self._final_result(final, critic_status, context, evidence, common)
-
-    def _synthesize_and_review(self, context: ApprovedContext):
-        """Synthesizer -> handle enrichment -> deterministic validation -> optional Critic
-        -> finalizer. The model reasons over local handles; code owns identity and scope."""
-        projection = project(context)
+        keep, periods = set(gathered.refs), None
+        if anchor_choice is not None:
+            anchor_id = self.anchor_handles.get(anchor_choice.event)
+            keep, periods, dropped, usable = (
+                anchor(gathered, anchor_id, anchor_choice.relation)
+                if anchor_id
+                else (keep, None, 0, False)
+            )
+            if usable:
+                self.activity.update(
+                    temporal_anchor=anchor_choice.relation, evidence_filtered_by_date=dropped
+                )
+            else:
+                common["limitations"] = (
+                    *common["limitations"],
+                    "The requested event has no source-stated date; no date filter was applied.",
+                )
+        entries = pack(
+            gathered,
+            keep,
+            max_bytes=bounds.context_max_bytes,
+            max_text_chars=bounds.evidence_text_chars,
+        )
+        self.activity["evidence_shown"] = len(entries)
+        context = self._context(objective, entries, gathered)
+        evidence = tuple(_package_evidence(gathered.refs[i]) for i in gathered.refs if i in keep)
+        projection = project(context, objective=objective, periods=periods)
         with self.recorder.span("synthesis") as span:
             semantic, failure = self._call(
                 "SYNTHESIZER", SYNTHESIS_INSTRUCTIONS, projection.payload, SemanticSynthesis, span
             )
         if failure is not None:
-            return self._finalize(None, None, context, (failure,)), CriticStatus.NOT_REQUIRED
+            return self._fail(failure, objective, evidence, common)
         with self.recorder.span("enrichment") as span:
-            output, failure, stats = enrich(semantic, projection, context)
-            _annotate(span, **stats.attributes(projection), failure=failure and failure.value)
-        if failure is not None:  # unknown/duplicate handle, mixed-provenance assertion, ...
-            return self._finalize(None, None, context, (failure,)), CriticStatus.NOT_REQUIRED
-        with self.recorder.span("deterministic_validation") as span:
-            errors = validate_claims(
-                output, context, max_claims=self.config.policy().max_claims_per_draft
-            )
+            output, dropped, stats = enrich(semantic, projection, context)
+            _annotate(span, **stats.attributes(projection))
+        with self.recorder.span("integrity") as span:
+            integrity = check_integrity(output, context)
             _annotate(
                 span,
-                candidate_claims=len(output.candidate_claims),
-                failures=",".join(e.value for e in errors),
+                claims_checked=len(output.candidate_claims),
+                claims_removed=sum(integrity.removed.values()),
+                security_failures=",".join(integrity.security_failures),
             )
-        if errors:  # mechanical violations are never sent to, or excused by, the critic
-            return self._finalize(None, None, context, errors), CriticStatus.NOT_REQUIRED
-        if not output.candidate_claims:  # abstention: nothing for a critic to review
-            empty = CriticOutput(findings=())
-            return self._finalize(output, empty, context), CriticStatus.NOT_REQUIRED
-        if not self.config.models.critic_enabled:
-            return self._finalize(
-                output, None, context, critic_disabled=True
-            ), CriticStatus.DISABLED
-        with self.recorder.span("critic") as span:
-            semantic_review, failure = self._call(
-                "CRITIC",
-                CRITIC_INSTRUCTIONS,
-                critic_payload(projection, output),
-                SemanticReview,
-                span,
-            )
-        if failure is not None:
-            return self._finalize(output, None, context, (failure,)), CriticStatus.FAILED
-        review = enrich_review(semantic_review, output)
-        final = self._finalize(output, review, context)
-        if final.disposition == Disposition.FAIL_CLOSED:
-            return final, CriticStatus.FAILED
-        supported = all(f.code == CriticCode.SUPPORTED for f in review.findings)
-        return final, CriticStatus.SUPPORTED if supported else CriticStatus.REJECTED
-
-    def _finalize(
-        self, output, review, context, failures=(), *, critic_disabled=False
-    ) -> FinalResponse:
-        """Authoritative finalization; the span only explains the returned disposition."""
+        critic_enabled = self.config.models.critic_enabled
+        review, critic_status = None, CriticStatus.NOT_REQUIRED
+        if integrity.security_failures:
+            critic_status = CriticStatus.NOT_REQUIRED
+        elif not critic_enabled:
+            critic_status = CriticStatus.DISABLED
+        elif integrity.claims:
+            with self.recorder.span("critic") as span:
+                review, failure = self._call(
+                    "CRITIC",
+                    CRITIC_INSTRUCTIONS,
+                    critic_payload(projection, integrity.claims),
+                    SemanticReview,
+                    span,
+                )
+            if failure is not None:  # fail closed: no claim is published as reviewed
+                return self._fail(failure, objective, evidence, common, critic=True)
+            critic_status = CriticStatus.REVIEWED
         with self.recorder.span("finalization") as span:
-            final = (
-                _finalize_without_critic(output, context)
-                if critic_disabled
-                else finalize(output, review, context, failures=failures)
+            final = finalize(
+                integrity,
+                review,
+                critic_enabled=critic_enabled,
+                model_insufficient=output.insufficient_evidence,
+                limitations=(*context.limitations, *output.limitations),
+                removed_before=dropped,
             )
             _annotate(
                 span,
-                **finalization_attributes(
-                    final, output, review, context, failures, critic_disabled=critic_disabled
+                disposition=final.disposition,
+                published=len(final.published),
+                partially_supported=sum(
+                    p.support == "PARTIALLY_SUPPORTED" for p in final.published
                 ),
+                **{f"removed_{k.lower()}": v for k, v in final.removed.items()},
             )
-            return final
+        cited = {e["evidence_id"]: e for e in context.evidence}
+        claims = tuple(_claim(p, cited) for p in final.published)
+        if final.disposition == "FAIL_CLOSED":
+            status, message = ResultStatus.FAIL_CLOSED, "No answer published: integrity failure."
+        elif claims:
+            status, message = ResultStatus.ANSWER, "Validated, cited claims."
+        else:
+            status, message = (
+                ResultStatus.INSUFFICIENT_EVIDENCE,
+                "UNKNOWN: the evidence does not support a publishable answer.",
+            )
+        common["limitations"] = (*common["limitations"], *final.limitations)
+        return self._result(
+            status,
+            message,
+            claims=claims,
+            evidence=evidence,
+            objective=objective,
+            validation=Validation(
+                disposition=final.disposition,
+                mechanical_validity="INVALID" if final.failures else "VALID",
+                failures=final.failures,
+                semantic_support="MODEL_ASSESSED" if review is not None else "NOT_ASSESSED",
+                critic_status=critic_status,
+                claims_removed=final.removed,
+            ),
+            **common,
+        )
 
+    def _context(self, objective, entries, gathered):
+        scope = parse_temporal(self.query).model_dump(mode="json")
+        return approved_context(
+            request_id=self.request_id,
+            project_id=self.project_id,
+            question=self.query,
+            objective=objective,
+            temporal_scope=scope,
+            entries=entries,
+            gathered=gathered,
+        )
+
+    def _fail(self, failure, objective, evidence, common, *, critic=False):
+        return self._result(
+            ResultStatus.FAIL_CLOSED,
+            "No answer published: a model step failed.",
+            evidence=evidence,
+            objective=objective,
+            validation=Validation(
+                disposition="FAIL_CLOSED",
+                mechanical_validity="INVALID",
+                failures=(failure.value,),
+                critic_status=CriticStatus.FAILED if critic else CriticStatus.NOT_REQUIRED,
+            ),
+            **common,
+        )
+
+    # -- model calls ---------------------------------------------------------------------
     def _call(self, role: str, system: str, payload: dict, schema, span):
         """One bounded model call; returns (parsed output, None) or (None, Failure)."""
         models = self.config.models
-        adapter = self.copilot.synthesizer if role == "SYNTHESIZER" else self.copilot.critic
+        adapter = {
+            "INVESTIGATOR": self.copilot.investigator,
+            "SYNTHESIZER": self.copilot.synthesizer,
+            "CRITIC": self.copilot.critic,
+        }[role]
         if adapter is None:
             raise ValueError(f"{role.lower()} model not configured")
-        endpoint = models.synthesizer_endpoint if role == "SYNTHESIZER" else models.critic_endpoint
+        endpoint = {
+            "INVESTIGATOR": models.investigator_endpoint,
+            "SYNTHESIZER": models.synthesizer_endpoint,
+            "CRITIC": models.critic_endpoint,
+        }[role]
         remaining = self.started + self.config.overall_deadline_seconds - time.monotonic()
         called, reply, failure, parsed, reason = time.monotonic(), None, None, None, None
         if remaining <= 0:
             failure = Failure.BUDGET_EXHAUSTED
         else:
             request = ModelRequest(
-                role=role,
+                # The pinned request contract knows two roles; the Investigator uses the
+                # same bounded structured-output transport as the Synthesizer.
+                role="SYNTHESIZER" if role == "INVESTIGATOR" else role,
                 system=system,
                 context_json=json.dumps(payload, sort_keys=True, separators=(",", ":")),
                 output_schema=schema.model_json_schema(),
@@ -413,31 +524,7 @@ class _Request:
         _annotate(span, **call.model_dump(mode="json", exclude={"role"}))
         return parsed, failure
 
-    # -- result assembly --------------------------------------------------------------
-    def _final_result(self, final: FinalResponse, critic_status, context, evidence, common):
-        cited = {e["evidence_id"]: e for e in context.evidence}
-        claims = tuple(_claim(claim, cited) for claim in final.published_claims)
-        if claims:
-            status, message = ResultStatus.ANSWER, "Validated, cited claims."
-        elif final.disposition == Disposition.FAIL_CLOSED:
-            status, message = ResultStatus.FAIL_CLOSED, "No answer published: validation failed."
-        else:
-            status, message = (
-                ResultStatus.INSUFFICIENT_EVIDENCE,
-                "UNKNOWN: the evidence does not support a publishable answer.",
-            )
-        validation = Validation(
-            disposition=final.disposition.value,
-            mechanical_validity=final.mechanical_validity,
-            failures=tuple(f.value for f in final.failures),
-            semantic_support=final.semantic_support,
-            critic_status=critic_status,
-        )
-        common["limitations"] = (*common["limitations"], *final.limitations)
-        return self._result(
-            status, message, claims=claims, evidence=evidence, validation=validation, **common
-        )
-
+    # -- result assembly -----------------------------------------------------------------
     def _result(self, status, message, *, routed: RouteResult | None = None, **fields):
         understanding = routed.understanding if routed else None
         intent = understanding.intent if understanding else None
@@ -445,7 +532,11 @@ class _Request:
             request_id=self.request_id,
             query=self.query,
             project_id=self.project_id,
-            route=routed.decision.route.value if routed else None,
+            route="INVESTIGATOR"
+            if self.investigated
+            else routed.decision.route.value
+            if routed
+            else None,
             reason_code=routed.decision.reason_code if routed else None,
             intent=intent.intent.value if intent and intent.intent else None,
             temporal_scope=understanding.temporal.model_dump(mode="json")
@@ -454,54 +545,10 @@ class _Request:
             status=status,
             message=message,
             model_calls=tuple(self.model_calls),
+            activity=InvestigationActivity(**self.activity) if self.activity else None,
             model_capability_note=self.config.models.capability_note if self.model_calls else None,
             **fields,
         )
-
-
-def _finalize_without_critic(output: SynthesisOutput, context: ApprovedContext) -> FinalResponse:
-    """Deterministic finalization when the Critic is disabled by configuration.
-
-    Applies the existing finalizer's non-semantic rules to claims that already passed
-    ``validate_claims`` (re-checked here, so validation stays authoritative): abstain on
-    insufficient/UNKNOWN evidence or an uncovered required requirement, otherwise publish
-    with an explicit limitation. No semantic review is performed or implied.
-    """
-    limitations = (
-        *context.limitations,
-        *output.limitations,
-        *(("Context omitted evidence.",) if context.omitted_evidence_ids else ()),
-        CRITIC_DISABLED_LIMITATION,
-    )
-    failures = validate_claims(output, context)
-    covered = {i for claim in output.candidate_claims for i in claim.requirement_ids}
-    if failures:
-        disposition = Disposition.FAIL_CLOSED
-    elif (
-        output.insufficient_evidence
-        or not output.candidate_claims
-        or not context.evidence
-        or any(c.provenance_label == ProvenanceClass.UNKNOWN for c in output.candidate_claims)
-        or any(
-            r["required"] and (r["requirement_id"] not in covered or not r["evidence_ids"])
-            for r in context.requirements
-        )
-    ):
-        disposition = Disposition.INSUFFICIENT_EVIDENCE
-    else:
-        disposition = Disposition.PUBLISH_WITH_LIMITATIONS
-    return FinalResponse(
-        project_id=context.project_id,
-        package_fingerprint=context.package_fingerprint,
-        disposition=disposition,
-        published_claims=output.candidate_claims
-        if disposition == Disposition.PUBLISH_WITH_LIMITATIONS
-        else (),
-        limitations=tuple(dict.fromkeys(limitations)),
-        failures=failures,
-        mechanical_validity="INVALID" if failures else "VALID",
-        semantic_support="NOT_ASSESSED",
-    )
 
 
 def _annotate(span, **attributes) -> None:
@@ -513,9 +560,10 @@ def _annotate(span, **attributes) -> None:
 def _request_attributes(result: InvestigationResult, config: CopilotConfig) -> dict:
     """Request-level trace metadata: identifiers, outcomes and counts.
 
-    Never user query text, documents, prompts or model output.
+    Never user query text, objectives, documents, prompts or model output.
     """
     calls = result.model_calls
+    activity = result.activity or InvestigationActivity()
     return {
         "request_id": result.request_id,
         "project_id": result.project_id,
@@ -529,9 +577,11 @@ def _request_attributes(result: InvestigationResult, config: CopilotConfig) -> d
         "citation_count": sum(len(c.citations) for c in result.claims),
         "signal_count": len(result.attention_signals),
         "critic_status": result.validation.critic_status.value,
-        "disposition": result.validation.disposition,
         "critic_enabled": config.models.critic_enabled,
+        "disposition": result.validation.disposition,
         "validation_failures": ",".join(result.validation.failures),
+        "decision_rounds": activity.decision_rounds,
+        "tool_calls": activity.tool_calls,
         "model_call_count": len(calls),
         "model_endpoints": ",".join(sorted({c.endpoint for c in calls if c.endpoint})),
         "model_diagnostic_reasons": ",".join(
@@ -543,7 +593,8 @@ def _request_attributes(result: InvestigationResult, config: CopilotConfig) -> d
     }
 
 
-def _claim(claim, cited: dict[str, dict]) -> Claim:
+def _claim(published, cited: dict[str, dict]) -> Claim:
+    claim = published.claim
     citations = []
     for ref in claim.citations:
         entry = cited.get(ref.evidence_id, {})
@@ -566,6 +617,8 @@ def _claim(claim, cited: dict[str, dict]) -> Claim:
         provenance=claim.provenance_label.value,
         evidence_ids=claim.evidence_ids,
         citations=tuple(citations),
+        support=published.support,
+        qualifier=published.qualifier,
     )
 
 

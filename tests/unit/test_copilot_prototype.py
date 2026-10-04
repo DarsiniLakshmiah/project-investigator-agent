@@ -29,7 +29,7 @@ def test_scenarios_hold_invariants_offline(scenario_id):
     report = run_scenario(copilot(synthesizer, critic), scenario_id)
     assert report["invariants"] == "PASS", report["failed_invariants"]
     calls = len(report["result"]["model_calls"])
-    assert calls == (2 if scenario_id == "S2" else 0)
+    assert calls == (4 if scenario_id == "S2" else 0)  # S2: Investigator x2, Synthesizer, Critic
 
 
 def test_scenario_questions_are_the_reviewed_routing_cases():

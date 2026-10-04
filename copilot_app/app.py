@@ -79,12 +79,16 @@ def main_result(view: ResultView) -> None:
     if view.headline:
         tone = {"REFUSE": st.info, "CLARIFY": st.info, "FAIL_CLOSED": st.warning}
         tone.get(view.status, st.warning)(view.headline)
+    if view.objective:
+        st.caption("Investigated: " + md(view.objective))
     for claim in view.claims:
         with st.container(border=True):
-            st.markdown(badge(claim.badge))
+            st.markdown(f"{badge(claim.badge)}  {md(claim.support)}")
             text(claim.text)
+            if claim.qualifier:
+                st.caption("Not fully established: " + md(claim.qualifier))
             if claim.sources:
-                st.caption("Sources: " + "; ".join(claim.sources))
+                st.caption("Sources: " + "; ".join(md(s) for s in claim.sources))
     if view.withheld_unknown_claims:
         st.caption(
             f"{view.withheld_unknown_claims} statement(s) withheld: underlying values unknown."

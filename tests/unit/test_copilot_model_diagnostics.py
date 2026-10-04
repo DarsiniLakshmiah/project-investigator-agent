@@ -171,9 +171,11 @@ def test_runtime_records_reason_and_still_fails_closed(monkeypatch, transport, f
     result = app.investigate(INVESTIGATION, PROJECT)
     assert result.status == ResultStatus.FAIL_CLOSED and not result.claims
     assert result.validation.failures == (failure,)
-    call = result.model_calls[0]
+    call = result.model_calls[-1]
+    assert call.role == "SYNTHESIZER"
     assert (call.outcome, call.diagnostic_reason) == (failure, reason)
-    assert len(result.model_calls) == 1  # no retry, no critic
+    # Investigator rounds, then exactly one synthesis attempt: no retry, no critic.
+    assert [c.role for c in result.model_calls] == ["INVESTIGATOR", "INVESTIGATOR", "SYNTHESIZER"]
     synthesis = next(s for s in spans if s.name == "synthesis")
     assert synthesis.attributes["diagnostic_reason"] == reason
     assert spans[0].attributes["model_diagnostic_reasons"] == reason
@@ -187,7 +189,7 @@ def test_runtime_success_through_diagnosed_adapter_is_unchanged(monkeypatch):
     )
     result = app.investigate(INVESTIGATION, PROJECT)
     assert result.status == ResultStatus.ANSWER
-    assert [c.diagnostic_reason for c in result.model_calls] == [None, None]
+    assert result.model_calls and all(c.diagnostic_reason is None for c in result.model_calls)
     assert spans[0].attributes["model_diagnostic_reasons"] == ""
 
 
@@ -197,5 +199,6 @@ def test_timeout_raised_by_transport_is_no_response():
             raise TimeoutError
 
     result = copilot(Raising(), Critic()).investigate(INVESTIGATION, PROJECT)
-    call = result.model_calls[0]
+    call = result.model_calls[-1]
+    assert call.role == "SYNTHESIZER"
     assert (call.outcome, call.diagnostic_reason) == (Failure.MODEL_TIMEOUT.value, "NO_RESPONSE")

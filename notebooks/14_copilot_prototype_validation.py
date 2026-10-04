@@ -38,7 +38,8 @@ print(
         "synthesizer": copilot.config.models.synthesizer_endpoint,
         "critic_enabled": copilot.config.models.critic_enabled,
         "critic": copilot.config.models.critic_endpoint,
-        "pricing_configured": copilot.config.pricing_configured,
+        "investigator": copilot.config.models.investigator_endpoint,
+        "investigation_bounds": copilot.config.investigation.model_dump(),
         "allowed_projects": copilot.config.allowed_projects,
     }
 )

@@ -24,8 +24,7 @@ class ResultStatus(StrEnum):
 class CriticStatus(StrEnum):
     NOT_REQUIRED = "NOT_REQUIRED"  # no synthesis, or no claims to review
     DISABLED = "DISABLED"  # by configuration; claims are NOT critic-validated
-    SUPPORTED = "SUPPORTED"  # every claim was found supported
-    REJECTED = "REJECTED"  # at least one claim was not supported; nothing published
+    REVIEWED = "REVIEWED"  # claim-level verdicts applied (see Claim.support, removed counts)
     FAILED = "FAILED"  # critic call/output failed; fail closed
 
 
@@ -46,6 +45,8 @@ class Claim(_Result):
     provenance: str
     evidence_ids: tuple[str, ...]
     citations: tuple[Citation, ...]
+    support: str = "NOT_ASSESSED"  # SUPPORTED | PARTIALLY_SUPPORTED | NOT_ASSESSED
+    qualifier: str | None = None  # Critic's note on what a partial claim does not support
 
 
 class EvidenceItem(_Result):
@@ -86,11 +87,24 @@ class ModelCall(_Result):
 
 
 class Validation(_Result):
-    disposition: str | None = None  # deterministic finalizer disposition, when synthesized
+    disposition: str | None = None  # finalizer disposition, when synthesized
     mechanical_validity: str | None = None
-    failures: tuple[str, ...] = ()
+    failures: tuple[str, ...] = ()  # response-level integrity failures (fail closed)
     semantic_support: str = "NOT_ASSESSED"
     critic_status: CriticStatus = CriticStatus.NOT_REQUIRED
+    claims_removed: dict[str, int] = Field(default_factory=dict)  # by reason code
+
+
+class InvestigationActivity(_Result):
+    """Bounded Investigator activity (counts and fixed codes only)."""
+
+    decision_rounds: int = 0
+    tool_calls: int = 0
+    rejected_actions: int = 0
+    evidence_retrieved: int = 0
+    evidence_shown: int = 0
+    temporal_anchor: str | None = None  # BEFORE | AFTER | COMPARE when applied
+    evidence_filtered_by_date: int = 0
 
 
 class InvestigationResult(_Result):
@@ -109,6 +123,8 @@ class InvestigationResult(_Result):
     limitations: tuple[str, ...] = ()
     validation: Validation = Validation()
     model_calls: tuple[ModelCall, ...] = ()
+    objective: str | None = None  # the Investigator's restatement (model text)
+    activity: InvestigationActivity | None = None
     model_capability_note: str | None = None  # set whenever a model call was made
     latency_ms: float = Field(default=0, ge=0)
     stage_latency_ms: dict[str, float] = Field(default_factory=dict)

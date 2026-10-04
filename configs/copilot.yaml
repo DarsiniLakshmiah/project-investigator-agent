@@ -1,9 +1,10 @@
 # Interview-prototype runtime for copilot.investigate(query, project_id).
 # Separate from the pinned environment/routing/retrieval configs, which stay frozen.
-# Environment overrides: WBC_COPILOT_SYNTHESIZER_ENDPOINT, WBC_COPILOT_CRITIC_ENDPOINT,
-# WBC_COPILOT_CRITIC_ENABLED (true/false).
+# Environment overrides: WBC_COPILOT_INVESTIGATOR_ENDPOINT, WBC_COPILOT_SYNTHESIZER_ENDPOINT,
+# WBC_COPILOT_CRITIC_ENDPOINT, WBC_COPILOT_CRITIC_ENABLED (true/false).
 
 models:
+  investigator_endpoint: databricks-qwen35-122b-a10b
   synthesizer_endpoint: databricks-qwen35-122b-a10b
   critic_endpoint: databricks-qwen35-122b-a10b
   # Fail-closed when enabled; when disabled, results record critic_status DISABLED.
@@ -17,15 +18,21 @@ models:
     (overall FAIL). It is not capability-accepted; deterministic validation is
     authoritative for every published claim.
 
+investigation:
+  # Bounded Investigator: at most 2 decision rounds and 6 governed tool/retrieval calls.
+  max_decision_rounds: 2
+  max_tool_calls: 6
+  # Relevance-aware packing: round-robin over calls in ranked order, long text trimmed.
+  context_max_bytes: 40000
+  evidence_text_chars: 1500
+
 projects:
   allowed: [P130544, P179039, P506272]
 
 policy:
+  # Request deadline; model calls and tool calls are bounded under investigation:.
+  # Billed cost is not exposed by the platform adapters (UNAVAILABLE, not zero).
   overall_deadline_seconds: 180
-  # Optional budget pricing, set together (configured units, not billed cost). Unset follows
-  # the accepted Phase 10C live validation: no pricing gate, billed cost UNAVAILABLE.
-  cost_ceiling: null
-  pricing_version: null
 
 mlflow:
   experiment: null
