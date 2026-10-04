@@ -101,9 +101,11 @@ class InvestigationActivity(_Result):
     decision_rounds: int = 0
     tool_calls: int = 0
     rejected_actions: int = 0
+    rejected_by_reason: dict[str, int] = Field(default_factory=dict)  # fixed Rejection codes
     evidence_retrieved: int = 0
     evidence_shown: int = 0
     temporal_anchor: str | None = None  # BEFORE | AFTER | COMPARE when applied
+    anchor_resolution: str | None = None  # RESOLVED | AMBIGUOUS | NO_SOURCE_DATED_EVENT | ...
     evidence_filtered_by_date: int = 0
 
 

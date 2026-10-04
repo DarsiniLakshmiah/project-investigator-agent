@@ -409,12 +409,20 @@ def _technical(result) -> tuple[tuple[str, str], ...]:
         ("Governed tool calls", _count(activity.get("tool_calls"))),
         ("Rejected actions", _count(activity.get("rejected_actions"))),
         (
+            "Rejection reasons",
+            ", ".join(
+                f"{k}: {v}" for k, v in sorted((activity.get("rejected_by_reason") or {}).items())
+            )
+            or None,
+        ),
+        (
             "Evidence shown to models",
             f"{activity['evidence_shown']} of {activity.get('evidence_retrieved', 0)}"
             if activity.get("evidence_shown") is not None and activity.get("evidence_retrieved")
             else None,
         ),
         ("Date anchor", activity.get("temporal_anchor")),
+        ("Anchor resolution", activity.get("anchor_resolution")),
         ("Claims removed", ", ".join(f"{k}: {v}" for k, v in sorted(removed.items())) or None),
         ("Total latency", f"{result.get('latency_ms', 0):,.0f} ms"),
         ("MLflow trace ID", result.get("trace_id")),

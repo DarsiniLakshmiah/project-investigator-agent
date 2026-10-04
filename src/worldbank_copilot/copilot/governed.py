@@ -31,6 +31,7 @@ from worldbank_copilot.retrieval.contract import (
     RetrievalResult,
     RetrievalStatus,
 )
+from worldbank_copilot.routing.models import TemporalKind, TemporalStatus
 from worldbank_copilot.tools.executor import ToolExecutor
 from worldbank_copilot.tools.models import ToolResult, ToolStatus
 
@@ -216,31 +217,96 @@ def evidence_date(ref: EvidenceReference) -> date | None:
     return None
 
 
-def anchor(gathered: Gathered, anchor_id: str, relation: str):
-    """Label/filter evidence against a governed timeline event's source-stated date.
+def event_date_of(ref: EvidenceReference | None) -> date | None:
+    """The source-stated date of a governed timeline event (never an estimated date)."""
+    if ref is None or not ref.payload.get("event_type"):
+        return None
+    value = ref.payload.get("event_date")
+    try:
+        return date.fromisoformat(str(value)[:10]) if value else None
+    except ValueError:
+        return None
 
-    Returns (kept evidence ids, period labels, dropped count, anchor usable). The date
-    comes from the event record, never from model text; undated evidence is kept and
-    labeled UNDATED.
+
+def anchor(gathered: Gathered, when: date, relation: str, event_id: str | None = None):
+    """Label/filter evidence against an authoritative anchor date.
+
+    Returns (kept evidence ids, period labels, dropped count). Evidence dated on the other
+    side of a BEFORE/AFTER boundary is dropped; undated evidence is kept for ordinary facts
+    but labeled UNDATED, so it can never establish a before/after relationship.
     """
-    event = gathered.refs.get(anchor_id)
-    when = (
-        date.fromisoformat(str(event.payload["event_date"])[:10])
-        if event is not None and event.payload.get("event_type") and event.payload.get("event_date")
-        else None
-    )
-    if when is None:
-        return set(gathered.refs), {}, 0, False
     periods, kept = {}, set()
     for evidence_id, ref in gathered.refs.items():
         day = evidence_date(ref)
-        period = "UNDATED" if day is None else "BEFORE" if day < when else "AFTER"
-        if evidence_id == anchor_id:
-            period = "EVENT"
+        period = (
+            "UNDATED"
+            if day is None
+            else "EVENT"  # the anchor itself, or dated the same day: neither side
+            if day == when or evidence_id == event_id
+            else "BEFORE"
+            if day < when
+            else "AFTER"
+        )
         periods[evidence_id] = period
         if relation == "COMPARE" or period in ("UNDATED", "EVENT", relation):
             kept.add(evidence_id)
-    return kept, periods, len(gathered.refs) - len(kept), True
+    return kept, periods, len(gathered.refs) - len(kept)
+
+
+@dataclass(frozen=True)
+class AnchorOutcome:
+    """Whether an event-relative relationship can be established, from governed data only."""
+
+    status: str  # NOT_EVENT_RELATIVE | RESOLVED | AMBIGUOUS | NO_SOURCE_DATED_EVENT
+    relation: str | None = None  # BEFORE | AFTER | COMPARE
+    when: date | None = None
+    event_id: str | None = None  # the Investigator-chosen event record, if it was the anchor
+    candidates: tuple[str, ...] = ()  # governed "title (date)" labels when ambiguous
+
+    @property
+    def resolved(self) -> bool:
+        return self.status == "RESOLVED"
+
+
+_DIRECTIONS = {"before": "BEFORE", "until": "BEFORE", "after": "AFTER", "since": "AFTER"}
+
+
+def resolve_anchor(parsed, choice, chosen_event, resolver) -> AnchorOutcome:
+    """The Investigator's semantic choice first; otherwise the existing timeline resolver.
+
+    ``parsed`` is the deterministic temporal parse of the question; ``choice`` the
+    Investigator's TemporalAnchor (or None); ``chosen_event`` the evidence it points at;
+    ``resolver`` resolves an EVENT_ANCHORED scope against source-dated timeline events.
+    The date always comes from a governed record, never from model text.
+    """
+    expression = next(
+        (e for e in parsed.expressions if e.kind == TemporalKind.EVENT_ANCHORED), None
+    )
+    relation = (
+        choice.relation
+        if choice is not None
+        else _DIRECTIONS.get(expression.anchor_direction, "COMPARE")
+        if expression is not None
+        else None
+    )
+    when = event_date_of(chosen_event)
+    if when is not None:
+        return AnchorOutcome("RESOLVED", relation, when, event_id=chosen_event.evidence_id)
+    if parsed.kind != TemporalKind.EVENT_ANCHORED or expression is None:
+        # The Investigator named an anchor event, but it carries no source-stated date.
+        status = "NOT_EVENT_RELATIVE" if choice is None else "NO_SOURCE_DATED_EVENT"
+        return AnchorOutcome(status, relation)
+    scope = resolver(parsed)
+    candidates = scope.anchor_candidates
+    if scope.status == TemporalStatus.RESOLVED and len(candidates) == 1:
+        return AnchorOutcome("RESOLVED", relation, candidates[0].event_date)
+    if len(candidates) > 1:
+        return AnchorOutcome(
+            "AMBIGUOUS",
+            relation,
+            candidates=tuple(f"{c.title} ({c.event_date.isoformat()})" for c in candidates),
+        )
+    return AnchorOutcome("NO_SOURCE_DATED_EVENT", relation)
 
 
 # -- relevance-aware context packing -------------------------------------------------

@@ -90,7 +90,7 @@ class Synthesizer:
         payload = json.loads(request.context_json)
         claims = [
             {"text": "The record reports an implementation fact.", "evidence": [e["handle"]],
-             "interpretation": False}
+             "interpretation": False, "temporal_relation": "NONE"}
             for e in payload["evidence"][: self.count]
         ]  # fmt: skip
         if claims and not self.abstain:
@@ -175,9 +175,7 @@ def test_natural_question_is_investigated_and_answered_with_citations():
         "Were there procurement problems?",
         "What did the ISR documents say about institutional capacity?",
         "What caused implementation delays?",
-        "What happened before restructuring?",
         "What happened before financing was cancelled?",
-        "What were the biggest implementation problems and did they improve after restructuring?",
     ],
 )
 def test_paraphrases_reach_the_investigator_not_clarify(question):
@@ -270,7 +268,7 @@ def test_no_evidence_abstains_without_synthesis():
     assert result.status == ResultStatus.INSUFFICIENT_EVIDENCE and not synthesizer.requests
 
 
-def test_event_without_source_stated_date_is_not_used_as_a_filter():
+def test_investigator_chosen_event_without_source_stated_date_is_insufficient():
     def anchored(payload):
         timeline = [e for e in payload["evidence"] if "event_type" in e["content"]]
         return decision(
@@ -284,14 +282,95 @@ def test_event_without_source_stated_date_is_not_used_as_a_filter():
         tool="get_project_timeline",
         arguments=[{"name": "event_types", "value": '["RESTRUCTURING"]'}],
     )
+    synthesizer = Synthesizer()
     _, result = run(
         "What happened before restructuring?",
         investigator=Investigator(actions=[action(**SEARCH), timeline], round2=anchored),
-        synthesizer=Synthesizer(),
+        synthesizer=synthesizer,
         critic=Critic(),
     )
+    assert result.status == ResultStatus.INSUFFICIENT_EVIDENCE and not synthesizer.requests
     assert result.activity.temporal_anchor is None
-    assert any("no source-stated date" in note for note in result.limitations)
+    assert result.activity.anchor_resolution == "NO_SOURCE_DATED_EVENT"
+
+
+# -- event-relative questions (D3) ---------------------------------------------------
+BEFORE_RESTRUCTURING = "What happened before restructuring?"
+
+
+def timeline_has(monkeypatch, *dates):
+    """The router's existing resolver, answering from fixed source-dated timeline events."""
+    from worldbank_copilot.routing.models import AnchorCandidate, TemporalStatus
+    from worldbank_copilot.routing.service import RoutingService
+
+    calls = []
+
+    def resolve(self, temporal, pid, access, ctx, anchors):
+        calls.append(pid)
+        candidates = tuple(
+            AnchorCandidate(
+                timeline_event_id=f"t{n}", event_type="RESTRUCTURING", event_date=d, title=f"R{n}"
+            )
+            for n, d in enumerate(dates, 1)
+        )
+        status = TemporalStatus.RESOLVED if len(dates) == 1 else TemporalStatus.UNRESOLVED
+        return temporal.model_copy(update={"status": status, "anchor_candidates": candidates})
+
+    monkeypatch.setattr(RoutingService, "_resolve_anchor", resolve)
+    return calls
+
+
+def test_one_authoritative_event_date_filters_evidence_and_answers(monkeypatch):
+    from datetime import date
+
+    calls = timeline_has(monkeypatch, date(2100, 1, 1))  # every dated record is BEFORE it
+    synthesizer = Synthesizer(temporal_relation="BEFORE", count=1)
+    _, result = run(BEFORE_RESTRUCTURING, synthesizer=synthesizer, critic=Critic())
+    assert calls == [PROJECT]
+    assert result.status == ResultStatus.ANSWER, result.message
+    assert result.activity.anchor_resolution == "RESOLVED"
+    assert result.activity.temporal_anchor == "BEFORE"
+    payload = json.loads(synthesizer.requests[0].context_json)
+    assert payload["anchor"] == {"relation": "BEFORE", "date": "2100-01-01"}
+    periods = {e["handle"]: e["period"] for e in payload["evidence"]}
+    first = payload["evidence"][0]["handle"]
+    # the published BEFORE claim cites evidence source-dated before the event
+    assert periods[first] == "BEFORE" and len(result.claims) == 1
+    assert set(periods.values()) <= {"BEFORE", "EVENT", "UNDATED"}  # AFTER was filtered out
+
+
+def test_several_authoritative_events_ask_which_one(monkeypatch):
+    from datetime import date
+
+    timeline_has(monkeypatch, date(2019, 5, 1), date(2022, 3, 1))
+    synthesizer = Synthesizer()
+    _, result = run(BEFORE_RESTRUCTURING, synthesizer=synthesizer, critic=Critic())
+    assert result.status == ResultStatus.CLARIFY and not synthesizer.requests
+    assert "R1 (2019-05-01)" in result.message and "R2 (2022-03-01)" in result.message
+    assert result.activity.anchor_resolution == "AMBIGUOUS" and not result.claims
+
+
+def test_event_without_authoritative_date_publishes_no_temporal_answer():
+    # The offline timeline holds no source-stated restructuring date for this project.
+    synthesizer = Synthesizer()
+    for question in (
+        BEFORE_RESTRUCTURING,
+        "What were the biggest implementation problems and did they improve after restructuring?",
+    ):
+        _, result = run(question, synthesizer=synthesizer, critic=Critic())
+        assert result.status == ResultStatus.INSUFFICIENT_EVIDENCE and not result.claims
+        assert result.activity.anchor_resolution == "NO_SOURCE_DATED_EVENT"
+    assert not synthesizer.requests
+
+
+def test_synthesizer_before_claim_without_anchor_is_removed():
+    critic = Critic()
+    _, result = run(synthesizer=Synthesizer(temporal_relation="BEFORE"), critic=critic)
+    assert result.activity.anchor_resolution == "NOT_EVENT_RELATIVE"
+    assert result.status == ResultStatus.ANSWER and len(result.claims) == 1
+    assert result.validation.claims_removed == {"TEMPORAL_RELATION_UNVERIFIED": 1}
+    reviewed = json.loads(critic.requests[0].context_json)["candidate_claims"]
+    assert [c["temporal_relation"] for c in reviewed] == ["NONE"]
 
 
 # -- claim-level grounding -----------------------------------------------------------
@@ -518,6 +597,7 @@ def test_trace_has_named_stages_and_only_structural_metadata(monkeypatch):
         "investigator_1",
         "tools_1",
         "investigator_2",
+        "anchor",
         "synthesis",
         "enrichment",
         "integrity",

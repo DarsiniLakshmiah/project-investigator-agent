@@ -2,6 +2,7 @@
 per-claim integrity and claim-level finalization. Offline; no models or network."""
 
 import json
+from datetime import date
 from types import SimpleNamespace
 
 import pytest
@@ -22,15 +23,19 @@ from worldbank_copilot.copilot.governed import (
     anchor,
     approved_context,
     pack,
+    resolve_anchor,
 )
 from worldbank_copilot.copilot.investigator import (
     Action,
     ActionTool,
     InvestigatorDecision,
+    Rejection,
+    TemporalAnchor,
     govern,
     tool_catalog,
 )
 from worldbank_copilot.copilot.semantic import (
+    TEMPORAL_RELATION_UNVERIFIED,
     SemanticReview,
     SemanticSynthesis,
     enrich,
@@ -38,6 +43,8 @@ from worldbank_copilot.copilot.semantic import (
 )
 from worldbank_copilot.investigation.evidence_models import EvidenceReference
 from worldbank_copilot.investigation.model_protocol import StructuredTool
+from worldbank_copilot.routing.models import AnchorCandidate, TemporalStatus
+from worldbank_copilot.routing.temporal import parse_temporal
 from worldbank_copilot.tools.registry import TOOL_SPECS
 from worldbank_copilot.validation.phase10d_fixtures import fixture
 
@@ -63,24 +70,45 @@ def act(tool, query=None, **arguments):
 
 
 def test_project_is_injected_by_code_and_arguments_are_schema_checked():
-    call = govern(act("get_rating_history", rating_types=["PDO"]), PROJECT)
+    call, reason = govern(act("get_rating_history", rating_types=["PDO"]), PROJECT)
+    assert reason is None
     assert call.arguments["project_id"] == PROJECT and call.arguments["rating_types"] == ["PDO"]
-    assert govern(act("get_rating_history", rating_types=["NOT_A_RATING"]), PROJECT) is None
-    assert govern(act("get_rating_history", project_id="P999999"), PROJECT) is None
-    assert govern(act("get_rating_history", query_text="x"), PROJECT) is None
+    for bad, code in (
+        (act("get_rating_history", rating_types=["NOT_A_RATING"]), Rejection.SCHEMA_INVALID),
+        (act("get_rating_history", project_id="P999999"), Rejection.PROJECT_ARGUMENT),
+        (act("get_rating_history", query_text="x"), Rejection.SCHEMA_INVALID),
+    ):
+        assert govern(bad, PROJECT) == (None, code)
+
+
+def test_structured_action_formatting_is_normalised_not_rejected():
+    # D3: an empty query, a bare enum string and a scalar for a list field were rejected.
+    bare = Action(
+        tool="get_project_timeline",
+        arguments=({"name": "event_types", "value": "RESTRUCTURING"},),
+        query="",
+        purpose="p",
+    )
+    call, reason = govern(bare, PROJECT)
+    assert reason is None and call.arguments["event_types"] == ["RESTRUCTURING"]
+    call, reason = govern(act("get_rating_history", query="ignored", rating_types="PDO"), PROJECT)
+    assert reason is None and call.arguments["rating_types"] == ["PDO"]
 
 
 @pytest.mark.parametrize(
     "query", ["", "drop table x", "http://x.org", "/Volumes/a/b", "C:\\secret"]
 )
 def test_unsafe_or_empty_search_queries_are_rejected(query):
-    assert govern(act("search_documents", query=query), PROJECT) is None
+    call, reason = govern(act("search_documents", query=query), PROJECT)
+    assert call is None
+    assert reason == (Rejection.EMPTY_QUERY if not query else Rejection.UNSAFE_QUERY)
 
 
 def test_search_query_is_model_text_executed_only_as_search():
-    call = govern(act("search_documents", query="procurement delays"), PROJECT)
+    call, _ = govern(act("search_documents", query="procurement delays"), PROJECT)
     assert call.is_document and call.query == "procurement delays" and call.arguments is None
-    assert govern(act("search_documents", query="x", limit=5), PROJECT) is None
+    call, _ = govern(act("search_documents", query="x", limit=5), PROJECT)
+    assert call.arguments is None  # model arguments never reach document search
 
 
 def test_decision_contract_is_bounded():
@@ -136,25 +164,158 @@ def test_packing_keeps_identity_and_citation_fields_intact():
     assert e["citation"] == r.model_dump(mode="json")["citation"]
 
 
-def test_anchor_uses_the_events_source_stated_date():
+WHEN = date(2020, 6, 1)
+
+
+def test_anchor_filters_by_the_authoritative_date_and_keeps_undated_as_undated():
     event = ref("FACT", "ev", event_type="RESTRUCTURING", event_date="2020-06-01")
     before = ref(record="d1", document_date="2019-01-01")
     after = ref(record="d2", document_date="2021-01-01")
     undated = ref(record="d3")
     g = gathered([event, before, after, undated])
-    kept, periods, dropped, usable = anchor(g, event.evidence_id, "BEFORE")
-    assert usable and dropped == 1
+    kept, periods, dropped = anchor(g, WHEN, "BEFORE", event.evidence_id)
+    assert dropped == 1
     assert kept == {event.evidence_id, before.evidence_id, undated.evidence_id}
+    assert periods[event.evidence_id] == "EVENT" and periods[before.evidence_id] == "BEFORE"
     assert periods[after.evidence_id] == "AFTER" and periods[undated.evidence_id] == "UNDATED"
-    kept, _, dropped, _ = anchor(g, event.evidence_id, "COMPARE")
+    kept, _, dropped = anchor(g, WHEN, "COMPARE")
     assert dropped == 0 and len(kept) == 4
 
 
-def test_anchor_without_a_source_stated_date_is_not_used():
+# -- event-relative anchor resolution (D3) --------------------------------------------
+BEFORE_RESTRUCTURING = parse_temporal("What happened before restructuring?")
+
+
+def scope(*dates):
+    candidates = tuple(
+        AnchorCandidate(
+            timeline_event_id=f"t{n}", event_type="RESTRUCTURING", event_date=d, title=f"R{n}"
+        )
+        for n, d in enumerate(dates, 1)
+    )
+    status = TemporalStatus.RESOLVED if len(candidates) == 1 else TemporalStatus.UNRESOLVED
+    return BEFORE_RESTRUCTURING.model_copy(
+        update={"status": status, "anchor_candidates": candidates}
+    )
+
+
+def resolver_of(result):
+    calls = []
+
+    def resolver(parsed):
+        calls.append(parsed)
+        return result
+
+    resolver.calls = calls
+    return resolver
+
+
+def test_one_source_dated_event_resolves_the_anchor():
+    outcome = resolve_anchor(BEFORE_RESTRUCTURING, None, None, resolver_of(scope(WHEN)))
+    assert outcome.resolved and outcome.when == WHEN and outcome.relation == "BEFORE"
+
+
+def test_several_source_dated_events_are_ambiguous_not_guessed():
+    outcome = resolve_anchor(
+        BEFORE_RESTRUCTURING, None, None, resolver_of(scope(WHEN, date(2022, 3, 1)))
+    )
+    assert outcome.status == "AMBIGUOUS" and outcome.when is None
+    assert outcome.candidates == ("R1 (2020-06-01)", "R2 (2022-03-01)")
+
+
+def test_known_event_without_a_source_stated_date_is_unresolved():
+    outcome = resolve_anchor(BEFORE_RESTRUCTURING, None, None, resolver_of(scope()))
+    assert outcome.status == "NO_SOURCE_DATED_EVENT" and not outcome.resolved
     estimated = ref("FACT", "ev", event_type="RESTRUCTURING", event_date=None)
-    g = gathered([estimated, ref(record="d1", document_date="2019-01-01")])
-    kept, periods, dropped, usable = anchor(g, estimated.evidence_id, "BEFORE")
-    assert not usable and dropped == 0 and len(kept) == 2
+    choice = TemporalAnchor(event="E1", relation="BEFORE")
+    outcome = resolve_anchor(parse_temporal("What changed?"), choice, estimated, resolver_of(None))
+    assert outcome.status == "NO_SOURCE_DATED_EVENT"
+
+
+def test_investigator_chosen_dated_event_wins_without_a_timeline_lookup():
+    event = ref("FACT", "ev", event_type="RESTRUCTURING", event_date="2020-06-01")
+    resolver = resolver_of(scope())
+    choice = TemporalAnchor(event="E1", relation="AFTER")
+    outcome = resolve_anchor(BEFORE_RESTRUCTURING, choice, event, resolver)
+    assert outcome.resolved and outcome.when == WHEN and outcome.relation == "AFTER"
+    assert outcome.event_id == event.evidence_id and not resolver.calls
+
+
+def test_question_that_is_not_event_relative_needs_no_anchor():
+    resolver = resolver_of(scope())
+    outcome = resolve_anchor(parse_temporal("What changed?"), None, None, resolver)
+    assert outcome.status == "NOT_EVENT_RELATIVE" and not resolver.calls
+
+
+def temporal_case():
+    """E1 dated before the anchor, E2 dated after, E3 undated (document_date=None)."""
+    refs = (
+        ref(record="d1", document_date="2019-01-01"),
+        ref(record="d2", document_date="2021-01-01"),
+        ref(record="d3", document_date=None),
+    )
+    context = context_for(*refs)
+    _, periods, _ = anchor(gathered(list(refs)), WHEN, "COMPARE")
+    return context, periods
+
+
+def related(*claims):
+    return SemanticSynthesis.model_validate(
+        {
+            "claims": [
+                {"text": t, "evidence": list(h), "interpretation": False, "temporal_relation": r}
+                for t, h, r in claims
+            ],
+            "insufficient_evidence": False,
+            "limitations": [],
+        }
+    )
+
+
+def test_before_after_claims_need_a_resolved_anchor():
+    # Case 6: the Synthesizer adds "before restructuring" while no anchor was resolved.
+    context, _ = temporal_case()
+    projection = project(context, objective="o")
+    output, dropped, _ = enrich(
+        related(("Before the restructuring, X.", ["E1"], "BEFORE"), ("X.", ["E1"], "NONE")),
+        projection,
+        context,
+    )
+    assert [c.claim_id for c in output.candidate_claims] == ["C2"]
+    assert dropped == {TEMPORAL_RELATION_UNVERIFIED: 1}
+    assert projection.payload["anchor"] is None
+
+
+def test_undated_evidence_cannot_establish_before_or_after():
+    # Cases 4 and 5: undated alone, and undated mixed with dated evidence.
+    context, periods = temporal_case()
+    projection = project(context, objective="o", periods=periods, anchor={"relation": "BEFORE"})
+    output, dropped, _ = enrich(
+        related(
+            ("Dated before.", ["E1"], "BEFORE"),
+            ("Undated before.", ["E3"], "BEFORE"),
+            ("Mixed before.", ["E1", "E3"], "BEFORE"),
+            ("Wrong side.", ["E2"], "BEFORE"),
+            ("After.", ["E2"], "AFTER"),
+        ),
+        projection,
+        context,
+    )
+    assert [c.claim_id for c in output.candidate_claims] == ["C1", "C5"]
+    assert dropped == {TEMPORAL_RELATION_UNVERIFIED: 3}
+    periods_shown = [e["period"] for e in projection.payload["evidence"]]
+    assert periods_shown == ["BEFORE", "AFTER", "UNDATED"]
+
+
+def test_undated_evidence_still_supports_ordinary_facts():
+    # Case 7: non-temporal claims from undated evidence remain usable, anchor or not.
+    context, periods = temporal_case()
+    for projection in (
+        project(context, objective="o"),
+        project(context, objective="o", periods=periods, anchor={"relation": "BEFORE"}),
+    ):
+        output, dropped, _ = enrich(related(("Undated fact.", ["E3"], "NONE")), projection, context)
+        assert len(output.candidate_claims) == 1 and not dropped
 
 
 class FakeTools:
@@ -177,7 +338,7 @@ def test_foreign_project_data_from_a_tool_is_a_governance_violation():
         status="EMPTY",
     )
     executor = GovernedExecutor(FakeTools(foreign), None, lambda rid: None, PROJECT, "r")
-    call = govern(act("get_attention_signals"), PROJECT)
+    call, _ = govern(act("get_attention_signals"), PROJECT)
     with pytest.raises(GovernanceViolation):
         executor.run(call, Gathered())
 
@@ -200,7 +361,10 @@ def context_for(*refs):
 def semantic(*claims, insufficient=False):
     return SemanticSynthesis.model_validate(
         {
-            "claims": [{"text": t, "evidence": list(h), "interpretation": i} for t, h, i in claims],
+            "claims": [
+                {"text": t, "evidence": list(h), "interpretation": i, "temporal_relation": "NONE"}
+                for t, h, i in claims
+            ],
             "insufficient_evidence": insufficient,
             "limitations": [],
         }

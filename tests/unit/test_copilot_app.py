@@ -181,8 +181,8 @@ def test_technical_details_contain_safe_metadata_only(results, name):
         "Route", "Intent", "Routing reason", "Result status", "Validation disposition",
         "Mechanical validity", "Semantic support", "Critic status", "Validation failures",
         "Evidence records", "Published claims", "Citations", "Attention signals", "Model calls",
-        "Investigator rounds", "Governed tool calls", "Rejected actions",
-        "Evidence shown to models", "Date anchor", "Claims removed",
+        "Investigator rounds", "Governed tool calls", "Rejected actions", "Rejection reasons",
+        "Evidence shown to models", "Date anchor", "Anchor resolution", "Claims removed",
         "Total latency", "MLflow trace ID", "Request ID", "Model note",
     }  # fmt: skip
     assert {label for label, _ in view.technical} <= allowed

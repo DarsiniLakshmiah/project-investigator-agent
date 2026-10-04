@@ -16,6 +16,7 @@ import json
 import logging
 import time
 import uuid
+from collections import Counter
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,7 @@ from worldbank_copilot.copilot.governed import (
     anchor,
     approved_context,
     pack,
+    resolve_anchor,
 )
 from worldbank_copilot.copilot.investigator import (
     INSTRUCTIONS as INVESTIGATOR_INSTRUCTIONS,
@@ -221,7 +223,7 @@ class _Request:
             request_id=self.request_id,
         )
         gathered = Gathered()
-        decision, rejected, anchor_choice = None, 0, None
+        decision, rejected, anchor_choice = None, Counter(), None
         for round_number in range(1, bounds.max_decision_rounds + 1):
             remaining = bounds.max_tool_calls - len(gathered.calls)
             with self.recorder.span(f"investigator_{round_number}") as span:
@@ -248,9 +250,9 @@ class _Request:
                 break
             with self.recorder.span(f"tools_{round_number}") as span:
                 for action in decision.actions[:remaining]:
-                    call = govern(action, self.project_id)
+                    call, reason = govern(action, self.project_id)
                     if call is None:
-                        rejected += 1
+                        rejected[reason.value] += 1
                         continue
                     try:
                         executor.run(call, gathered)
@@ -265,16 +267,23 @@ class _Request:
                             ),
                             **common,
                         )
-                rejected += max(0, len(decision.actions) - remaining)
-                _annotate(span, tool_calls=len(gathered.calls), evidence=len(gathered.refs))
+                if len(decision.actions) > remaining:
+                    rejected["OVER_BUDGET"] += len(decision.actions) - remaining
+                _annotate(
+                    span,
+                    tool_calls=len(gathered.calls),
+                    evidence=len(gathered.refs),
+                    rejected=",".join(f"{k}:{v}" for k, v in sorted(rejected.items())),
+                )
             if not decision.review_evidence or len(gathered.calls) >= bounds.max_tool_calls:
                 break
         self.activity.update(
             tool_calls=len(gathered.calls),
-            rejected_actions=rejected,
+            rejected_actions=sum(rejected.values()),
+            rejected_by_reason=dict(rejected),
             evidence_retrieved=len(gathered.refs),
         )
-        return self._answer(decision, gathered, anchor_choice, routed, common)
+        return self._answer(decision, gathered, anchor_choice, router, common)
 
     def _disposition(self, decision, common) -> InvestigationResult | None:
         if decision.disposition == "PREDICTION":
@@ -322,9 +331,26 @@ class _Request:
         return payload
 
     # -- answer --------------------------------------------------------------------------
-    def _answer(self, decision, gathered, anchor_choice, routed, common) -> InvestigationResult:
+    def _answer(self, decision, gathered, anchor_choice, router, common) -> InvestigationResult:
         bounds = self.config.investigation
         objective = decision.objective
+        outcome = self._anchor(router, anchor_choice, gathered)
+        if outcome.status == "AMBIGUOUS":  # several source-dated events: do not guess
+            return self._result(
+                ResultStatus.CLARIFY,
+                "The question is relative to an event that occurs more than once in the "
+                "governed timeline: " + "; ".join(outcome.candidates) + ". Which one do you mean?",
+                objective=objective,
+                **common,
+            )
+        if outcome.status == "NO_SOURCE_DATED_EVENT":  # never assert an unverified before/after
+            return self._result(
+                ResultStatus.INSUFFICIENT_EVIDENCE,
+                "UNKNOWN: the event this question is relative to has no source-stated date in "
+                "the governed timeline, so no before/after relationship can be established.",
+                objective=objective,
+                **common,
+            )
         if not gathered.refs:
             return self._result(
                 ResultStatus.INSUFFICIENT_EVIDENCE,
@@ -332,23 +358,15 @@ class _Request:
                 objective=objective,
                 **common,
             )
-        keep, periods = set(gathered.refs), None
-        if anchor_choice is not None:
-            anchor_id = self.anchor_handles.get(anchor_choice.event)
-            keep, periods, dropped, usable = (
-                anchor(gathered, anchor_id, anchor_choice.relation)
-                if anchor_id
-                else (keep, None, 0, False)
+        keep, periods, anchor_view = set(gathered.refs), None, None
+        if outcome.resolved:
+            keep, periods, dropped = anchor(
+                gathered, outcome.when, outcome.relation, outcome.event_id
             )
-            if usable:
-                self.activity.update(
-                    temporal_anchor=anchor_choice.relation, evidence_filtered_by_date=dropped
-                )
-            else:
-                common["limitations"] = (
-                    *common["limitations"],
-                    "The requested event has no source-stated date; no date filter was applied.",
-                )
+            anchor_view = {"relation": outcome.relation, "date": outcome.when.isoformat()}
+            self.activity.update(
+                temporal_anchor=outcome.relation, evidence_filtered_by_date=dropped
+            )
         entries = pack(
             gathered,
             keep,
@@ -358,7 +376,7 @@ class _Request:
         self.activity["evidence_shown"] = len(entries)
         context = self._context(objective, entries, gathered)
         evidence = tuple(_package_evidence(gathered.refs[i]) for i in gathered.refs if i in keep)
-        projection = project(context, objective=objective, periods=periods)
+        projection = project(context, objective=objective, periods=periods, anchor=anchor_view)
         with self.recorder.span("synthesis") as span:
             semantic, failure = self._call(
                 "SYNTHESIZER", SYNTHESIS_INSTRUCTIONS, projection.payload, SemanticSynthesis, span
@@ -387,7 +405,11 @@ class _Request:
                 review, failure = self._call(
                     "CRITIC",
                     CRITIC_INSTRUCTIONS,
-                    critic_payload(projection, integrity.claims),
+                    critic_payload(
+                        projection,
+                        integrity.claims,
+                        {f"C{n}": c.temporal_relation for n, c in enumerate(semantic.claims, 1)},
+                    ),
                     SemanticReview,
                     span,
                 )
@@ -440,6 +462,22 @@ class _Request:
             ),
             **common,
         )
+
+    def _anchor(self, router, choice, gathered):
+        """Resolve an event-relative scope from governed, source-dated records only."""
+        chosen = self.anchor_handles.get(choice.event) if choice is not None else None
+
+        def resolver(scope):  # the router's existing timeline resolver (never guesses)
+            ctx = router.context_factory(self.request_id)
+            return router._resolve_anchor(scope, self.project_id, self.access, ctx, [])
+
+        with self.recorder.span("anchor") as span:
+            outcome = resolve_anchor(
+                parse_temporal(self.query), choice, gathered.refs.get(chosen), resolver
+            )
+            _annotate(span, status=outcome.status, relation=outcome.relation or "")
+        self.activity["anchor_resolution"] = outcome.status
+        return outcome
 
     def _context(self, objective, entries, gathered):
         scope = parse_temporal(self.query).model_dump(mode="json")

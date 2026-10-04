@@ -117,22 +117,56 @@ def tool_catalog() -> list[dict]:
     return catalog
 
 
-def govern(action: Action, project_id: str) -> GovernedCall | None:
-    """Validate one proposed action; None means rejected (never repaired or guessed)."""
+class Rejection(StrEnum):
+    """Why a proposed action was not executed (safe, fixed codes for tracing)."""
+
+    EMPTY_QUERY = "EMPTY_QUERY"
+    UNSAFE_QUERY = "UNSAFE_QUERY"
+    PROJECT_ARGUMENT = "PROJECT_ARGUMENT"
+    DUPLICATE_ARGUMENT = "DUPLICATE_ARGUMENT"
+    SCHEMA_INVALID = "SCHEMA_INVALID"
+
+
+def govern(action: Action, project_id: str) -> tuple[GovernedCall | None, Rejection | None]:
+    """Validate one proposed action, or say why it is rejected (never guessed).
+
+    Only format is normalized: a query on a structured tool and arguments on a search are
+    ignored (neither is executed), and a scalar is wrapped where the tool schema expects a
+    list. Tool, argument names/values and project scope are never repaired.
+    """
     if action.tool == ActionTool.SEARCH_DOCUMENTS:
         query = (action.query or "").strip()
-        if action.arguments or not query or _UNSAFE_QUERY.search(query):
-            return None
-        return GovernedCall(SEARCH, None, query, action.purpose)
+        if not query:
+            return None, Rejection.EMPTY_QUERY
+        if _UNSAFE_QUERY.search(query):
+            return None, Rejection.UNSAFE_QUERY
+        return GovernedCall(SEARCH, None, query, action.purpose), None
     names = [a.name for a in action.arguments]
-    if action.query is not None or len(names) != len(set(names)) or "project_id" in names:
-        return None
-    raw = {a.name: _value(a.value) for a in action.arguments}
+    if "project_id" in names:
+        return None, Rejection.PROJECT_ARGUMENT
+    if len(names) != len(set(names)):
+        return None, Rejection.DUPLICATE_ARGUMENT
+    model = SPECS[action.tool.value].args_model
+    lists = _list_fields(model)
+    raw = {}
+    for a in action.arguments:
+        value = _value(a.value)
+        raw[a.name] = [value] if a.name in lists and not isinstance(value, list) else value
     try:
-        args = SPECS[action.tool.value].args_model.model_validate({**raw, "project_id": project_id})
+        args = model.model_validate({**raw, "project_id": project_id})
     except ValidationError:
-        return None
-    return GovernedCall(action.tool.value, args.model_dump(mode="json"), None, action.purpose)
+        return None, Rejection.SCHEMA_INVALID
+    return GovernedCall(action.tool.value, args.model_dump(mode="json"), None, action.purpose), None
+
+
+def _list_fields(model) -> set[str]:
+    properties = model.model_json_schema().get("properties", {})
+    return {
+        name
+        for name, schema in properties.items()
+        if schema.get("type") == "array"
+        or any(s.get("type") == "array" for s in schema.get("anyOf", ()))
+    }
 
 
 def _value(text: str) -> Any:
