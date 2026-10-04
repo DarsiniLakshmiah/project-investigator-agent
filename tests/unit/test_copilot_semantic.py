@@ -502,7 +502,8 @@ def review(*supports):
             "findings": [
                 {"claim": f"C{i}", "support": s, "rationale": f"note {i}"}
                 for i, s in enumerate(supports, 1)
-            ]
+            ],
+            "limitations": [],
         }
     )
 
@@ -598,3 +599,24 @@ def test_failed_critic_publishes_valid_claims_unassessed_but_never_unknowns():
     )  # fmt: skip
     assert none.disposition == "INSUFFICIENT_EVIDENCE" and not none.published
     assert CRITIC_UNAVAILABLE_NOTE not in none.limitations
+
+
+def test_limitation_publishes_only_when_grounded_and_once():
+    output, context = draft(("A.", ["E1"], False))
+    integrity = check_integrity(output, context)
+    verdicts = SemanticReview.model_validate(
+        {
+            "findings": [{"claim": "C1", "support": "SUPPORTED", "rationale": None}],
+            "limitations": [
+                {"limitation": "L1", "grounded": True},
+                {"limitation": "L2", "grounded": False},
+                {"limitation": "L3", "grounded": True},
+                {"limitation": "L3", "grounded": True},  # duplicate verdict: not trusted
+            ],
+        }
+    )
+    final = finalize(
+        integrity, verdicts, critic_enabled=True, model_insufficient=False, limitations=("app",),
+        model_limitations=("kept", "ungrounded", "ambiguous", "unreviewed"),
+    )  # fmt: skip
+    assert final.limitations == ("app", "kept") and final.limitations_withheld == 3

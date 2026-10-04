@@ -439,6 +439,7 @@ class _Request:
                 claims_removed=sum(integrity.removed.values()),
                 security_failures=",".join(integrity.security_failures),
             )
+        relations = {f"C{n}": c.temporal_relation for n, c in enumerate(semantic.claims, 1)}
         critic_enabled = self.config.models.critic_enabled
         review, critic_status = None, CriticStatus.NOT_REQUIRED
         if integrity.security_failures:
@@ -450,11 +451,7 @@ class _Request:
                 review, failure = self._call(
                     "CRITIC",
                     CRITIC_INSTRUCTIONS,
-                    critic_payload(
-                        projection,
-                        integrity.claims,
-                        {f"C{n}": c.temporal_relation for n, c in enumerate(semantic.claims, 1)},
-                    ),
+                    critic_payload(projection, integrity.claims, relations, output.limitations),
                     SemanticReview,
                     span,
                 )
@@ -468,7 +465,8 @@ class _Request:
                 critic_enabled=critic_enabled,
                 critic_failed=critic_status == CriticStatus.FAILED,
                 model_insufficient=output.insufficient_evidence,
-                limitations=(*context.limitations, *output.limitations),
+                limitations=context.limitations,
+                model_limitations=output.limitations,
                 removed_before=dropped,
             )
             _annotate(
@@ -479,10 +477,11 @@ class _Request:
                 partially_supported=sum(
                     p.support == "PARTIALLY_SUPPORTED" for p in final.published
                 ),
+                limitations_withheld=final.limitations_withheld,
                 **{f"removed_{k.lower()}": v for k, v in final.removed.items()},
             )
         cited = {e["evidence_id"]: e for e in context.evidence}
-        claims = tuple(_claim(p, cited) for p in final.published)
+        claims = tuple(_claim(p, cited, relations) for p in final.published)
         if final.disposition == "FAIL_CLOSED":
             status, message = ResultStatus.FAIL_CLOSED, "No answer published: integrity failure."
         elif claims and critic_status == CriticStatus.FAILED:
@@ -511,6 +510,7 @@ class _Request:
                 semantic_support="MODEL_ASSESSED" if review is not None else "NOT_ASSESSED",
                 critic_status=critic_status,
                 claims_removed=final.removed,
+                limitations_withheld=final.limitations_withheld,
             ),
             **common,
         )
@@ -700,7 +700,7 @@ def _request_attributes(result: InvestigationResult, config: CopilotConfig) -> d
     }
 
 
-def _claim(published, cited: dict[str, dict]) -> Claim:
+def _claim(published, cited: dict[str, dict], relations: dict[str, str]) -> Claim:
     claim = published.claim
     citations = []
     for ref in claim.citations:
@@ -726,6 +726,7 @@ def _claim(published, cited: dict[str, dict]) -> Claim:
         citations=tuple(citations),
         support=published.support,
         qualifier=published.qualifier,
+        temporal_relation=relations.get(claim.claim_id, "NONE"),
     )
 
 

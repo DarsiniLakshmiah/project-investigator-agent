@@ -21,6 +21,7 @@ from worldbank_copilot.copilot.finalizer import (
     CRITIC_DISABLED_NOTE,
     CRITIC_UNAVAILABLE_NOTE,
 )
+from worldbank_copilot.copilot.semantic import SYNTHESIS_INSTRUCTIONS
 from worldbank_copilot.investigation.claims import Failure, ModelReply, NodeError
 
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs"
@@ -84,8 +85,9 @@ class Investigator:
 class Synthesizer:
     """One single-handle claim per supplied evidence (first ``count``); ``changes`` edit C1."""
 
-    def __init__(self, abstain=False, raw=None, error=None, count=2, **changes):
+    def __init__(self, abstain=False, raw=None, error=None, count=2, limitations=(), **changes):
         self.abstain, self.raw, self.error, self.count = abstain, raw, error, count
+        self.limitations = list(limitations)
         self.changes, self.requests = changes, []
 
     def invoke(self, request):
@@ -103,20 +105,26 @@ class Synthesizer:
         output = {
             "claims": [] if self.abstain else claims,
             "insufficient_evidence": self.abstain,
-            "limitations": [],
+            "limitations": self.limitations,
         }
         return reply(self.raw or output, input_tokens=10, output_tokens=5)
 
 
 class Critic:
-    def __init__(self, supports=("SUPPORTED",), raw=None, error=None):
+    def __init__(self, supports=("SUPPORTED",), raw=None, error=None, grounded=(True,)):
         self.supports, self.raw, self.error, self.requests = supports, raw, error, []
+        self.grounded = grounded
 
     def invoke(self, request):
         self.requests.append(request)
         if self.error:
             raise self.error
-        claims = json.loads(request.context_json)["candidate_claims"]
+        payload = json.loads(request.context_json)
+        claims = payload["candidate_claims"]
+        verdicts = [
+            {"limitation": item["limitation"], "grounded": self.grounded[i % len(self.grounded)]}
+            for i, item in enumerate(payload["candidate_limitations"])
+        ]
         findings = [
             {
                 "claim": c["claim"],
@@ -125,7 +133,7 @@ class Critic:
             }
             for i, c in enumerate(claims)
         ]
-        return reply(self.raw or {"findings": findings})
+        return reply(self.raw or {"findings": findings, "limitations": verdicts})
 
 
 def config(**models):
@@ -648,7 +656,10 @@ def test_model_failure_fails_closed(part):
 
 
 # -- a failed Critic is a missing secondary review, not a gate ------------------------
-INVALID_FINDING = {"findings": [{"claim": "C1", "support": "MAYBE", "rationale": None}]}
+INVALID_FINDING = {
+    "findings": [{"claim": "C1", "support": "MAYBE", "rationale": None}],
+    "limitations": [],
+}
 
 
 @pytest.mark.parametrize(
@@ -714,7 +725,7 @@ def test_critic_sees_only_cited_evidence_and_may_omit_rationale():
     critic = Critic(raw=json.dumps({"findings": [
         {"claim": "C1", "support": "SUPPORTED", "rationale": None},
         {"claim": "C2", "support": "SUPPORTED", "rationale": None},
-    ]}))  # fmt: skip
+    ], "limitations": []}))  # fmt: skip
     synthesizer = Synthesizer()
     _, result = run(synthesizer=synthesizer, critic=critic)
     assert result.status == ResultStatus.ANSWER and len(result.claims) == 2
@@ -725,8 +736,76 @@ def test_critic_sees_only_cited_evidence_and_may_omit_rationale():
     assert len(reviewed["evidence"]) < len(shown)
 
 
+# -- D3C: temporal claims, relevance guidance and grounded limitations ----------------
+def test_resolved_before_question_publishes_verified_before_claims(monkeypatch):
+    governed_timeline(monkeypatch, *FOUR)
+    synthesizer = Synthesizer(temporal_relation="BEFORE", count=1)
+    _, result = run(
+        JULY_23,
+        investigator=Investigator(temporal_anchor=anchor_on(**FULL_DATE)),
+        synthesizer=synthesizer,
+        critic=Critic(),
+    )
+    assert result.status == ResultStatus.ANSWER, result.message
+    assert [c.temporal_relation for c in result.claims] == ["BEFORE"]
+    payload = json.loads(synthesizer.requests[0].context_json)
+    assert payload["anchor"] == {"relation": "BEFORE", "date": "2024-07-23"}
+    assert payload["time_scope"] is None  # no competing DATE scope read off the event date
+    cited = result.claims[0].evidence_ids
+    periods = {e["handle"]: e["period"] for e in payload["evidence"]}
+    assert periods[payload["evidence"][0]["handle"]] == "BEFORE" and len(cited) == 1
+
+
+def test_background_facts_may_stay_none_beside_before_claims(monkeypatch):
+    governed_timeline(monkeypatch, *FOUR)
+    _, result = run(
+        JULY_23,
+        investigator=Investigator(temporal_anchor=anchor_on(**FULL_DATE)),
+        synthesizer=Synthesizer(temporal_relation="BEFORE"),  # C1 BEFORE, C2 background
+        critic=Critic(),
+    )
+    assert result.status == ResultStatus.ANSWER
+    assert sorted(c.temporal_relation for c in result.claims) == ["BEFORE", "NONE"]
+
+
+def test_temporal_question_asks_for_relevant_developments_not_a_chronology():
+    # Contract test only: selectivity is a semantic choice, measured live, never a rule.
+    text = " ".join(SYNTHESIS_INSTRUCTIONS.split())
+    assert "do not list every record or retell the project chronology" in text
+    assert "what characterises that period" in text
+    assert "sets temporal_relation to that relation" in text
+
+
+def test_ungrounded_model_limitation_is_not_published():
+    contradicting = "No evidence covers project outcomes after the 2018 ISR reports."
+    grounded = "The evidence does not cover disbursement amounts."
+    critic = Critic(grounded=(False, True))
+    _, result = run(synthesizer=Synthesizer(limitations=[contradicting, grounded]), critic=critic)
+    assert result.status == ResultStatus.ANSWER
+    assert contradicting not in result.limitations and grounded in result.limitations
+    assert result.validation.limitations_withheld == 1
+    reviewed = json.loads(critic.requests[0].context_json)
+    assert [x["limitation"] for x in reviewed["candidate_limitations"]] == ["L1", "L2"]
+    assert all("content" not in e for e in reviewed["evidence_index"])
+
+
+@pytest.mark.parametrize(
+    "parts",
+    [{"critic": Critic(raw="not JSON")}, {"critic": Critic(), "critic_enabled": False}],
+    ids=["critic-failed", "critic-disabled"],
+)
+def test_unreviewed_model_limitations_are_withheld(parts):
+    _, result = run(synthesizer=Synthesizer(limitations=["Unchecked gap statement."]), **parts)
+    assert result.status == ResultStatus.ANSWER
+    assert "Unchecked gap statement." not in result.limitations
+    assert result.validation.limitations_withheld == 1
+
+
 def test_critic_missing_a_finding_removes_that_claim_only():
-    one = {"findings": [{"claim": "C1", "support": "SUPPORTED", "rationale": "ok"}]}
+    one = {
+        "findings": [{"claim": "C1", "support": "SUPPORTED", "rationale": "ok"}],
+        "limitations": [],
+    }
     _, result = run(synthesizer=Synthesizer(), critic=Critic(raw=json.dumps(one)))
     assert len(result.claims) == 1 and result.validation.claims_removed == {"NOT_REVIEWED": 1}
 

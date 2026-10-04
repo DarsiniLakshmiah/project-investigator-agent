@@ -47,6 +47,7 @@ class Claim(_Result):
     citations: tuple[Citation, ...]
     support: str = "NOT_ASSESSED"  # SUPPORTED | PARTIALLY_SUPPORTED | NOT_ASSESSED
     qualifier: str | None = None  # Critic's note on what a partial claim does not support
+    temporal_relation: str = "NONE"  # BEFORE | AFTER: verified against source-dated evidence
 
 
 class EvidenceItem(_Result):
@@ -93,6 +94,7 @@ class Validation(_Result):
     semantic_support: str = "NOT_ASSESSED"
     critic_status: CriticStatus = CriticStatus.NOT_REQUIRED
     claims_removed: dict[str, int] = Field(default_factory=dict)  # by reason code
+    limitations_withheld: int = 0  # model-written limitations the Critic did not ground
 
 
 class InvestigationActivity(_Result):

@@ -6,8 +6,9 @@ integrity failure removes only that claim. Semantic support is the Critic's judg
 claim: SUPPORTED keeps, PARTIALLY_SUPPORTED keeps with its qualifier, UNSUPPORTED and
 CONTRADICTED remove. If the Critic itself fails (call, parse or schema), it is a secondary
 reviewer, not a gate: integrity-valid claims publish as NOT_ASSESSED with a limitation, and
-are never shown as critic-approved. INSUFFICIENT_EVIDENCE only when no publishable claim
-remains.
+are never shown as critic-approved. A model-written limitation publishes only if the Critic
+found it grounded; application limitations always publish. INSUFFICIENT_EVIDENCE only when
+no publishable claim remains.
 """
 
 from __future__ import annotations
@@ -65,6 +66,7 @@ class Finalized:
     removed: dict[str, int]
     failures: tuple[str, ...]
     limitations: tuple[str, ...]
+    limitations_withheld: int = 0  # model-written limitations not found grounded
 
 
 def check_integrity(output: SynthesisOutput, context: ApprovedContext) -> Integrity:
@@ -95,16 +97,22 @@ def finalize(
     critic_failed: bool = False,
     model_insufficient: bool,
     limitations: tuple[str, ...],
+    model_limitations: tuple[str, ...] = (),
     removed_before: dict[str, int] | None = None,
 ) -> Finalized:
     removed = Counter(removed_before or {}) + integrity.removed
     if integrity.security_failures:
         return Finalized("FAIL_CLOSED", (), dict(removed), integrity.security_failures, ())
     notes = list(limitations)
-    findings = {}
+    findings, grounded = {}, set()
     if review is not None:
         counts = Counter(f.claim for f in review.findings)
         findings = {f.claim: f for f in review.findings if counts[f.claim] == 1}
+        verdicts = Counter(f.limitation for f in review.limitations)
+        grounded = {f.limitation for f in review.limitations if f.grounded} - {
+            h for h, n in verdicts.items() if n > 1
+        }
+    kept_limitations = [t for n, t in enumerate(model_limitations, 1) if f"L{n}" in grounded]
     published = []
     for claim in integrity.claims:
         if claim.provenance_label == ProvenanceClass.UNKNOWN:
@@ -122,6 +130,8 @@ def finalize(
             published.append(PublishedClaim(claim, "PARTIALLY_SUPPORTED", finding.rationale))
         else:
             removed[finding.support.value] += 1
+    if published:
+        notes.extend(kept_limitations)
     if removed.get("UNKNOWN_VALUE"):
         notes.append(UNKNOWN_NOTE)
     if removed.get(ClaimSupport.CONTRADICTED.value):
@@ -138,4 +148,5 @@ def finalize(
         dict(removed),
         (),
         tuple(dict.fromkeys(notes)),
+        len(model_limitations) - (len(kept_limitations) if published else 0),
     )
