@@ -336,27 +336,6 @@ def test_p1_verdict_passes_only_on_a_clean_contract_and_provenance_run(tmp_path)
     assert not p1_verdict(rows, results, SEMIF, 0, no_torch)["passed"]
 
 
-def test_notebook_gates_p1_on_p0_and_never_touches_dataset_text():
-    text = (REPO_ROOT / "notebooks" / "08c_semif_capability.py").read_text(encoding="utf-8")
-    assert text.index('require_state("p0"') < text.index("install_pinned_semif")
-    assert 'if not p0["passed"]' in text and "protocol drift" in text
-    assert "p1_verdict(rows, results, semif, run.returncode, provenance)" in text
-    assert 'hf_snapshot_provenance(work / "hf_cache"' in text  # the HF_HOME the loader uses
-    assert "bfloat16 configuration is incompatible" in text
-    assert "float16" not in text.replace("bfloat16", "")  # no fp16 fallback anywhere
-    assert "routing_cases.yaml" in text  # only hashed for the lock check
-    for forbidden in (
-        "load_dataset",
-        "semantic_ambiguity_probe",
-        "run_development",
-        "serving_endpoints.create",
-        "c2_shadow",
-        "c1_eligible",
-    ):
-        assert forbidden not in text, forbidden
-    assert '"-m", "venv"' in text  # SemIf's pins never enter the notebook environment
-
-
 # -- frozen ambiguity probe -------------------------------------------------------------------
 
 

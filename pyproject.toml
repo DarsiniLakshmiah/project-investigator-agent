@@ -9,8 +9,8 @@ description = "World Bank Project Implementation Intelligence Copilot: evidence-
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
-# Core dependencies: needed to import the package, load configuration and
-# (from Phase 2) read the structured source files locally.
+# Core dependencies: needed to import the package, load configuration and read the
+# structured source files locally.
 dependencies = [
     "pydantic>=2.5",
     "pyyaml>=6.0",
@@ -20,30 +20,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Extras are grouped by the phase that first needs them. Nothing here is
-# required to import the package or run the unit tests.
+# Optional extras. Nothing here is required to import the package or run the unit tests.
+# On Databricks, notebooks install the pinned requirements-*.txt files instead.
 databricks = [          # Databricks access. In notebooks the runtime provides databricks-sdk;
     "databricks-sdk",     # Vector Search uses databricks-ai-search (requirements-retrieval.txt).
     "databricks-ai-search==0.78",
 ]
-documents = [           # Phase 4: layout-aware PDF parsing (validated with docling 2.130.0)
+documents = [           # layout-aware PDF parsing (validated with docling 2.130.0)
     "docling>=2.130,<3",
 ]
-retrieval = [           # Phase 8: optional CrossEncoder reranking (requirements-reranker.txt)
+retrieval = [           # CrossEncoder reranking (requirements-reranker.txt)
     "sentence-transformers==5.5.1",
 ]
-agents = [              # Phase 11
-    "langgraph>=0.2",
-]
-guardrails = [          # Phase 12
-    "nemoguardrails",
-]
-observability = [       # Phase 13 (mlflow.tracing requires >=2.14)
+observability = [       # MLflow tracing (mlflow.tracing requires >=2.14); provided by Databricks
     "mlflow>=2.14",
-]
-api = [                 # Phase 14
-    "fastapi>=0.110",
-    "uvicorn>=0.29",
 ]
 dev = [
     "pytest>=7.4",

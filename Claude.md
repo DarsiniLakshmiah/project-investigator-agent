@@ -326,9 +326,7 @@ Silver records must preserve provenance.
 
 ## Gold
 
-Gold is NOT yet implemented.
-
-Planned Gold datasets include:
+Gold is implemented (notebook 06, `intelligence/`). Gold datasets:
 
 gold.project_360
 gold.project_timeline
@@ -370,7 +368,7 @@ Never remove provenance simply to make schemas cleaner.
 
 # 10. Fact / Interpretation Boundaries
 
-Future user-facing information should distinguish between:
+User-facing information distinguishes between:
 
 FACT
 
@@ -414,9 +412,8 @@ OCR should be introduced only when required evidence exists solely on image-only
 
 # 12. RAG Target Architecture
 
-RAG is NOT implemented yet.
-
-When introduced, do not build:
+RAG is implemented (notebook 07, `retrieval/`) as hybrid BM25 + Vector Search with RRF and
+CrossEncoder reranking, selected by experiment. Do not reduce it to:
 
 question
 → vector search
@@ -1166,47 +1163,42 @@ Do not commit secrets.
 
 # 33. Current Project Status
 
-Completed:
+The interview prototype is complete and was validated on Databricks.
 
-Phase 1 — repository foundation
+Implemented and validated:
 
-Phase 2 — Bronze ingestion
+- Bronze, Silver and Gold medallion layers on Unity Catalog / Delta (notebooks 01-06);
+- deterministic document extraction: 35 ISR snapshots, 837 results observations, 237
+  indicators, 89 appraisal risks/findings and 27 project events, with no LLM extraction;
+- hybrid retrieval with a CrossEncoder, selected by experiment (notebook 07);
+- seven governed tools and a deterministic router;
+- the online runtime `Copilot.investigate()`: Investigator -> governed execution ->
+  Synthesizer -> deterministic integrity -> Critic -> finalizer;
+- a Databricks App (`copilot_app/`) backed by a Databricks Job (notebook 15);
+- a 50-question application evaluation (notebook 16).
 
-Phase 3 — structured Silver transformation
+Evaluated and not promoted: LLM and similarity routing fallbacks, and adaptive reranking.
 
-Phase 4 — document parsing
+Not implemented (do not add without an evaluated baseline): memory, caching, per-user
+ACLs, a long-lived API process.
 
-Phase 5 — structured document extraction
-
-Phase 5 validated:
-
-35 ISR snapshots
-
-837 results observations
-
-237 indicators
-
-89 appraisal risks/findings
-
-27 project events
-
-No LLM extraction was required.
-
-All required source provenance is preserved.
-
-Known unresolved items remain explicit rather than silently resolved.
+See README.md for results, docs/ARCHITECTURE.md for the runtime, and
+IMPLEMENTATION_PLAN.md for the chronological log.
 
 ---
 
-# 34. Current Phase
+# 34. Change Policy
 
-The next approved phase is:
+The repository is frozen for review.
 
-PHASE 6 — DATABRICKS PLATFORMIZATION AND GOVERNED DELTA FOUNDATION
+Any change must preserve these:
 
-Phase 6 should move the validated data foundation into Databricks without changing its analytical meaning.
+- all tests;
+- the hash locks in `evaluation/*lock*.json`. Never edit pinned files, locks or historical
+  artefacts;
+- project isolation and provenance guarantees.
 
-Do NOT start Gold, RAG, agents, memory, Jev integration or application development during Phase 6.
+Changes to the runtime require explicit approval and a re-run of the application evaluation.
 
 ---
 
@@ -1234,37 +1226,23 @@ Wait for explicit approval.
 
 ---
 
-# 36. Planned High-Level Roadmap
+# 36. Delivered Roadmap
 
-The current intended sequence is approximately:
+Phases 1-5: repository, Bronze, Silver, parsing, extraction.
 
-Phase 6
-Databricks platformization and governed Delta foundation
+Phase 6: Databricks platformization and governed Delta foundation.
 
-Phase 7
-Gold analytical/intelligence layer
+Phase 7: Gold intelligence layer.
 
-Phase 8
-RAG foundation + retrieval experiments
+Phase 8: RAG foundation and retrieval experiments.
 
-Phase 9
-Structured tools + adaptive query routing experiments
+Phase 9: structured tools and routing experiments.
 
-Phase 10
-Agent harness + bounded decision experiments
+Phase 10: investigation, evidence, bounded synthesis and critique.
 
-Phase 11
-Hybrid memory/cache + advanced guardrails
+Final prototype: `Copilot.investigate`, Databricks App, application evaluation.
 
-Phase 12
-MLflow tracing + comprehensive evaluation
-
-Phase 13
-API + Databricks application / product experience
-
-The exact roadmap may change based on evidence from each completed phase.
-
-Do not treat future phase numbering as permission to implement it.
+Possible next steps are listed in README.md ("Production evolution"). None is approved.
 
 ---
 

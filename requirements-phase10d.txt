@@ -1,2 +1,3 @@
-# Strict structured-output validation; Phase 10D only.
+# Strict JSON-schema validation of model output (copilot runtime, notebooks 14-16).
+# Name kept for the validated install set referenced by copilot/databricks.py.
 jsonschema==4.26.0

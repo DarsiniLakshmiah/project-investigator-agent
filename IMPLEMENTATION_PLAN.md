@@ -4,6 +4,11 @@ Source of truth for requirements: [Claude.md](Claude.md). This file records how
 they are being implemented, what was learned from the real data, and what is
 still open. Updated at the end of every phase.
 
+> **For reviewers:** this is the chronological engineering log, kept unedited as a record
+> of the decisions, data findings, experiments and validation runs. For the current
+> system, read [README.md](README.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
+> [docs/REVIEW_GUIDE.md](docs/REVIEW_GUIDE.md) first.
+
 ---
 
 ## 1. Current status
@@ -19,8 +24,9 @@ still open. Updated at the end of every phase.
 | 7 | Deterministic Gold intelligence layer | **Complete, validated in Databricks, approved** (2026-09-30) |
 | 8 | Databricks-native retrieval foundation + experiments | **Corpus, Qwen embeddings, AI Search index and notebook 07 Steps 4–7 and 07b staged experiments (incl. CrossEncoder) validated in Databricks (2026-10-01). Complete. Adaptive reranking evaluated diagnostically in Phase 9E; no adaptive policy promoted; independent validation required before any future promotion** |
 | 9 | Structured tools + intelligent query routing | **9A, 9B approved** (2026-10-01); **9C CLOSED and frozen** (80 reviewed cases, 29 dev / 51 test); **9D CLOSED** (2026-10-02): Candidate A SELECTED - deterministic routing + targeted clarification; no semantic LLM fallback promoted (Candidate C GPT-OSS-20B DEV REJECTED on quality/repeatability; earlier Candidate C blocks were not quality rejections); **9E CLOSED** (2026-10-02): adaptive-rerank diagnostic VALID offline and live-validated; descriptive only, no adaptive policy promoted, `production` stays null; **9F-A approved, 9F-B approved and committed** (frozen Phase 10 execution contract); **9F-C PASSED real Databricks acceptance** (`9f3`, 10/10 cases, preflight/overall PASS, finalized artifact and receipt verified); **Phase 9 COMPLETE** |
-| 10 | Investigation, evidence, bounded synthesis and critique | 10A/10B approved; 10C real Databricks PASS (`10c6`, 4/4); 10D IMPLEMENTED_LOCALLY_AWAITING_DATABRICKS_MODEL_VALIDATION; 10E not started |
-| 11-13 | Later roadmap | Not started |
+| 10 | Investigation, evidence, bounded synthesis and critique | 10A/10B approved; 10C real Databricks PASS (`10c6`, 4/4); 10D model-capability protocol run on Databricks: `databricks-qwen35-122b-a10b` 12/19 (overall FAIL, not capability-accepted; contained by deterministic integrity and the Critic) |
+| Final | Interview prototype: `Copilot.investigate`, Databricks App + Job, 50-question application evaluation | **Complete** (`app-eval-001`: 35 PASS / 7 PARTIAL / 8 FAIL; 100% isolation and citation validity; 0 unsupported claims). Repository cleaned for review (2026-10-05) |
+| 11-13 | Memory/cache, extended guardrails, API | Not started (see README "Production evolution") |
 
 Latest verification (end of Phase 4, in the rebuilt Python 3.14 `.venv`): `pytest` → 331
 passed (unit); `pytest -m integration` → 18 passed (5 Bronze + 7 Silver + 6 parsed, real

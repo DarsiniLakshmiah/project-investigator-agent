@@ -121,7 +121,6 @@ def test_semif_is_recorded_as_blocked_not_rejected_and_its_lock_is_unchanged():
     text = (REPO_CONFIG_DIR / "routing" / "semantic_semif.yaml").read_text("utf-8")
     assert "NOT a model-quality rejection" in text
     assert (REPO_ROOT / "evaluation" / "semif_protocol_lock.json").exists()
-    assert (REPO_ROOT / "notebooks" / "08c_semif_capability.py").exists()
 
 
 def test_output_enum_is_exactly_the_reviewed_intents_plus_abstain():

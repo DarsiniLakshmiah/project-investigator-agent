@@ -59,10 +59,6 @@ mlartifacts/
 .local_output/
 *.log
 
-# Frontend (Phase 15)
-node_modules/
-frontend/dist/
-
 # Editors / OS
 .vscode/
 .idea/
