@@ -12,6 +12,14 @@ and is labelled with where it came from.
 **Reviewers:** start with [docs/REVIEW_GUIDE.md](docs/REVIEW_GUIDE.md), which has a 20-minute
 reading order. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) walks through one request end to end.
 
+## 🎥 End-to-End Demo
+
+A complete walkthrough of the Project Investigator Agent, including
+the user interface, multi-agent workflow, evidence-backed responses,
+citations, validation, and technical details.
+
+▶️ [Watch the Full Demo](https://github.com/DarsiniLakshmiah/project-investigator-agent/releases/tag/v1.0-demo)
+
 ---
 
 ## Contents
